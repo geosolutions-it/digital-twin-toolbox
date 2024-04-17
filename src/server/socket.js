@@ -3,21 +3,10 @@ import fs from 'fs';
 import shpjs from 'shpjs';
 import { Server } from 'socket.io';
 import { createServer } from 'http';
-import { asyncQuery } from './query.js';
-import {
-    getPolyhedralTableQuery,
-    getPointInstancesTableQuery
-} from './table.js';
-import {
-    countLasPoint,
-    getLasCRS,
-    fromLasToTileset,
-    processLas,
-    fromPolyhedronToTileset,
-    fromPointInstancesToTileset
-} from './scripts.js';
-
 import { fileURLToPath } from 'url';
+import { setLoggerSocket } from './logger.js';
+import workflows from './workflows/index.js';
+import { DATA } from '../constants.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -65,73 +54,17 @@ export const createSocket = (port) => {
     const httpServer = createServer();
     const io = new Server(httpServer);
     io.on('connection', (socket) => {
-        const log = (message, type, options = {}) => {
-            console.log(message);
-            socket.emit('log', {
-                message,
-                type,
-                options
-            });
-        };
+        setLoggerSocket(socket);
         const files = readDataFiles();
-        socket.emit('data', { files });
-
-        socket.on('mesh:tileset', ({ file, config }) => {
-            socket.emit('gui:hide');
-            log('Initialize tiling process');
-            getCollection(file)
-                .then((collection) => {
-                    log('Features loaded!');
-                    return asyncQuery(getPolyhedralTableQuery(collection, config), log)
-                        .then(() => fromPolyhedronToTileset({ collection, config }, log))
-                        .catch((error) => log(error?.message || error, 'error'))
-                })
-                .catch((error) => log(error?.message || error, 'error'))
-                .finally(() => socket.emit('gui:show'));
-        });
-        socket.on('point-instance:tileset', ({ file, config }) => {
-            socket.emit('gui:hide');
-            log('Initialize tiling process');
-            getCollection(file)
-                .then((collection) => {
-                    log('Features loaded!');
-                    return asyncQuery(getPointInstancesTableQuery(collection, config), log)
-                        .then(() => fromPointInstancesToTileset({ collection, config }, log))
-                        .catch((error) => log(error?.message || error, 'error'))
-                })
-                .catch((error) => log(error?.message || error, 'error'))
-                .finally(() => socket.emit('gui:show'));
-        });
-        socket.on('point-cloud:count', ({ file }) => {
-            socket.emit('gui:hide');
-            countLasPoint({ file }, log)
-                .catch((error) => log(error?.message || error, 'error'))
-                .finally(() => socket.emit('gui:show'));
-        });
-        socket.on('point-cloud:projection', ({ file }) => {
-            socket.emit('gui:hide');
-            getLasCRS({ file }, log)
-                .catch((error) => log(error?.message || error, 'error'))
-                .finally(() => socket.emit('gui:show'));
-        });
-        socket.on('point-cloud:process-las', (config) => {
-            socket.emit('gui:hide');
-            processLas(config, log)
-                .then(() => {
-                    const updatedFiles = readDataFiles();
-                    socket.emit('data', { files: updatedFiles });
-                })
-                .catch((error) => log(error?.message || error, 'error'))
-                .finally(() => socket.emit('gui:show'));
-        });
-        socket.on('point-cloud:tileset', (config) => {
-            socket.emit('gui:hide');
-            fromLasToTileset(config, log)
-                .catch((error) => log(error?.message || error, 'error'))
-                .finally(() => socket.emit('gui:show'));
+        socket.emit(DATA, { files });
+        Object.keys(workflows).forEach(key => {
+            workflows[key]({
+                socket,
+                getCollection,
+                readDataFiles
+            });
         });
     });
     io.listen(port);
-    
     console.log(`Socket is listening on port ${port}`);
 };

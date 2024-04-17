@@ -2,10 +2,11 @@ const logger = (payload) => {
     const parent = document.querySelector('#console');
     const log = document.createElement('div');
     log.setAttribute('class', 'log ' + (payload.type || ''));
+    const date = new Date();
     log.innerHTML = `
         ${payload?.message ? `<div>${payload.message}</div>` : ''}
         <div class="actions"></div>
-        <small>${new Date().toDateString()}</small>
+        <small>${date.toLocaleDateString() + ' - ' + date.toLocaleTimeString()}</small>
     `;
     parent.appendChild(log);
     const actions = log.querySelector('.actions');

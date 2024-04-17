@@ -5,15 +5,16 @@ let processOptions;
 
 const setDefaultOptions = () => {
     tilingOptions = {
-        crsIn: 0
+        crsIn: 0,
+        geometricErrorScale: 0
     };
     processOptions = {
         outputName: '',
-        crsIn: 0,
-        crsOut: 0,
-        geodeticCrs: 0,
+        crsIn: '',
+        crsOut: '',
         groundClassification: false,
-        sampleRadius: 0
+        sampleRadius: 0,
+        rasterFile: ''
     };
 };
 
@@ -67,13 +68,14 @@ const initPointCloudWorkflow = (options) => {
     processFolder.add( processOptions, 'outputName' ).name('Output file name');
     processFolder.add( processOptions, 'crsIn' ).name('From CRS');
     processFolder.add( processOptions, 'crsOut' ).name('To CRS');
-    processFolder.add( processOptions, 'geodeticCrs' ).name('Geodetic CRS');
     processFolder.add( processOptions, 'groundClassification' ).name('Ground classification');
     processFolder.add( processOptions, 'sampleRadius' ).name('Sample radius');
+    processFolder.add( processOptions, 'rasterFile' ).name('Raster image');
     processFolder.add( actions, 'pointCloudProcessLas' ).name('Start processing');
 
     const tilingOptionsFolder = folder.addFolder( 'Tiling options' );
     tilingOptionsFolder.add( tilingOptions, 'crsIn' ).name('CRS number');
+    tilingOptionsFolder.add( tilingOptions, 'geometricErrorScale').name('Geometric error scale factor');
     tilingOptionsFolder.add( actions, 'createTileset' ).name('Create tileset');
 };
 

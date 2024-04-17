@@ -125,7 +125,7 @@ export const getPolyhedralTableQuery = (collection, config) => {
                         const geometry = toWKTPolyhedralSurfaceZ(feature);
                         const attributes = Object.keys(feature.properties).map((key) => isNumber(feature.properties[key])
                             ? feature.properties[key]
-                            : `'${(feature.properties[key] || '').replace(/'/g, "''")}'`).join(', ')
+                            : `'${((feature.properties[key] || '') + '').replace(/'/g, "''")}'`).join(', ')
                         return `(${geometry}, ${attributes})`;
                     });
                 return {

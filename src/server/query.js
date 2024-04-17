@@ -1,10 +1,11 @@
 import pkg from 'pg';
 const { Client } = pkg;
 import postgis from './postgis.js';
+import logger from './logger.js';
 
-async function tableQuery(client, { create, insert }, log = console.log) {
+async function tableQuery(client, { create, insert }) {
     await client.query(create());
-    log('Init insert...');
+    logger({ message: 'Init insert...' });
     const insetQuery = insert();
     let result = insetQuery.next();
     await client.query(result.value);
@@ -14,25 +15,25 @@ async function tableQuery(client, { create, insert }, log = console.log) {
             await client.query(result.value);
         }
     }
-    log(`Features inserted in table ${result.processed} of ${result.total}`);
+    logger({ message: `Features inserted in table ${result.processed} of ${result.total}` });
 }
 
-export function asyncQuery(query, log = console.log) {
+export function asyncQuery(query) {
     const client = new Client(postgis);
-    log('Connecting to PostGIS');
+    logger({ message: 'Connecting to PostGIS' });
     return client.connect()
         .then(() => {
-            log('Connected!');
-            log('Running query...');
+            logger({ message: 'Connected!' });
+            logger({ message: 'Running query...' });
             return query?.type === 'create-table'
-                ? tableQuery(client, query, log)
+                ? tableQuery(client, query)
                 : client.query(query)
                 .then(() => {
-                    log('Table created!');
+                    logger({ message: 'Table created!' });
                     return true;
                 })
                 .finally(() => {
-                    log('Disconnected from PostGIS');
+                    logger({ message: 'Disconnected from PostGIS' });
                     client.end();
                     return null;
                 });

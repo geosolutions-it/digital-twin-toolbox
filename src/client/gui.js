@@ -9,7 +9,7 @@ let data = {
 };
 
 const getCollectionWorkflow = ({ file, collection, ...options }) => {
-    const isPointCollection = (collection?.features).every(feature => ['Point'].includes(feature.geometry.type));
+    const isPointCollection = (collection?.features).every(feature => ['Point'].includes(feature?.geometry?.type));
     if (isPointCollection) {
         return workflows.pointInstance({ ...options, file, collection });
     }
@@ -72,6 +72,7 @@ const initGui = (options) => {
                         logger({ message: `${file.name} data loaded!`, type: 'success' })
                     })
                     .catch((error) => {
+                        console.log(error);
                         logger({ message: error?.message || error, type: 'error' });
                         configFolder.destroy();
                     });

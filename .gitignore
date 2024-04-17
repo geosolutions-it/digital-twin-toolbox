@@ -8,3 +8,4 @@ static/tilesets/**/*
 vdatum/**/*
 !vdatum/README.md
 tmp/
+static/download/
