@@ -3,6 +3,7 @@ import GUI from 'lil-gui';
 import logger from './logger.js';
 import shpjs from 'shpjs';
 import workflows from './workflows/index.js'
+import { SHOW_GUI, HIDE_GUI } from '../constants.js';
 
 let data = {
     file: {}
@@ -13,7 +14,7 @@ const getCollectionWorkflow = ({ file, collection, ...options }) => {
     if (isPointCollection) {
         return workflows.pointInstance({ ...options, file, collection });
     }
-    return workflows.mesh({ ...options, file, collection });
+    return workflows.vector({ ...options, file, collection });
 };
 
 const loadingFileInfo = (file, options) => {
@@ -33,6 +34,9 @@ const loadingFileInfo = (file, options) => {
     if (['.laz', '.las'].includes(file.extension)) {
         return Promise.resolve(workflows.pointCloud({ ...options, file }));
     }
+    if (['.ply'].includes(file.extension)) {
+        return Promise.resolve(workflows.mesh({ ...options, file }));
+    }
     return Promise.reject('Format not implemented yet');
 };
 
@@ -42,10 +46,10 @@ const initGui = (options) => {
     let fileSelector;
     const inputDataFolder = gui.addFolder( 'Input data' );
     let configFolder;
-    socket.on('gui:hide', () => {
+    socket.on(HIDE_GUI, () => {
         gui.hide();
     });
-    socket.on('gui:show', () => {
+    socket.on(SHOW_GUI, () => {
         gui.show();
     });
     socket.on('data', (payload) => {

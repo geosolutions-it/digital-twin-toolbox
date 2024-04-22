@@ -11,7 +11,7 @@ import { DATA } from '../constants.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const supportedExtensions = ['.geojson', '.json', '.zip', '.las', '.laz'];
+const supportedExtensions = ['.geojson', '.json', '.zip', '.las', '.laz', '.ply'];
 
 const NGINX_PORT = process.env.NGINX_PORT;
 

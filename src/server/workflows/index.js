@@ -1,9 +1,11 @@
 
-import initMeshWorkflow from './mesh.js';
+import initVectorWorkflow from './vector.js';
 import initPointCloudWorkflow from './pointcloud.js';
 import initPointInstanceWorkflow from './pointinstance.js';
+import initMeshWorkflow from './mesh.js';
 export default {
-    mesh: initMeshWorkflow,
+    vector: initVectorWorkflow,
     pointCloud: initPointCloudWorkflow,
-    pointInstance: initPointInstanceWorkflow
+    pointInstance: initPointInstanceWorkflow,
+    mesh: initMeshWorkflow
 };

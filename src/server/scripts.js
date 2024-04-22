@@ -1,7 +1,7 @@
 
 import child_process from 'child_process';
 
-export const executeCommand = (command, options) => {
+export const executeCommand = (command, options = {}) => {
     return new Promise((resolve, reject) => {
         const cmd = command.join(' ');
         console.log(cmd);

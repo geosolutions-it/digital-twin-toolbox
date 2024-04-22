@@ -1,30 +1,25 @@
+import { MESH_TILESET, MESH_UPDATE_TILESET_JSON, MESH_PREVIEW, MESH_SHOW_PREVIEW } from '../../constants.js';
 import * as THREE from 'three';
-import turfBbox from '@turf/bbox';
-import { parseNumericExpression } from '../../expression.js';
-import { convertToCartesian, translateAndRotate } from '../../cartesian.js';
-import { collectionToPolyhedralSurfaceZ } from '../../polyhedron.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import logger from '../logger.js';
 
-let prevCollection;
 let tilingOptions;
-let visualizationOptions;
-let geometryOptions;
+let tilesetJSONOptions;
 
 const setDefaultOptions = () => {
     tilingOptions = {
-        minGeometricError: 0,
-        maxGeometricError: 250,
-        doubleSided: false,
-        maxFeaturesPerTile: 100
+        meshFacesTargetCount: 500000,
+        tileFacesTargetCount: 50000,
+        zOffset: 0,
+        crs: '',
+        depth: 3,
+        geometricErrors: '200,100,20,5,0',
+        removeDoublesFactor: 0.01
     };
-    visualizationOptions = {
-        wireframe: false,
-    };
-    geometryOptions = {
-        lowerLimit: '',
-        upperLimit: '',
-        translateZ: '',
-        width: ''
+    tilesetJSONOptions = {
+        zOffset: 0,
+        crs: '',
+        geometricErrors: '200,100,20,5,0'
     };
 };
 
@@ -36,115 +31,99 @@ const getOptions = (name) => {
             ...tilingOptions,
             ...options.tilingOptions
         };
-        visualizationOptions = {
-            ...visualizationOptions,
-            ...options.visualizationOptions
-        };
-        geometryOptions = {
-            ...geometryOptions,
-            ...options.geometryOptions
+        tilesetJSONOptions = {
+            ...tilesetJSONOptions,
+            ...options.tilesetJSONOptions
         };
     } catch (e) {}
 };
 
 const resetOptions = (name) => {
-    prevCollection = undefined;
     getOptions(name);
 };
 
+const loader = new GLTFLoader();
+
 const material = new THREE.MeshNormalMaterial();
 
-const updateScene = ({ collection, setInitCameraLocation, group }, config = {}) => {
-    if (!collection) {
-        return null;
-    }
-    if (collection !== prevCollection) {
-        setInitCameraLocation();
-    }
+const loadGLB = (path) => {
+    return new Promise((resolve, reject) => {
+        loader.load(path,
+            ( glb ) => {
+                resolve(glb);
+            },
+            ( xhr ) => {
+                logger({ message: ( xhr.loaded / xhr.total * 100 ) + '% glb loaded' });
+            },
+            ( error ) => {
+                reject(error);
+            }
+        );
+    });
+}
+
+const updateScene = ({ group, path }, config = {}) => {
     group.children.forEach((mesh) => {
         mesh.geometry.dispose();
     });
     group.remove(...group.children);
-    const [minx, miny, maxx, maxy] = turfBbox(collection);
-    const center = [minx + (maxx - minx) / 2, miny + (maxy - miny) / 2, 0];
-    const cartesian = convertToCartesian(center);
-    const polyhedralSurfaceCollection = collectionToPolyhedralSurfaceZ(collection, {
-        filter: config?.filter ? config.filter : (feature, idx) => feature,
-        computeOptions: (feature) => ({
-            lowerLimit: parseNumericExpression(config?.lowerLimit, feature.properties),
-            upperLimit: parseNumericExpression(config?.upperLimit, feature.properties),
-            translateZ: parseNumericExpression(config?.translateZ, feature.properties),
-            width: parseNumericExpression(config?.width, feature.properties)
-        })
-    });
-    
-    polyhedralSurfaceCollection.features.forEach((feature) => {
-        const coordinates = feature.geometry.coordinates;
-        const vertices = new Float32Array(coordinates.reduce((acc, triangle) => {
-            const [a, b, c] = triangle;
-            return [...acc, ...[a, b, c].map((vertex) => translateAndRotate(vertex, cartesian))];
-        }, []).flat());
-        const geometry = new THREE.BufferGeometry();
-        geometry.setAttribute( 'position', new THREE.BufferAttribute( vertices, 3 ) );
-        geometry.computeVertexNormals();
-        const mesh = new THREE.Mesh( geometry, material );
-        group.add(mesh);
-    });
-    logger({ message: 'Geometry update completed...' });
+
+    loadGLB(path)
+        .then((glb) => {
+            glb.scene.traverse(obj => {
+                if (obj.isMesh) {
+                    obj.material = material;
+                    group.add(obj);
+                }
+            });
+        }).catch((error) => {
+            logger({ message: error?.message || error, type: 'error' });
+        });
 };
 
 const initMeshWorkflow = (options) => {
-    const { folder, collection, file, socket } = options;
+    const { socket, file, folder } = options;
     resetOptions(file.name);
-    const getConfig = () => {
-        return {
-            ...geometryOptions,
-            ...tilingOptions,
-            file,
-            name: file.name
-        };
-    };
-
     let actions = {
-        applyGeometryOptions: () => {
-            logger({ message: 'Updating geometry...' });
-            setTimeout(() => updateScene({ ...options, collection: prevCollection }, getConfig()), 100);
-        },
         createTileset: () => {
-            socket.emit('mesh:tileset', {
-                file,
-                config: getConfig()
-            });
+            socket.emit(MESH_TILESET, { config: { ...tilingOptions }, file });
+        },
+        updateTilesetJSON: () => {
+            socket.emit(MESH_UPDATE_TILESET_JSON, { config: { ...tilesetJSONOptions }, file });
+        },
+        meshPreview: () => {
+            socket.emit(MESH_PREVIEW, { file });
         }
     };
     folder.onChange(() => {
         localStorage.setItem(`${file.name}Options`, JSON.stringify({
             tilingOptions,
-            visualizationOptions,
-            geometryOptions
+            tilesetJSONOptions
         }));
     });
-    const visualizationOptionsFolder = folder.addFolder( 'Visualization options' );
-    visualizationOptionsFolder.add( visualizationOptions, 'wireframe' )
-        .onChange(() => { material.wireframe = !!visualizationOptions.wireframe; });
 
-    const geometryOptionsFolder = folder.addFolder( 'Geometry options' );
-    geometryOptionsFolder.add( geometryOptions, 'lowerLimit' ).name('Lower limit height (m)');
-    geometryOptionsFolder.add( geometryOptions, 'upperLimit' ).name('Upper limit height (m)');
-    geometryOptionsFolder.add( geometryOptions, 'translateZ' ).name('Translate z (m)');
-    geometryOptionsFolder.add( geometryOptions, 'width' ).name('Width for line and point');
-    geometryOptionsFolder.add(actions, 'applyGeometryOptions').name('Apply');
+    const visualizationOptionsFolder = folder.addFolder( 'Visualization options' );
+    visualizationOptionsFolder.add( actions, 'meshPreview' ).name('Create a data sample for preview');
 
     const tilingOptionsFolder = folder.addFolder( 'Tiling options' );
-    tilingOptionsFolder.add(tilingOptions, 'maxFeaturesPerTile').name('Max features per tile');
-    tilingOptionsFolder.add(tilingOptions, 'doubleSided').name('Double sided');
-    tilingOptionsFolder.add(tilingOptions, 'maxGeometricError').name('Max geometric error (m)');
-    tilingOptionsFolder.add(tilingOptions, 'minGeometricError').name('Min geometric error (m)');
-    tilingOptionsFolder.add(actions, 'createTileset').name('Create tileset');
+    tilingOptionsFolder.add( tilingOptions, 'crs' ).name('CRS (eg EPSG:26985)');
+    tilingOptionsFolder.add( tilingOptions, 'depth' ).name('Tilset depth');
+    tilingOptionsFolder.add( tilingOptions, 'geometricErrors' ).name('Geometric errors');
+    tilingOptionsFolder.add( tilingOptions, 'zOffset' ).name('Z offset (m)');
+    tilingOptionsFolder.add( tilingOptions, 'meshFacesTargetCount' ).name('Mesh faces count');
+    tilingOptionsFolder.add( tilingOptions, 'tileFacesTargetCount' ).name('Tile faces count');
+    tilingOptionsFolder.add( tilingOptions, 'removeDoublesFactor' ).name('Remove doubles factor');
+    tilingOptionsFolder.add( actions, 'createTileset' ).name('Create tileset');
 
-    logger({ message: 'Updating geometry...' });
-    updateScene(options, getConfig());
-    prevCollection = { ...collection };
+    const tilesetJSONOptionsFolder = folder.addFolder( 'Tiling options' );
+    tilesetJSONOptionsFolder.add( tilesetJSONOptions, 'crs' ).name('CRS (eg EPSG:26985)');
+    tilesetJSONOptionsFolder.add( tilesetJSONOptions, 'geometricErrors' ).name('Geometric errors');
+    tilesetJSONOptionsFolder.add( tilesetJSONOptions, 'zOffset' ).name('Z offset (m)');
+    tilesetJSONOptionsFolder.add( actions, 'updateTilesetJSON' ).name('Update tileset.json');
+
+    socket.on(MESH_SHOW_PREVIEW, ({ path }) => {
+        updateScene({ ...options, path });
+    });
 };
 
 export default initMeshWorkflow;
