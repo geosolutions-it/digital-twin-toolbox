@@ -4,7 +4,7 @@ services:
   webapp:
     restart: unless-stopped
     build: .
-    container_name: docker_3dtiles_webapp
+    container_name: digital_twin_toolbox
     volumes:
       - ./:/usr/src/app
       - /usr/src/app/node_modules
@@ -14,7 +14,7 @@ services:
       - .env
   postgres:
     image: postgis/postgis:16-3.4
-    container_name: docker_3dtiles_postgis
+    container_name: digital_twin_toolbox_postgis
     restart: unless-stopped
     networks:
       - node_network
@@ -22,7 +22,7 @@ services:
       - .env
   nginx:
     restart: unless-stopped
-    container_name: docker_3dtiles_nginx
+    container_name: digital_twin_toolbox_nginx
     image: nginx:1.25.3
     ports:
       - ${NGINX_PORT}:80

@@ -1,6 +1,6 @@
-# <img src="./static/img/logo.svg" height="32" /> Docker 3D Tiles
+# <img src="./static/img/logo.svg" height="32" /> Digital Twin Toolbox
 
-Docker solution for inspecting data and 3D Tiles generation.
+Docker solution for inspecting data and 3D Tiles generation for urban environment.
 
 **Important**: The application **is not** production ready. The main purpose of the current setup is a local development environment to produce 3D Tiles.
 
