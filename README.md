@@ -12,6 +12,7 @@ Docker solution for inspecting data and 3D Tiles generation for urban environmen
     - [Point cloud processing](#point-cloud-processing)
     - [Mesh processing (experimental)](#mesh-processing-experimental)
 - [Generated tileset](#generated-tileset)
+- [Processes library dependencies](#processes-library-dependencies)
 
 ## Setup
 
@@ -199,3 +200,14 @@ The mesh processing initializes when a .ply file is selected, the interactive fo
 All the generated tileset are located in the `static/tilesets` folder of this repository and they can be previewed at the following link:
 
 `http://locahost:3000/preview/?{name-of-the-tileset}`
+
+## Processes library dependencies
+
+Here a list of main libraries used inside processing
+
+- [pg2b3dm](https://github.com/Geodan/pg2b3dm)
+- [i3dm.export](https://github.com/Geodan/i3dm.export)
+- [PDAL](https://github.com/PDAL/PDAL)
+- [py3dtiles](https://gitlab.com/py3dtiles/py3dtiles)
+- [Open3D](https://github.com/isl-org/Open3D)
+- [blender](https://github.com/blender/blender)

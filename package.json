@@ -14,7 +14,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "",
+  "license": "GPL3-license",
   "devDependencies": {
     "@turf/turf": "^6.5.0",
     "buffer": "^6.0.3",
