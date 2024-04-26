@@ -117,7 +117,7 @@ const initMeshWorkflow = (options) => {
     tilingOptionsFolder.add( tilingOptions, 'image' ).name('Orthophoto image');
     tilingOptionsFolder.add( actions, 'createTileset' ).name('Create tileset');
 
-    const tilesetJSONOptionsFolder = folder.addFolder( 'Tiling options' );
+    const tilesetJSONOptionsFolder = folder.addFolder( 'Tileset.json options' );
     tilesetJSONOptionsFolder.add( tilesetJSONOptions, 'crs' ).name('CRS (eg EPSG:26985)');
     tilesetJSONOptionsFolder.add( tilesetJSONOptions, 'geometricErrors' ).name('Geometric errors');
     tilesetJSONOptionsFolder.add( tilesetJSONOptions, 'zOffset' ).name('Z offset (m)');

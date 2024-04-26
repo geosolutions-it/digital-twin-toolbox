@@ -120,6 +120,11 @@ const checkUri = (outputDir, leaf) => {
 
 const createTileset = ({ file, config }) => {
     const outputDir = `static/tilesets/${file.name}/`;
+
+    if (!fs.existsSync(`${outputDir}info.json`)) {
+        return Promise.reject(`${outputDir}info.json not avaliable`);
+    }
+    
     const info = JSON.parse(fs.readFileSync(`${outputDir}info.json`, 'utf-8'));
     const {
         size,
