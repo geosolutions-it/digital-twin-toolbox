@@ -227,6 +227,9 @@ const createTileset = ({ file, config }) => {
 const meshToTileset = ({ file, config }) => {
     logger({ message: 'Init tiling...' });
     const input = `static/data/${file.name}${file.extension}`;
+    const inputImage = config.image
+        ? `static/data/${config.image}`
+        : '';
     return executeCommand(
         [
             'blender',
@@ -238,7 +241,8 @@ const meshToTileset = ({ file, config }) => {
             config.depth || 3, // depth
             config.meshFacesTargetCount || 500000, // mesh faces target
             config.tileFacesTargetCount || 50000, // tile faces target
-            config.removeDoublesFactor || 0.025
+            config.removeDoublesFactor || 0.025,
+            inputImage
         ],
         {
             onStdOut: (data) => {

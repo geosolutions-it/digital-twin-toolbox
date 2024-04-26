@@ -23,7 +23,7 @@ else:
 
 mesh_faces_target = argv[3]
 if not mesh_faces_target:
-    mesh_faces_target = 2000000
+    mesh_faces_target = 500000
 else:
     mesh_faces_target = int(mesh_faces_target)
 
@@ -38,6 +38,10 @@ if not remove_doubles_factor:
     remove_doubles_factor = 0.025
 else:
     remove_doubles_factor = float(remove_doubles_factor)
+
+input_image = argv[6]
+if not input_image:
+    input_image = None
 
 if __name__ == '__main__':
 
@@ -113,7 +117,6 @@ if __name__ == '__main__':
         bpy.context.preferences.edit.undo_steps = 0
         # setup render engine
         bpy.context.scene.render.engine = 'CYCLES'
-        bpy.context.scene.cycles.bake_type = 'EMIT'
         bpy.context.scene.cycles.samples = 1
         bpy.context.scene.cycles.preview_samples = 1
         bpy.context.scene.cycles.use_denoising = False
@@ -273,7 +276,72 @@ if __name__ == '__main__':
             decimate.use_collapse_triangulate = True
             bpy.ops.object.modifier_apply(modifier="decimate")
 
-    def split_tile(target, bbox, margin, filepath, name, bake_img, remove_doubles_threshold, bake_mat):
+    def get_image_plane(dimensions):
+
+        bpy.ops.mesh.primitive_plane_add(
+            size=1,
+            enter_editmode=False,
+            align='WORLD',
+            location=(0, 0, dimensions[2]),
+            scale=(1, 1, 1)
+        )
+        
+        plane = bpy.context.object
+        plane.scale.x = dimensions[0]
+        plane.scale.y = dimensions[1]
+        
+        bpy.ops.object.transform_apply()
+        
+        mat = bpy.data.materials.new(name='PlaneMaterial')
+        mat.use_nodes = True
+        bsdf = mat.node_tree.nodes["Principled BSDF"]
+        bsdf.inputs['Specular'].default_value = 0
+        bsdf.inputs['Roughness'].default_value = 1
+        texture_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
+        texture_node.name = 'BaseImageNode'
+        texture_node.select = True
+        texture_node.image = bpy.data.images.load(filepath=input_image, check_existing=False)
+        mat.node_tree.links.new(bsdf.inputs['Base Color'], texture_node.outputs['Color'])
+        mat.node_tree.nodes.active = texture_node
+        
+        plane.data.materials.append(mat)
+        
+        bpy.ops.object.vertex_group_add()
+        
+        bpy.ops.object.mode_set(mode='EDIT')
+
+        for subdivide_count in range(0, 10):
+            bpy.ops.mesh.subdivide()
+
+        bpy.ops.object.vertex_group_assign()
+        bpy.ops.object.mode_set(mode='OBJECT')
+        
+        shrinkwrap = plane.modifiers.new(type="SHRINKWRAP", name="shrinkwrap")
+        shrinkwrap.wrap_method = 'PROJECT'
+        shrinkwrap.use_positive_direction = True
+        shrinkwrap.use_negative_direction = True
+        shrinkwrap.target = merged
+        bpy.ops.object.modifier_apply(modifier="shrinkwrap")
+        
+        vertex_weight_proximity = plane.modifiers.new(type="VERTEX_WEIGHT_PROXIMITY", name="vertex_weight_proximity")
+        vertex_weight_proximity.target = merged
+        vertex_weight_proximity.vertex_group = 'Group'
+        vertex_weight_proximity.max_dist = 0.0001
+        vertex_weight_proximity.min_dist = 0.0002
+        vertex_weight_proximity.proximity_mode = 'GEOMETRY'
+        vertex_weight_proximity.proximity_geometry = {'FACE'}
+        vertex_weight_proximity.normalize = True
+        bpy.ops.object.modifier_apply(modifier="vertex_weight_proximity")
+
+        mask = plane.modifiers.new(type="MASK", name="mask")
+        mask.vertex_group = 'Group'
+        bpy.ops.object.modifier_apply(modifier="mask")
+        
+        bpy.ops.object.select_all(action="DESELECT")
+
+        return plane
+
+    def split_tile(target, bbox, margin, filepath, name, bake_img, remove_doubles_threshold, bake_mat, plane):
 
         for obj in scene.objects:
             obj.select_set(False)
@@ -321,6 +389,7 @@ if __name__ == '__main__':
         bpy.ops.object.editmode_toggle()
         # unwrap the uv
         bpy.ops.object.editmode_toggle()
+        bpy.ops.mesh.select_all(action = 'SELECT')
         bpy.ops.uv.smart_project()
         bpy.ops.object.editmode_toggle()
 
@@ -329,7 +398,18 @@ if __name__ == '__main__':
         mat.node_tree.nodes.active = bake_img
 
         # bake
-        bpy.ops.object.bake(type='EMIT',use_clear=True)
+        if plane:
+            plane.select_set(True)
+            bpy.context.scene.cycles.bake_type = 'DIFFUSE'
+            bpy.context.scene.render.bake.use_selected_to_active = True
+            bpy.context.scene.render.bake.cage_extrusion = 0.001 # (m) to avoid black pixels
+            bpy.ops.object.bake(type='DIFFUSE',use_clear=True)
+            plane.select_set(False)
+        else:
+            bpy.context.scene.cycles.bake_type = 'EMIT'
+            bpy.context.scene.render.bake.use_selected_to_active = False
+            bpy.context.scene.render.bake.cage_extrusion = 0
+            bpy.ops.object.bake(type='EMIT',use_clear=True)
 
         # remove all material from tile copy
         tile.data.materials.clear()
@@ -372,6 +452,21 @@ if __name__ == '__main__':
 
     width = merged.dimensions[0]
     height = merged.dimensions[1]
+
+    plane = None
+
+    if input_image:
+
+        # remove edge from merged
+        '''
+        if mesh_faces_target <= 500000:
+            bpy.ops.object.editmode_toggle()
+            bpy.ops.mesh.select_all(action = 'SELECT')
+            bpy.ops.mesh.dissolve_limited()
+            bpy.ops.object.editmode_toggle()
+        '''
+
+        plane = get_image_plane(merged.dimensions)
 
     for z in range(0, depth + 1):
 
@@ -438,7 +533,7 @@ if __name__ == '__main__':
                 print(minx, miny, maxx, maxy)
                 tile_name = f"{z}_{y}_{x}"
                 filepath = os.path.join(output_dir, f"{tile_name}.glb")
-                split_tile(clonded_merged, (minx, miny, maxx, maxy), 4, filepath, tile_name, bake_img, remove_doubles_threshold, bake_mat)
+                split_tile(clonded_merged, (minx, miny, maxx, maxy), 4, filepath, tile_name, bake_img, remove_doubles_threshold, bake_mat, plane)
                 print(f"done {tile_name} in")
                 print("--- %s seconds ---" % ((time.time() - tile_start_time)))
 

@@ -26,10 +26,10 @@ const fromPointInstancesToTileset = ({ collection, config }) => {
     } = getInfo(collection, config);
     const { models } = collectionToPointInstances(collection, {
         computeOptions: (feature) => ({
-            scale: parseNumericExpression(config?.scale, feature.properties),
-            rotation: parseNumericExpression(config?.rotation, feature.properties),
-            translateZ: parseNumericExpression(config?.translateZ, feature.properties),
-            model: parseStringExpression(config?.model, feature.properties)
+            scale: parseNumericExpression(config?.scale, feature),
+            rotation: parseNumericExpression(config?.rotation, feature),
+            translateZ: parseNumericExpression(config?.translateZ, feature),
+            model: parseStringExpression(config?.model, feature)
         })
     });
     rimraf.sync(output);

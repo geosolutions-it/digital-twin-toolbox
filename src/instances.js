@@ -10,7 +10,7 @@ export const collectionToPointInstances = (collection, {
                 scale: options?.scale || 1,
                 rotation: options?.rotation || 0,
                 model: options?.model || 'model.glb',
-                tags: Object.keys(feature?.properties).map((key) => ({ [key]: feature.properties[key] }))
+                tags: Object.keys(feature?.properties).map((key) => ({ [key.replace(/ /g, '_').toLowerCase()]: feature.properties[key] }))
             },
             geometry: {
                 ...feature?.geometry,

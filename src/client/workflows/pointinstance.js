@@ -80,10 +80,10 @@ const updateScene = ({ collection, setInitCameraLocation, group }, config = {}) 
     const cartesian = convertToCartesian(center);
     const pointInstancesCollection = collectionToPointInstances(collection, {
         computeOptions: (feature) => ({
-            scale: parseNumericExpression(config?.scale, feature.properties),
-            rotation: parseNumericExpression(config?.rotation, feature.properties),
-            translateZ: parseNumericExpression(config?.translateZ, feature.properties),
-            model: parseStringExpression(config?.model, feature.properties)
+            scale: parseNumericExpression(config?.scale, feature),
+            rotation: parseNumericExpression(config?.rotation, feature),
+            translateZ: parseNumericExpression(config?.translateZ, feature),
+            model: parseStringExpression(config?.model, feature)
         })
     });
     const models = pointInstancesCollection.models;

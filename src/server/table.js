@@ -65,10 +65,10 @@ export const getPointInstancesTableQuery = (collection, config) => {
                     features: collection.features.filter((value, idx) => idx >= offset && idx < (offset + step))
                 }, {
                     computeOptions: (feature) => ({
-                        scale: parseNumericExpression(config?.scale, feature.properties),
-                        rotation: parseNumericExpression(config?.rotation, feature.properties),
-                        translateZ: parseNumericExpression(config?.translateZ, feature.properties),
-                        model: parseStringExpression(config?.model, feature.properties)
+                        scale: parseNumericExpression(config?.scale, feature),
+                        rotation: parseNumericExpression(config?.rotation, feature),
+                        translateZ: parseNumericExpression(config?.translateZ, feature),
+                        model: parseStringExpression(config?.model, feature)
                     })
                 });
             
@@ -114,10 +114,10 @@ export const getPolyhedralTableQuery = (collection, config) => {
                     features: collection.features.filter((value, idx) => idx >= offset && idx < (offset + step))
                 }, {
                     computeOptions: (feature) => ({
-                        lowerLimit: parseNumericExpression(config?.lowerLimit, feature.properties),
-                        upperLimit: parseNumericExpression(config?.upperLimit, feature.properties),
-                        translateZ: parseNumericExpression(config?.translateZ, feature.properties),
-                        width: parseNumericExpression(config?.width, feature.properties)
+                        lowerLimit: parseNumericExpression(config?.lowerLimit, feature),
+                        upperLimit: parseNumericExpression(config?.upperLimit, feature),
+                        translateZ: parseNumericExpression(config?.translateZ, feature),
+                        width: parseNumericExpression(config?.width, feature)
                     })
                 })
                 const values = polyhedralSurfaceCollection.features

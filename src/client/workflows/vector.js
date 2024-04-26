@@ -71,10 +71,10 @@ const updateScene = ({ collection, setInitCameraLocation, group }, config = {}) 
     const polyhedralSurfaceCollection = collectionToPolyhedralSurfaceZ(collection, {
         filter: config?.filter ? config.filter : (feature, idx) => feature,
         computeOptions: (feature) => ({
-            lowerLimit: parseNumericExpression(config?.lowerLimit, feature.properties),
-            upperLimit: parseNumericExpression(config?.upperLimit, feature.properties),
-            translateZ: parseNumericExpression(config?.translateZ, feature.properties),
-            width: parseNumericExpression(config?.width, feature.properties)
+            lowerLimit: parseNumericExpression(config?.lowerLimit, feature),
+            upperLimit: parseNumericExpression(config?.upperLimit, feature),
+            translateZ: parseNumericExpression(config?.translateZ, feature),
+            width: parseNumericExpression(config?.width, feature)
         })
     });
     

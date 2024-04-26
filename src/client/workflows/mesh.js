@@ -14,7 +14,8 @@ const setDefaultOptions = () => {
         crs: '',
         depth: 3,
         geometricErrors: '200,100,20,5,0',
-        removeDoublesFactor: 0.01
+        removeDoublesFactor: 0.01,
+        image: ''
     };
     tilesetJSONOptions = {
         zOffset: 0,
@@ -113,6 +114,7 @@ const initMeshWorkflow = (options) => {
     tilingOptionsFolder.add( tilingOptions, 'meshFacesTargetCount' ).name('Mesh faces count');
     tilingOptionsFolder.add( tilingOptions, 'tileFacesTargetCount' ).name('Tile faces count');
     tilingOptionsFolder.add( tilingOptions, 'removeDoublesFactor' ).name('Remove doubles factor');
+    tilingOptionsFolder.add( tilingOptions, 'image' ).name('Orthophoto image');
     tilingOptionsFolder.add( actions, 'createTileset' ).name('Create tileset');
 
     const tilesetJSONOptionsFolder = folder.addFolder( 'Tiling options' );

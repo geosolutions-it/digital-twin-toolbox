@@ -52,9 +52,11 @@
         });
         viewer.imageryLayers.removeAll();
         viewer.scene.globe.baseColor = new Cesium.Color(0.05, 0.05, 0.05, 1);
+        /*
         viewer.scene.light = new Cesium.DirectionalLight({
             direction: viewer.scene.camera.directionWC,
         });
+        */
         viewer.imageryLayers.add(imageryLayer);
         Cesium.Cesium3DTileset.fromUrl(
             `/tilesets/${(window.location.search || 'missing-tileset').replace('?', '')}/tileset.json`
