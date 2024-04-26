@@ -4,6 +4,15 @@ Docker solution for inspecting data and 3D Tiles generation for urban environmen
 
 **Important**: The application **is not** production ready. The main purpose of the current setup is a local development environment to produce 3D Tiles.
 
+- [Setup](#setup)
+- [Add data](#add-data)
+- [Processing data](#processing-data)
+    - [Vector polygon processing](#vector-polygons-processing)
+    - [Vector point processing](#vector-point-processing)
+    - [Point cloud processing](#point-cloud-processing)
+    - [Mesh processing (experimental)](#mesh-processing-experimental)
+- [Generated tileset](#generated-tileset)
+
 ## Setup
 
 Navigate in a directory and clone the repository
