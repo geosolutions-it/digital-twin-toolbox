@@ -1,8 +1,6 @@
-FROM mambaorg/micromamba:latest
+FROM ubuntu:22.04
 
-USER root
-
-WORKDIR /usr/src/app
+SHELL ["/bin/bash", "-c"]
 
 ENV DEBIAN_FRONTEND noninteractive
 ENV LC_ALL C.UTF-8
@@ -15,6 +13,7 @@ ENV HW="CPU"
 
 RUN apt-get update && apt-get upgrade && apt-get install --no-install-recommends -y \
     wget \
+    curl \
     libopenexr-dev \
     bzip2 \
     build-essential \
@@ -33,9 +32,6 @@ RUN apt-get update && apt-get upgrade && apt-get install --no-install-recommends
     python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
-RUN wget https://packages.microsoft.com/config/debian/11/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
-RUN dpkg -i packages-microsoft-prod.deb
-RUN rm packages-microsoft-prod.deb
 RUN apt update && apt install -y apt-transport-https
 RUN apt install -y dotnet-sdk-6.0
 RUN apt-get install -y aspnetcore-runtime-6.0
@@ -44,6 +40,13 @@ RUN dotnet tool install -g dotnet-serve --version 1.10.172
 ENV PATH="${PATH}:/root/.dotnet/tools"
 RUN dotnet tool install -g pg2b3dm --version 1.8.4
 RUN dotnet tool install -g i3dm.export --version 2.6.0
+
+RUN curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
+ENV MAMBA_ROOT_PREFIX=/dtt
+RUN ./bin/micromamba shell init -s bash -p ~/micromamba
+RUN source ~/.bashrc
+
+WORKDIR /usr/src/app
 
 RUN micromamba config append channels conda-forge
 
