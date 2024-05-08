@@ -398,18 +398,18 @@ if __name__ == '__main__':
         mat.node_tree.nodes.active = bake_img
 
         # bake
+        bpy.context.scene.cycles.bake_type = 'EMIT'
+        bpy.context.scene.render.bake.use_selected_to_active = False
+        bpy.context.scene.render.bake.cage_extrusion = 0
+        bpy.ops.object.bake(type='EMIT',use_clear=True)
+
         if plane:
             plane.select_set(True)
             bpy.context.scene.cycles.bake_type = 'DIFFUSE'
             bpy.context.scene.render.bake.use_selected_to_active = True
             bpy.context.scene.render.bake.cage_extrusion = 0.001 # (m) to avoid black pixels
-            bpy.ops.object.bake(type='DIFFUSE',use_clear=True)
+            bpy.ops.object.bake(type='DIFFUSE',use_clear=False)
             plane.select_set(False)
-        else:
-            bpy.context.scene.cycles.bake_type = 'EMIT'
-            bpy.context.scene.render.bake.use_selected_to_active = False
-            bpy.context.scene.render.bake.cage_extrusion = 0
-            bpy.ops.object.bake(type='EMIT',use_clear=True)
 
         # remove all material from tile copy
         tile.data.materials.clear()
