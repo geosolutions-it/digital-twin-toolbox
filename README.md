@@ -7,10 +7,11 @@ The short term goal is to evaluate the various open source tools that are availa
 
 This project is still a work in progress and this application **is not** production ready. Extensive documentation about this project can be found in the [wiki](https://github.com/geosolutions-it/digital-twin-toolbox/wiki) page
 
-At the moment we have draft pipelines for converting:
-- shapefile building data into 3DTiles
-- lidar data to point 3DTiles dataset
-- lidar data to a 3D Mesg 3DTiles dataset (experimental at this stage)
+At the moment we have draft pipelines for:
+- converting shapefile data (polygons, lines, points) into 3DTiles
+- converting lidar data to point 3DTiles dataset
+- converting lidar data to a 3D Mesg 3DTiles dataset (experimental at this stage)
+- processing lidar to fix/manage CRS, resample and color it 
 
 ![](https://github.com/geosolutions-it/digital-twin-toolbox/wiki/images/vector-point-tiling.png)
 
