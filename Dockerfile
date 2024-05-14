@@ -74,6 +74,19 @@ ENV PATH="/root/.nvm/versions/node/v${NODE_VERSION}/bin/:${PATH}"
 RUN node --version
 RUN npm --version
 
+WORKDIR /usr/src
+RUN apt update && apt install -y git
+RUN git clone --depth 1 --branch v2024.01.00 https://github.com/geosolutions-it/mapstore-static-examples
+WORKDIR /usr/src/mapstore-static-examples/static-map
+RUN npm install
+ENV NODE_OPTIONS=--openssl-legacy-provider
+RUN npm run compile
+WORKDIR /usr/src
+RUN cp -R ./mapstore-static-examples/static-map/dist/ ./mapstore/
+RUN rm -rf ./mapstore-static-examples
+
+WORKDIR /usr/src/app
+
 COPY package.json /usr/src/app
 RUN npm install
 

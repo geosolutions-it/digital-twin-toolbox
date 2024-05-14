@@ -1,4 +1,5 @@
 export const DATA = 'data';
+export const AVALIABLE_TILESETS = 'available-tilesets';
 export const HIDE_GUI = 'gui:hide';
 export const SHOW_GUI = 'gui:show';
 export const POINT_CLOUD_COUNT = 'point-cloud:count';

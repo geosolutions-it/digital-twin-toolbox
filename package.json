@@ -5,12 +5,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "npm run client:build && npm run server:start",
-    "start:dev": "concurrently -n client,server \"npm:client:dev\" \"npm:server:dev\"",
+    "start": "npm run setup && npm run client:build && npm run server:start",
+    "start:dev": "npm run setup && concurrently -n client,server \"npm:client:dev\" \"npm:server:dev\"",
     "server:start": "node ./src/server/index.js",
     "server:dev": "nodemon ./src/server/index.js --legacy-watch --ignore ./static --ignore ./tmp",
     "client:build": "webpack --mode=production",
-    "client:dev": "webpack --watch --mode=development"
+    "client:dev": "webpack --watch --mode=development",
+    "setup": "node ./setup.js"
   },
   "keywords": [],
   "author": "",

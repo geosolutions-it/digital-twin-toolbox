@@ -9,3 +9,4 @@ vdatum/**/*
 !vdatum/README.md
 tmp/
 static/download/
+static/mapstore/

@@ -1,0 +1,213 @@
+{
+    "version": 2,
+    "map": {
+        "center": {
+            "x": 0,
+            "y": 0,
+            "crs": "EPSG:4326"
+        },
+        "projection": "EPSG:3857",
+        "zoom": 18,
+        "mapOptions": {},
+        "visualizationMode": "3D",
+        "layers": [
+            {
+                "id": "osm:osm__0",
+                "format": "image/jpeg",
+                "thumbURL": "assets/img/osm-bright.jpg",
+                "group": "background",
+                "source": "osm",
+                "name": "osm:osm",
+                "opacity": 1,
+                "title": "OSM Bright",
+                "type": "wms",
+                "url": [
+                    "https://maps1.geosolutionsgroup.com/geoserver/wms",
+                    "https://maps2.geosolutionsgroup.com/geoserver/wms",
+                    "https://maps3.geosolutionsgroup.com/geoserver/wms",
+                    "https://maps4.geosolutionsgroup.com/geoserver/wms",
+                    "https://maps5.geosolutionsgroup.com/geoserver/wms",
+                    "https://maps6.geosolutionsgroup.com/geoserver/wms"
+                ],
+                "visibility": true,
+                "singleTile": false,
+                "dimensions": [],
+                "hideLoading": false,
+                "handleClickOnLayer": false,
+                "useForElevation": false,
+                "hidden": false,
+                "expanded": false,
+                "credits": {
+                    "title": "OSM Bright | Rendering <a href=\"https://www.geo-solutions.it/\">GeoSolutions</a> | Data © <a href=\"http://www.openstreetmap.org/\">OpenStreetMap</a> contributors, <a href=\"http://www.openstreetmap.org/copyright\">ODbL</a>"
+                }
+            },
+            {
+                "id": "osm:osm_simple_dark__1",
+                "format": "image/jpeg",
+                "thumbURL": "assets/img/osm-simple-dark.jpg",
+                "group": "background",
+                "source": "osm_simple_dark",
+                "name": "osm:osm_simple_dark",
+                "opacity": 1,
+                "title": "OSM Simple Dark",
+                "type": "wms",
+                "url": [
+                    "https://maps6.geosolutionsgroup.com/geoserver/wms",
+                    "https://maps3.geosolutionsgroup.com/geoserver/wms",
+                    "https://maps1.geosolutionsgroup.com/geoserver/wms",
+                    "https://maps4.geosolutionsgroup.com/geoserver/wms",
+                    "https://maps2.geosolutionsgroup.com/geoserver/wms",
+                    "https://maps5.geosolutionsgroup.com/geoserver/wms"
+                ],
+                "visibility": false,
+                "singleTile": false,
+                "dimensions": [],
+                "hideLoading": false,
+                "handleClickOnLayer": false,
+                "useForElevation": false,
+                "hidden": false,
+                "expanded": false,
+                "credits": {
+                    "title": "OSM Simple Dark | Rendering <a href=\"https://www.geo-solutions.it/\">GeoSolutions</a> | Data © <a href=\"http://www.openstreetmap.org/\">OpenStreetMap</a> contributors, <a href=\"http://www.openstreetmap.org/copyright\">ODbL</a>"
+                }
+            },
+            {
+                "id": "osm:osm_simple_light__2",
+                "format": "image/jpeg",
+                "thumbURL": "assets/img/osm-simple-light.jpeg",
+                "group": "background",
+                "source": "osm_simple_light",
+                "name": "osm:osm_simple_light",
+                "opacity": 1,
+                "title": "OSM Simple Light",
+                "type": "wms",
+                "url": [
+                    "https://maps1.geosolutionsgroup.com/geoserver/wms",
+                    "https://maps2.geosolutionsgroup.com/geoserver/wms",
+                    "https://maps3.geosolutionsgroup.com/geoserver/wms",
+                    "https://maps4.geosolutionsgroup.com/geoserver/wms",
+                    "https://maps5.geosolutionsgroup.com/geoserver/wms",
+                    "https://maps6.geosolutionsgroup.com/geoserver/wms"
+                ],
+                "visibility": false,
+                "singleTile": false,
+                "dimensions": [],
+                "hideLoading": false,
+                "handleClickOnLayer": false,
+                "useForElevation": false,
+                "hidden": false,
+                "expanded": false,
+                "credits": {
+                    "title": "OSM Simple Light | Rendering <a href=\"https://www.geo-solutions.it/\">GeoSolutions</a> | Data © <a href=\"http://www.openstreetmap.org/\">OpenStreetMap</a> contributors, <a href=\"http://www.openstreetmap.org/copyright\">ODbL</a>"
+                }
+            },
+            {
+                "id": "s2cloudless:s2cloudless__3",
+                "format": "image/jpeg",
+                "thumbURL": "assets/img/s2cloudless.jpeg",
+                "group": "background",
+                "source": "s2cloudless",
+                "name": "s2cloudless:s2cloudless",
+                "opacity": 1,
+                "title": "Sentinel 2 Cloudless",
+                "type": "wms",
+                "url": [
+                    "https://maps1.geosolutionsgroup.com/geoserver/wms",
+                    "https://maps2.geosolutionsgroup.com/geoserver/wms",
+                    "https://maps3.geosolutionsgroup.com/geoserver/wms",
+                    "https://maps4.geosolutionsgroup.com/geoserver/wms",
+                    "https://maps5.geosolutionsgroup.com/geoserver/wms",
+                    "https://maps6.geosolutionsgroup.com/geoserver/wms"
+                ],
+                "visibility": false,
+                "singleTile": false,
+                "dimensions": [],
+                "hideLoading": false,
+                "handleClickOnLayer": false,
+                "useForElevation": false,
+                "hidden": false,
+                "expanded": false,
+                "credits": {
+                    "title": "<a class=\"a-light\" xmlns:dct=\"http://purl.org/dc/terms/\" href=\"https://s2maps.eu\" property=\"dct:title\">Sentinel-2 cloudless 2016</a> by <a class=\"a-light\" xmlns:cc=\"http://creativecommons.org/ns#\" href=\"https://eox.at\" property=\"cc:attributionName\" rel=\"cc:attributionURL\">EOX IT Services GmbH</a>"
+                }
+            },
+            {
+                "id": "mapnik__4",
+                "group": "background",
+                "source": "osm",
+                "name": "mapnik",
+                "title": "Open Street Map",
+                "type": "osm",
+                "visibility": false,
+                "singleTile": false,
+                "dimensions": [],
+                "hideLoading": false,
+                "handleClickOnLayer": false,
+                "useForElevation": false,
+                "hidden": false,
+                "expanded": false
+            },
+            {
+                "id": "Night2012__5",
+                "group": "background",
+                "source": "nasagibs",
+                "name": "Night2012",
+                "provider": "NASAGIBS.ViirsEarthAtNight2012",
+                "title": "NASAGIBS Night 2012",
+                "type": "tileprovider",
+                "visibility": false,
+                "singleTile": false,
+                "dimensions": [],
+                "hideLoading": false,
+                "handleClickOnLayer": false,
+                "useForElevation": false,
+                "hidden": false,
+                "expanded": false
+            },
+            {
+                "id": "OpenTopoMap__6",
+                "group": "background",
+                "source": "OpenTopoMap",
+                "name": "OpenTopoMap",
+                "provider": "OpenTopoMap",
+                "title": "OpenTopoMap",
+                "type": "tileprovider",
+                "visibility": false,
+                "singleTile": false,
+                "dimensions": [],
+                "hideLoading": false,
+                "handleClickOnLayer": false,
+                "useForElevation": false,
+                "hidden": false,
+                "expanded": false
+            },
+            {
+                "id": "undefined__7",
+                "group": "background",
+                "source": "ol",
+                "title": "Empty Background",
+                "type": "empty",
+                "visibility": false,
+                "singleTile": false,
+                "dimensions": [],
+                "hideLoading": false,
+                "handleClickOnLayer": false,
+                "useForElevation": false,
+                "hidden": false,
+                "expanded": false
+            }
+        ],
+        "groups": [
+            {
+                "id": "Default",
+                "title": "Default",
+                "expanded": true,
+                "visibility": true
+            }
+        ]
+    },
+    "catalogServices": {
+        "services": {},
+        "selectedService": ""
+    }
+}

@@ -3,7 +3,7 @@ import GUI from 'lil-gui';
 import logger from './logger.js';
 import shpjs from 'shpjs';
 import workflows from './workflows/index.js'
-import { SHOW_GUI, HIDE_GUI } from '../constants.js';
+import { SHOW_GUI, HIDE_GUI, DATA, AVALIABLE_TILESETS } from '../constants.js';
 
 let data = {
     file: {}
@@ -45,6 +45,39 @@ const initGui = (options) => {
     const gui = new GUI({ width: 300 });
     let fileSelector;
     const inputDataFolder = gui.addFolder( 'Input data' );
+    const tileSetFolder = gui.addFolder( 'Available tilesets' );
+    socket.on(AVALIABLE_TILESETS, (payload) => {
+        tileSetFolder.reset();
+        const { availableTilesets } = payload || {};
+        let tilesets = availableTilesets.reduce((acc, tileset) => {
+            return {
+                ...acc,
+                [tileset.name]: false
+            };
+        }, {});
+
+        Object.keys(tilesets).forEach((key) => {
+            tileSetFolder.add(tilesets, key);
+        });
+
+        tileSetFolder.add({
+            action: () => {
+                const selectedTilesets = availableTilesets.filter(tileset => tilesets[tileset.name]);
+                const actions = [
+                    {
+                        type:'CATALOG:ADD_LAYERS_FROM_CATALOGS',
+                        layers:selectedTilesets.map(tileset => tileset.name),
+                        sources:selectedTilesets.map((tileset) => ({
+                            type: '3dtiles',
+                            url: tileset.link
+                        }))
+                    }
+                ];
+                window.open('/mapstore/?map=../../configs/map#/?actions=' + JSON.stringify(actions), '', 'popup=true,width=800,height=600');
+            }
+        }, 'action').name('Show selected tilesets in MapStore');
+        
+    });
     let configFolder;
     socket.on(HIDE_GUI, () => {
         gui.hide();
@@ -52,7 +85,20 @@ const initGui = (options) => {
     socket.on(SHOW_GUI, () => {
         gui.show();
     });
-    socket.on('data', (payload) => {
+    const reset = () => {
+        group.children.forEach((mesh) => {
+            mesh.geometry.dispose();
+        });
+        group.remove(...group.children);
+        
+        if (configFolder) {
+            configFolder.destroy();
+            configFolder =  undefined;
+        }
+    };
+    socket.on(DATA, (payload) => {
+        data.file = {};
+        reset();
         if (fileSelector) {
             fileSelector.destroy();
         }
@@ -60,17 +106,10 @@ const initGui = (options) => {
             .add( data.file, 'file', [...(payload.files || [])].reduce((acc, file) => ({ ...acc, [`${file.name} (${file.extension})`]: file }), {}) )
             .name( 'Select file' )
             .onFinishChange((file) => {
-                group.children.forEach((mesh) => {
-                    mesh.geometry.dispose();
-                });
-                group.remove(...group.children);
-                logger({ message: 'Loading file info...' })
-                if (configFolder) {
-                    configFolder.destroy();
-                    configFolder =  undefined;
-                }
+                reset();
                 configFolder = gui.addFolder( 'Config' );
                 configFolder.reset();
+                logger({ message: 'Loading file info...' })
                 loadingFileInfo(file, { ...options, folder: configFolder })
                     .then(() => {
                         logger({ message: `${file.name} data loaded!`, type: 'success' })
