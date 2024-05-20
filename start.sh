@@ -1,3 +1,5 @@
+#!/bin/bash
+
 cd /usr/src/app
 
 if [ "$DEVELOPMENT" == "true" ]
