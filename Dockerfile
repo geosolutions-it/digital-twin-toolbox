@@ -11,7 +11,7 @@ ENV BLENDERPIP "/bin/3.2/python/bin/pip3"
 ENV BLENDERPY "/bin/3.2/python/bin/python3.10"
 ENV HW="CPU"
 
-RUN apt-get update && apt-get upgrade && apt-get install --no-install-recommends -y \
+RUN apt-get update -y && apt-get upgrade -y && apt-get install --no-install-recommends -y \
     wget \
     curl \
     libopenexr-dev \
