@@ -34,5 +34,17 @@ services:
       - node_network
     env_file:
       - .env
+  openpointclass:
+    # image: uav4geo/openpointclass:latest
+    build: https://github.com/uav4geo/OpenPointClass.git
+    stdin_open: true # docker run -i
+    tty: true        # docker run -t
+    container_name: digital_twin_openpointclass
+    volumes:
+      - ./static:/data/dataset-path
+    networks:
+      - node_network
+    env_file:
+      - .env
 networks:
   node_network:
