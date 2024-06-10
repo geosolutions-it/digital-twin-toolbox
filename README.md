@@ -3,7 +3,7 @@
 Introduction
 ============
 This repository collects different tools/libraries and workflows inside a docker environment to generate 3D Tiles from common data sources such as Shapefiles and LAS files. 
-The short term goal is to evaluate the various open source tools that are available for genering 3D tiles from various data sources typycally used when modeling an urban environment when creating a a 3D Model like building and Lidar data. The long term goal is to transform this experiment into an engine that can be used to create 3DTiles for urban environments.
+The short term goal is to evaluate the various open source tools that are available to generate 3D Tiles from various data sources typically used when modeling an urban environment when creating a 3D Model like building and Lidar data. The long term goal is to transform this experiment into an engine that can be used to create 3D Tiles for urban environments.
 
 This project is still a work in progress and this application **is not** production ready. Extensive documentation about this project can be found in the [wiki](https://github.com/geosolutions-it/digital-twin-toolbox/wiki) page (see the Table of Contents).
 
