@@ -14,7 +14,7 @@ At the moment we have draft pipelines for:
 - converting lidar data to a 3D Mesh file (experimental at this stage)
 - converting 3D Mesh to 3DTiles dataset (experimental at this stage)
 
-![](https://github.com/geosolutions-it/digital-twin-toolbox/wiki/images/vector-point-tiling.png)
+![Application viewer with extruded polygons](https://github.com/geosolutions-it/digital-twin-toolbox/wiki/images/vector-polygon-geometry.jpg)
 
 License
 ============
