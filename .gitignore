@@ -10,3 +10,5 @@ vdatum/**/*
 tmp/
 static/download/
 static/mapstore/
+static/models/*
+static/class_data/*
