@@ -5,7 +5,7 @@ description = ""
 authors = ["Admin <admin@example.com>"]
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = ">=3.10,<3.12"
 uvicorn = {extras = ["standard"], version = "^0.24.0.post1"}
 fastapi = "^0.109.1"
 python-multipart = "^0.0.7"
@@ -26,6 +26,12 @@ bcrypt = "4.0.1"
 pydantic-settings = "^2.2.1"
 sentry-sdk = {extras = ["fastapi"], version = "^1.40.6"}
 pyjwt = "^2.8.0"
+celery = "^5.4.0"
+redis = "^5.0.8"
+flower = "^2.0.1"
+earcut = "^1.1.5"
+py3dtiles = {extras = ["las", "ply", "postgres"], version = "^8.0.2"}
+laspy = {extras = ["laszip"], version = "^2.5.4"}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"

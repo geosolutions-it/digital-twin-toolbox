@@ -1,3 +1,40 @@
+export type Asset = {
+  filename: string
+  content_type?: string | null
+  content_size?: number | null
+  asset_type?: string | null
+  extension?: string | null
+  geometry_type?: string | null
+  upload_id?: string | null
+  upload_status?: string | null
+  upload_result: Record<string, unknown> | null
+  id?: string
+  owner_id: string
+}
+
+export type AssetPublic = {
+  filename: string
+  content_type?: string | null
+  content_size?: number | null
+  asset_type?: string | null
+  extension?: string | null
+  geometry_type?: string | null
+  upload_id?: string | null
+  upload_status?: string | null
+  upload_result: Record<string, unknown> | null
+  id: string
+  owner_id: string
+}
+
+export type AssetsPublic = {
+  data: Array<AssetPublic>
+  count: number
+}
+
+export type Body_assets_create_asset = {
+  file: Blob | File
+}
+
 export type Body_login_login_access_token = {
   grant_type?: string | null
   username: string
@@ -11,28 +48,6 @@ export type HTTPValidationError = {
   detail?: Array<ValidationError>
 }
 
-export type ItemCreate = {
-  title: string
-  description?: string | null
-}
-
-export type ItemPublic = {
-  title: string
-  description?: string | null
-  id: string
-  owner_id: string
-}
-
-export type ItemUpdate = {
-  title?: string | null
-  description?: string | null
-}
-
-export type ItemsPublic = {
-  data: Array<ItemPublic>
-  count: number
-}
-
 export type Message = {
   message: string
 }
@@ -40,6 +55,49 @@ export type Message = {
 export type NewPassword = {
   token: string
   new_password: string
+}
+
+export type PipelineCreate = {
+  title: string
+  asset_id: string | null
+  data: Record<string, unknown> | null
+  task_id: string | null
+  task_status: string | null
+  task_result: Record<string, unknown> | null
+}
+
+export type PipelinePublic = {
+  title: string
+  asset_id: string | null
+  data: Record<string, unknown> | null
+  task_id: string | null
+  task_status: string | null
+  task_result: Record<string, unknown> | null
+  id: string
+  owner_id: string
+}
+
+export type PipelinePublicExtended = {
+  title: string
+  asset_id: string | null
+  data: Record<string, unknown> | null
+  task_id: string | null
+  task_status: string | null
+  task_result: Record<string, unknown> | null
+  id: string
+  owner_id: string
+  asset: Asset | null
+}
+
+export type PipelineUpdate = {
+  data: Record<string, unknown> | null
+}
+
+export type PipelinesActionTypes = "run" | "cancel"
+
+export type PipelinesPublic = {
+  data: Array<PipelinePublic>
+  count: number
 }
 
 export type Token = {

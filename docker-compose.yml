@@ -1,9 +1,10 @@
 services:
   db:
-    image: postgres:12
+    image: postgis/postgis:12-3.4
     restart: always
     volumes:
       - app-db-data:/var/lib/postgresql/data/pgdata
+      - ./backend/scripts/create_tasks_db.sh:/docker-entrypoint-initdb.d/create_tasks_db.sh
     env_file:
       - .env
     environment:
@@ -11,6 +12,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD?Variable not set}
       - POSTGRES_USER=${POSTGRES_USER?Variable not set}
       - POSTGRES_DB=${POSTGRES_DB?Variable not set}
+      - POSTGRES_TASKS_DB${POSTGRES_TASKS_DB?Variable not set}
 
   adminer:
     image: adminer
@@ -38,6 +40,9 @@ services:
   backend:
     image: '${DOCKER_IMAGE_BACKEND?Variable not set}:${TAG-latest}'
     restart: always
+    command: /start.sh
+    volumes:
+      - app-assets-data:/mnt/assets
     networks:
       - traefik-public
       - default
@@ -62,6 +67,10 @@ services:
       - POSTGRES_USER=${POSTGRES_USER?Variable not set}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD?Variable not set}
       - SENTRY_DSN=${SENTRY_DSN}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - ASSETS_DATA=/mnt/assets
+      - PGPASSWORD=${POSTGRES_PASSWORD?Variable not set}
 
     build:
       context: ./backend
@@ -91,6 +100,47 @@ services:
       # Enable www redirection for HTTP and HTTPS
       - traefik.http.routers.${STACK_NAME?Variable not set}-backend-http.middlewares=https-redirect,${STACK_NAME?Variable not set}-www-redirect
       - traefik.http.routers.${STACK_NAME?Variable not set}-backend-https.middlewares=${STACK_NAME?Variable not set}-www-redirect
+
+  redis:
+    image: redis:7
+
+  worker:
+    restart: always
+    volumes:
+      - app-assets-data:/mnt/assets
+    image: '${DOCKER_IMAGE_BACKEND?Variable not set}:${TAG-latest}'
+    platform: linux/amd64 # Patch for M1 Mac
+    command: /celery.sh
+    env_file:
+      - .env
+    networks:
+      - traefik-public
+      - default
+    environment:
+      - DOMAIN=${DOMAIN}
+      - ENVIRONMENT=${ENVIRONMENT}
+      - BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS}
+      - SECRET_KEY=${SECRET_KEY?Variable not set}
+      - FIRST_SUPERUSER=${FIRST_SUPERUSER?Variable not set}
+      - FIRST_SUPERUSER_PASSWORD=${FIRST_SUPERUSER_PASSWORD?Variable not set}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - EMAILS_FROM_EMAIL=${EMAILS_FROM_EMAIL}
+      - POSTGRES_SERVER=db
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER?Variable not set}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD?Variable not set}
+      - SENTRY_DSN=${SENTRY_DSN}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - ASSETS_DATA=/mnt/assets
+      - PGPASSWORD=${POSTGRES_PASSWORD?Variable not set}
+    depends_on:
+      - backend
+      - redis
+      - db
 
   frontend:
     image: '${DOCKER_IMAGE_FRONTEND?Variable not set}:${TAG-latest}'
@@ -123,6 +173,7 @@ services:
       - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-http.middlewares=https-redirect,${STACK_NAME?Variable not set}-www-redirect
 volumes:
   app-db-data:
+  app-assets-data:
 
 networks:
   traefik-public:

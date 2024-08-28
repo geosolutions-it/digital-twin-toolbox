@@ -18,8 +18,10 @@ import { Route as LoginImport } from './routes/login'
 import { Route as LayoutImport } from './routes/_layout'
 import { Route as LayoutIndexImport } from './routes/_layout/index'
 import { Route as LayoutSettingsImport } from './routes/_layout/settings'
-import { Route as LayoutItemsImport } from './routes/_layout/items'
+import { Route as LayoutPipelinesImport } from './routes/_layout/pipelines'
+import { Route as LayoutAssetsImport } from './routes/_layout/assets'
 import { Route as LayoutAdminImport } from './routes/_layout/admin'
+import { Route as LayoutPipelinePipelineIdImport } from './routes/_layout/pipeline/$pipelineId'
 
 // Create/Update Routes
 
@@ -58,13 +60,23 @@ const LayoutSettingsRoute = LayoutSettingsImport.update({
   getParentRoute: () => LayoutRoute,
 } as any)
 
-const LayoutItemsRoute = LayoutItemsImport.update({
-  path: '/items',
+const LayoutPipelinesRoute = LayoutPipelinesImport.update({
+  path: '/pipelines',
+  getParentRoute: () => LayoutRoute,
+} as any)
+
+const LayoutAssetsRoute = LayoutAssetsImport.update({
+  path: '/assets',
   getParentRoute: () => LayoutRoute,
 } as any)
 
 const LayoutAdminRoute = LayoutAdminImport.update({
   path: '/admin',
+  getParentRoute: () => LayoutRoute,
+} as any)
+
+const LayoutPipelinePipelineIdRoute = LayoutPipelinePipelineIdImport.update({
+  path: '/pipeline/$pipelineId',
   getParentRoute: () => LayoutRoute,
 } as any)
 
@@ -96,8 +108,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutAdminImport
       parentRoute: typeof LayoutImport
     }
-    '/_layout/items': {
-      preLoaderRoute: typeof LayoutItemsImport
+    '/_layout/assets': {
+      preLoaderRoute: typeof LayoutAssetsImport
+      parentRoute: typeof LayoutImport
+    }
+    '/_layout/pipelines': {
+      preLoaderRoute: typeof LayoutPipelinesImport
       parentRoute: typeof LayoutImport
     }
     '/_layout/settings': {
@@ -108,6 +124,10 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutIndexImport
       parentRoute: typeof LayoutImport
     }
+    '/_layout/pipeline/$pipelineId': {
+      preLoaderRoute: typeof LayoutPipelinePipelineIdImport
+      parentRoute: typeof LayoutImport
+    }
   }
 }
 
@@ -116,9 +136,11 @@ declare module '@tanstack/react-router' {
 export const routeTree = rootRoute.addChildren([
   LayoutRoute.addChildren([
     LayoutAdminRoute,
-    LayoutItemsRoute,
+    LayoutAssetsRoute,
+    LayoutPipelinesRoute,
     LayoutSettingsRoute,
     LayoutIndexRoute,
+    LayoutPipelinePipelineIdRoute,
   ]),
   LoginRoute,
   RecoverPasswordRoute,

@@ -2,6 +2,8 @@ import sentry_sdk
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
 from starlette.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+import os
 
 from app.api.main import api_router
 from app.core.config import settings
@@ -33,3 +35,13 @@ if settings.BACKEND_CORS_ORIGINS:
     )
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
+static_output = os.path.join(settings.ASSETS_DATA, "output")
+
+os.makedirs(static_output, exist_ok=True)
+
+app.mount(
+    settings.API_V1_STR + '/output',
+    StaticFiles(directory=static_output),
+    name="output"
+)

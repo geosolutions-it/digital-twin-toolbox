@@ -53,6 +53,8 @@ class Settings(BaseSettings):
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str = ""
     POSTGRES_DB: str = ""
+    POSTGRES_TASKS_DB: str = ""
+    ASSETS_DATA: str = ""
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -64,6 +66,19 @@ class Settings(BaseSettings):
             host=self.POSTGRES_SERVER,
             port=self.POSTGRES_PORT,
             path=self.POSTGRES_DB,
+            query="options=-csearch_path=public"
+        )
+    
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def SQLALCHEMY_TASKS_DATABASE_URI(self) -> PostgresDsn:
+        return MultiHostUrl.build(
+            scheme="postgresql+psycopg",
+            username=self.POSTGRES_USER,
+            password=self.POSTGRES_PASSWORD,
+            host=self.POSTGRES_SERVER,
+            port=self.POSTGRES_PORT,
+            path=self.POSTGRES_TASKS_DB,
         )
 
     SMTP_TLS: bool = True

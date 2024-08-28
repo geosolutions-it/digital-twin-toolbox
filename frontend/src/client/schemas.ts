@@ -1,3 +1,256 @@
+export const $Asset = {
+  properties: {
+    filename: {
+      type: "string",
+      isRequired: true,
+      maxLength: 255,
+      minLength: 1,
+    },
+    content_type: {
+      type: "any-of",
+      contains: [
+        {
+          type: "string",
+          maxLength: 255,
+        },
+        {
+          type: "null",
+        },
+      ],
+    },
+    content_size: {
+      type: "any-of",
+      contains: [
+        {
+          type: "number",
+        },
+        {
+          type: "null",
+        },
+      ],
+    },
+    asset_type: {
+      type: "any-of",
+      contains: [
+        {
+          type: "string",
+        },
+        {
+          type: "null",
+        },
+      ],
+    },
+    extension: {
+      type: "any-of",
+      contains: [
+        {
+          type: "string",
+        },
+        {
+          type: "null",
+        },
+      ],
+    },
+    geometry_type: {
+      type: "any-of",
+      contains: [
+        {
+          type: "string",
+        },
+        {
+          type: "null",
+        },
+      ],
+    },
+    upload_id: {
+      type: "any-of",
+      contains: [
+        {
+          type: "string",
+        },
+        {
+          type: "null",
+        },
+      ],
+    },
+    upload_status: {
+      type: "any-of",
+      contains: [
+        {
+          type: "string",
+        },
+        {
+          type: "null",
+        },
+      ],
+    },
+    upload_result: {
+      type: "any-of",
+      contains: [
+        {
+          type: "dictionary",
+          contains: {
+            properties: {},
+          },
+        },
+        {
+          type: "null",
+        },
+      ],
+      isRequired: true,
+    },
+    id: {
+      type: "string",
+      format: "uuid",
+    },
+    owner_id: {
+      type: "string",
+      isRequired: true,
+      format: "uuid",
+    },
+  },
+} as const
+
+export const $AssetPublic = {
+  properties: {
+    filename: {
+      type: "string",
+      isRequired: true,
+      maxLength: 255,
+      minLength: 1,
+    },
+    content_type: {
+      type: "any-of",
+      contains: [
+        {
+          type: "string",
+          maxLength: 255,
+        },
+        {
+          type: "null",
+        },
+      ],
+    },
+    content_size: {
+      type: "any-of",
+      contains: [
+        {
+          type: "number",
+        },
+        {
+          type: "null",
+        },
+      ],
+    },
+    asset_type: {
+      type: "any-of",
+      contains: [
+        {
+          type: "string",
+        },
+        {
+          type: "null",
+        },
+      ],
+    },
+    extension: {
+      type: "any-of",
+      contains: [
+        {
+          type: "string",
+        },
+        {
+          type: "null",
+        },
+      ],
+    },
+    geometry_type: {
+      type: "any-of",
+      contains: [
+        {
+          type: "string",
+        },
+        {
+          type: "null",
+        },
+      ],
+    },
+    upload_id: {
+      type: "any-of",
+      contains: [
+        {
+          type: "string",
+        },
+        {
+          type: "null",
+        },
+      ],
+    },
+    upload_status: {
+      type: "any-of",
+      contains: [
+        {
+          type: "string",
+        },
+        {
+          type: "null",
+        },
+      ],
+    },
+    upload_result: {
+      type: "any-of",
+      contains: [
+        {
+          type: "dictionary",
+          contains: {
+            properties: {},
+          },
+        },
+        {
+          type: "null",
+        },
+      ],
+      isRequired: true,
+    },
+    id: {
+      type: "string",
+      isRequired: true,
+      format: "uuid",
+    },
+    owner_id: {
+      type: "string",
+      isRequired: true,
+      format: "uuid",
+    },
+  },
+} as const
+
+export const $AssetsPublic = {
+  properties: {
+    data: {
+      type: "array",
+      contains: {
+        type: "AssetPublic",
+      },
+      isRequired: true,
+    },
+    count: {
+      type: "number",
+      isRequired: true,
+    },
+  },
+} as const
+
+export const $Body_assets_create_asset = {
+  properties: {
+    file: {
+      type: "binary",
+      isRequired: true,
+      format: "binary",
+    },
+  },
+} as const
+
 export const $Body_login_login_access_token = {
   properties: {
     grant_type: {
@@ -60,108 +313,6 @@ export const $HTTPValidationError = {
   },
 } as const
 
-export const $ItemCreate = {
-  properties: {
-    title: {
-      type: "string",
-      isRequired: true,
-      maxLength: 255,
-      minLength: 1,
-    },
-    description: {
-      type: "any-of",
-      contains: [
-        {
-          type: "string",
-          maxLength: 255,
-        },
-        {
-          type: "null",
-        },
-      ],
-    },
-  },
-} as const
-
-export const $ItemPublic = {
-  properties: {
-    title: {
-      type: "string",
-      isRequired: true,
-      maxLength: 255,
-      minLength: 1,
-    },
-    description: {
-      type: "any-of",
-      contains: [
-        {
-          type: "string",
-          maxLength: 255,
-        },
-        {
-          type: "null",
-        },
-      ],
-    },
-    id: {
-      type: "string",
-      isRequired: true,
-      format: "uuid",
-    },
-    owner_id: {
-      type: "string",
-      isRequired: true,
-      format: "uuid",
-    },
-  },
-} as const
-
-export const $ItemUpdate = {
-  properties: {
-    title: {
-      type: "any-of",
-      contains: [
-        {
-          type: "string",
-          maxLength: 255,
-          minLength: 1,
-        },
-        {
-          type: "null",
-        },
-      ],
-    },
-    description: {
-      type: "any-of",
-      contains: [
-        {
-          type: "string",
-          maxLength: 255,
-        },
-        {
-          type: "null",
-        },
-      ],
-    },
-  },
-} as const
-
-export const $ItemsPublic = {
-  properties: {
-    data: {
-      type: "array",
-      contains: {
-        type: "ItemPublic",
-      },
-      isRequired: true,
-    },
-    count: {
-      type: "number",
-      isRequired: true,
-    },
-  },
-} as const
-
 export const $Message = {
   properties: {
     message: {
@@ -182,6 +333,313 @@ export const $NewPassword = {
       isRequired: true,
       maxLength: 40,
       minLength: 8,
+    },
+  },
+} as const
+
+export const $PipelineCreate = {
+  properties: {
+    title: {
+      type: "string",
+      isRequired: true,
+      maxLength: 255,
+      minLength: 1,
+    },
+    asset_id: {
+      type: "any-of",
+      contains: [
+        {
+          type: "string",
+          format: "uuid",
+        },
+        {
+          type: "null",
+        },
+      ],
+      isRequired: true,
+    },
+    data: {
+      type: "any-of",
+      contains: [
+        {
+          type: "dictionary",
+          contains: {
+            properties: {},
+          },
+        },
+        {
+          type: "null",
+        },
+      ],
+      isRequired: true,
+    },
+    task_id: {
+      type: "any-of",
+      contains: [
+        {
+          type: "string",
+        },
+        {
+          type: "null",
+        },
+      ],
+      isRequired: true,
+    },
+    task_status: {
+      type: "any-of",
+      contains: [
+        {
+          type: "string",
+        },
+        {
+          type: "null",
+        },
+      ],
+      isRequired: true,
+    },
+    task_result: {
+      type: "any-of",
+      contains: [
+        {
+          type: "dictionary",
+          contains: {
+            properties: {},
+          },
+        },
+        {
+          type: "null",
+        },
+      ],
+      isRequired: true,
+    },
+  },
+} as const
+
+export const $PipelinePublic = {
+  properties: {
+    title: {
+      type: "string",
+      isRequired: true,
+      maxLength: 255,
+      minLength: 1,
+    },
+    asset_id: {
+      type: "any-of",
+      contains: [
+        {
+          type: "string",
+          format: "uuid",
+        },
+        {
+          type: "null",
+        },
+      ],
+      isRequired: true,
+    },
+    data: {
+      type: "any-of",
+      contains: [
+        {
+          type: "dictionary",
+          contains: {
+            properties: {},
+          },
+        },
+        {
+          type: "null",
+        },
+      ],
+      isRequired: true,
+    },
+    task_id: {
+      type: "any-of",
+      contains: [
+        {
+          type: "string",
+        },
+        {
+          type: "null",
+        },
+      ],
+      isRequired: true,
+    },
+    task_status: {
+      type: "any-of",
+      contains: [
+        {
+          type: "string",
+        },
+        {
+          type: "null",
+        },
+      ],
+      isRequired: true,
+    },
+    task_result: {
+      type: "any-of",
+      contains: [
+        {
+          type: "dictionary",
+          contains: {
+            properties: {},
+          },
+        },
+        {
+          type: "null",
+        },
+      ],
+      isRequired: true,
+    },
+    id: {
+      type: "string",
+      isRequired: true,
+      format: "uuid",
+    },
+    owner_id: {
+      type: "string",
+      isRequired: true,
+      format: "uuid",
+    },
+  },
+} as const
+
+export const $PipelinePublicExtended = {
+  properties: {
+    title: {
+      type: "string",
+      isRequired: true,
+      maxLength: 255,
+      minLength: 1,
+    },
+    asset_id: {
+      type: "any-of",
+      contains: [
+        {
+          type: "string",
+          format: "uuid",
+        },
+        {
+          type: "null",
+        },
+      ],
+      isRequired: true,
+    },
+    data: {
+      type: "any-of",
+      contains: [
+        {
+          type: "dictionary",
+          contains: {
+            properties: {},
+          },
+        },
+        {
+          type: "null",
+        },
+      ],
+      isRequired: true,
+    },
+    task_id: {
+      type: "any-of",
+      contains: [
+        {
+          type: "string",
+        },
+        {
+          type: "null",
+        },
+      ],
+      isRequired: true,
+    },
+    task_status: {
+      type: "any-of",
+      contains: [
+        {
+          type: "string",
+        },
+        {
+          type: "null",
+        },
+      ],
+      isRequired: true,
+    },
+    task_result: {
+      type: "any-of",
+      contains: [
+        {
+          type: "dictionary",
+          contains: {
+            properties: {},
+          },
+        },
+        {
+          type: "null",
+        },
+      ],
+      isRequired: true,
+    },
+    id: {
+      type: "string",
+      isRequired: true,
+      format: "uuid",
+    },
+    owner_id: {
+      type: "string",
+      isRequired: true,
+      format: "uuid",
+    },
+    asset: {
+      type: "any-of",
+      contains: [
+        {
+          type: "Asset",
+        },
+        {
+          type: "null",
+        },
+      ],
+      isRequired: true,
+    },
+  },
+} as const
+
+export const $PipelineUpdate = {
+  properties: {
+    data: {
+      type: "any-of",
+      contains: [
+        {
+          type: "dictionary",
+          contains: {
+            properties: {},
+          },
+        },
+        {
+          type: "null",
+        },
+      ],
+      isRequired: true,
+    },
+  },
+} as const
+
+export const $PipelinesActionTypes = {
+  type: "Enum",
+  enum: ["run", "cancel"],
+} as const
+
+export const $PipelinesPublic = {
+  properties: {
+    data: {
+      type: "array",
+      contains: {
+        type: "PipelinePublic",
+      },
+      isRequired: true,
+    },
+    count: {
+      type: "number",
+      isRequired: true,
     },
   },
 } as const

@@ -1,24 +1,43 @@
-import { Box, Container, Text } from "@chakra-ui/react"
+import { Container, Flex, Heading, Image, Link, Text } from "@chakra-ui/react"
 import { createFileRoute } from "@tanstack/react-router"
-
-import useAuth from "../../hooks/useAuth"
+import Logo from "/assets/images/logo.svg"
 
 export const Route = createFileRoute("/_layout/")({
   component: Dashboard,
 })
 
 function Dashboard() {
-  const { user: currentUser } = useAuth()
-
   return (
     <>
       <Container maxW="full">
-        <Box pt={12} m={4}>
-          <Text fontSize="2xl">
-            Hi, {currentUser?.full_name || currentUser?.email} 👋🏼
-          </Text>
-          <Text>Welcome back, nice to see you again!</Text>
-        </Box>
+        <Heading size="2xl" textAlign={{ base: "center", md: "left" }} pt={12}>
+          <Flex alignItems="center">
+            <Image
+              src={Logo}
+              alt="Digital Twin Toolbox logo"
+              height="48px"
+              maxW="2xs"
+              alignSelf="center"
+              mr={2}
+            />
+            Digital Twin Toolbox
+          </Flex>
+        </Heading>
+        <Text pt={8} maxW="70ch">
+          This project collects different tools/libraries and workflows inside a
+          docker environment to generate 3D Tiles from common data sources such
+          as Shapefiles and LAS files.
+        </Text>
+        <Text pt={8} maxW="70ch">
+          Extensive documentation about this project can be found in the{" "}
+          <Link
+            color="ui.success"
+            href="https://github.com/geosolutions-it/digital-twin-toolbox/wiki"
+          >
+            wiki
+          </Link>{" "}
+          page (see the Table of Contents).
+        </Text>
       </Container>
     </>
   )

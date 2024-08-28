@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug FastAPI Project backend: Python Debugger",
+            "name": "Debug Backend: Python Debugger",
             "type": "debugpy",
             "request": "launch",
             "module": "uvicorn",

@@ -15,19 +15,7 @@ const Navbar = ({ type, addModalAs }: NavbarProps) => {
   return (
     <>
       <Flex py={8} gap={4}>
-        {/* TODO: Complete search functionality */}
-        {/* <InputGroup w={{ base: '100%', md: 'auto' }}>
-                    <InputLeftElement pointerEvents='none'>
-                        <Icon as={FaSearch} color='ui.dim' />
-                    </InputLeftElement>
-                    <Input type='text' placeholder='Search' fontSize={{ base: 'sm', md: 'inherit' }} borderRadius='8px' />
-                </InputGroup> */}
-        <Button
-          variant="primary"
-          gap={1}
-          fontSize={{ base: "sm", md: "inherit" }}
-          onClick={addModal.onOpen}
-        >
+        <Button variant="outline" gap={1} size="sm" onClick={addModal.onOpen}>
           <Icon as={FaPlus} /> Add {type}
         </Button>
         <AddModal isOpen={addModal.isOpen} onClose={addModal.onClose} />

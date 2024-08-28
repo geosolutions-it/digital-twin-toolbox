@@ -6,3 +6,4 @@ app.egg-info
 .coverage
 htmlcov
 .venv
+node_modules

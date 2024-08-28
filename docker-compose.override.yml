@@ -68,6 +68,17 @@ services:
       SMTP_TLS: "false"
       EMAILS_FROM_EMAIL: "noreply@example.com"
 
+  worker:
+    restart: "no"
+    volumes:
+      - ./backend/:/app
+    command: /celery-reload.sh
+    environment:
+      SMTP_HOST: "mailcatcher"
+      SMTP_PORT: "1025"
+      SMTP_TLS: "false"
+      EMAILS_FROM_EMAIL: "noreply@example.com"
+
   mailcatcher:
     image: schickling/mailcatcher
     ports:

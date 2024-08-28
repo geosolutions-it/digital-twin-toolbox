@@ -28,6 +28,17 @@ target_metadata = SQLModel.metadata
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
 
+# https://github.com/sqlalchemy/alembic/discussions/1282
+# https://gist.github.com/nathancahill/aeec99f6a3423c5ada77
+
+exclude_tables = ['spatial_ref_sys']
+
+def include_object(object, name, type_, reflected, compare_to):
+    if type_ == "table" and name in exclude_tables:
+        return False
+    else:
+        return True
+
 
 def get_url():
     return str(settings.SQLALCHEMY_DATABASE_URI)
@@ -71,12 +82,14 @@ def run_migrations_online():
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata, compare_type=True
+            connection=connection,
+            target_metadata=target_metadata,
+            compare_type=True,
+            include_object=include_object,
         )
 
         with context.begin_transaction():
             context.run_migrations()
-
 
 if context.is_offline_mode():
     run_migrations_offline()

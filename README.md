@@ -1,4 +1,4 @@
-# <img src="./static/img/logo.svg" height="32" /> Digital Twin Toolbox
+# <img src="./frontend/public/assets/images/logo.svg" height="32" /> Digital Twin Toolbox
 
 Introduction
 ============
@@ -9,12 +9,9 @@ This project is still a work in progress and this application **is not** product
 
 At the moment we have draft pipelines for:
 - converting shapefile data (polygons, lines, points) into 3DTiles
-- converting lidar data to point 3DTiles dataset
-- processing lidar to fix/manage CRS, resample and color it
-- converting lidar data to a 3D Mesh file (experimental at this stage)
-- converting 3D Mesh to 3DTiles dataset (experimental at this stage)
+- converting lidar data to point 3DTiles dataset, including lidar processing  to fix/manage CRS, resample and color it
 
-![Application viewer with extruded polygons](https://github.com/geosolutions-it/digital-twin-toolbox/wiki/images/vector-polygon-geometry.jpg)
+![Application viewer with extruded polygons](img/digital-twin-toolbox.png)
 
 License
 ============
