@@ -1,12 +1,5 @@
-.env
 node_modules/
-static/dist/
-static/data/**/*
-!static/data/README.md
-static/tilesets/**/*
-!static/tilesets/README.md
-vdatum/**/*
-!vdatum/README.md
-tmp/
-static/download/
-static/mapstore/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
