@@ -12,6 +12,7 @@ dist
 dist-ssr
 *.local
 openapi.json
+public/mapstore
 
 # Editor directories and files
 .vscode/*

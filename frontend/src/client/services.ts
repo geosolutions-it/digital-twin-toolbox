@@ -449,6 +449,19 @@ export class UtilsService {
       },
     })
   }
+
+  /**
+   * Create Map Config
+   * MapStore map configuration
+   * @returns unknown Successful Response
+   * @throws ApiError
+   */
+  public static createMapConfig(): CancelablePromise<unknown> {
+    return __request(OpenAPI, {
+      method: "GET",
+      url: "/api/v1/utils/map",
+    })
+  }
 }
 
 export class AssetsService {

@@ -1,0 +1,256 @@
+{
+    "proxyUrl": false,
+    "monitorState": [
+        {
+            "name": "mapType",
+            "path": "maptype.mapType"
+        }
+    ],
+    "projectionDefs": [],
+    "authenticationRules": [],
+    "plugins": [
+        {
+            "name": "Map",
+            "cfg": {
+                "mapOptions": {
+                    "openlayers": {
+                        "interactions": {
+                            "pinchRotate": false,
+                            "altShiftDragRotate": false
+                        },
+                        "attribution": {
+                            "container": "#footer-attribution-container"
+                        }
+                    },
+                    "leaflet": {
+                        "attribution": {
+                            "container": "#footer-attribution-container"
+                        }
+                    }
+                },
+                "toolsOptions": {
+                    "scalebar": {
+                        "container": "#footer-scalebar-container"
+                    }
+                }
+            }
+        },
+        "DrawerMenu",
+        "Notifications",
+        "BackgroundSelector",
+        "Swipe",
+        {
+            "name": "Annotations"
+        },
+        {
+            "name": "Identify",
+            "cfg": {
+                "showHighlightFeatureButton": true,
+                "viewerOptions": {
+                    "container": "{context.ReactSwipe}"
+                },
+                "showEdit": true
+            },
+            "override": {
+                "Toolbar": {
+                    "position": 11
+                }
+            }
+        },
+        {
+            "name": "Locate",
+            "override": {
+                "Toolbar": {
+                    "alwaysVisible": true
+                }
+            }
+        },
+        "FeatureEditor",
+        "LayerDownload",
+        {
+            "name": "QueryPanel",
+            "cfg": {
+                "activateQueryTool": true,
+                "spatialOperations": [
+                    {
+                        "id": "INTERSECTS",
+                        "name": "queryform.spatialfilter.operations.intersects"
+                    },
+                    {
+                        "id": "CONTAINS",
+                        "name": "queryform.spatialfilter.operations.contains"
+                    },
+                    {
+                        "id": "WITHIN",
+                        "name": "queryform.spatialfilter.operations.within"
+                    }
+                ],
+                "spatialMethodOptions": [
+                    {
+                        "id": "Viewport",
+                        "name": "queryform.spatialfilter.methods.viewport"
+                    },
+                    {
+                        "id": "BBOX",
+                        "name": "queryform.spatialfilter.methods.box"
+                    },
+                    {
+                        "id": "Circle",
+                        "name": "queryform.spatialfilter.methods.circle"
+                    },
+                    {
+                        "id": "Polygon",
+                        "name": "queryform.spatialfilter.methods.poly"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "TOC",
+            "cfg": {
+                "layerOptions": {
+                    "legendOptions": {
+                        "WMSLegendOptions": "forceLabels:on",
+                        "scaleDependent": true,
+                        "legendWidth": 12,
+                        "legendHeight": 12
+                    }
+                }
+            }
+        },
+        "FilterLayer",
+        "AddGroup",
+        "TOCItemsSettings",
+        "MapFooter",
+        {
+            "name": "Measure",
+            "cfg": {
+                "defaultOptions": {
+                    "showAddAsAnnotation": true
+                }
+            }
+        },
+        "MapImport",
+        {
+            "name": "MapExport"
+        },
+        {
+            "name": "Settings",
+            "cfg": {
+                "wrap": true
+            }
+        },
+        {
+            "name": "MetadataExplorer",
+            "cfg": {
+                "wrap": true
+            }
+        },
+        {
+            "name": "About",
+            "cfg": {
+                "githubUrl": "https://github.com/geosolutions-it/MapStore2/tree/"
+            }
+        },
+        {
+            "name": "MousePosition",
+            "cfg": {
+                "editCRS": true,
+                "showLabels": true,
+                "showToggle": true,
+                "filterAllowedCRS": [
+                    "EPSG:4326",
+                    "EPSG:3857"
+                ],
+                "additionalCRS": {}
+            }
+        },
+        {
+            "name": "CRSSelector",
+            "cfg": {
+                "additionalCRS": {},
+                "filterAllowedCRS": [
+                    "EPSG:4326",
+                    "EPSG:3857"
+                ],
+                "allowedRoles": [
+                    "ADMIN"
+                ]
+            }
+        },
+        {
+            "name": "Search",
+            "cfg": {
+                "withToggle": [
+                    "max-width: 768px",
+                    "min-width: 768px"
+                ]
+            }
+        },
+        {
+            "name": "Toolbar",
+            "id": "NavigationBar",
+            "cfg": {
+                "id": "navigationBar"
+            }
+        },
+        "ScaleBox",
+        {
+            "name": "ZoomAll",
+            "override": {
+                "Toolbar": {
+                    "alwaysVisible": true
+                }
+            }
+        },
+        {
+            "name": "MapLoading",
+            "override": {
+                "Toolbar": {
+                    "alwaysVisible": true
+                }
+            }
+        },
+        {
+            "name": "ZoomIn",
+            "override": {
+                "Toolbar": {
+                    "alwaysVisible": true
+                }
+            }
+        },
+        {
+            "name": "ZoomOut",
+            "override": {
+                "Toolbar": {
+                    "alwaysVisible": true
+                }
+            }
+        },
+        "OmniBar",
+        "Expander",
+        "Undo",
+        "Redo",
+        "GlobeViewSwitcher",
+        "SearchServicesConfig",
+        "SearchByBookmark",
+        "WidgetsBuilder",
+        {
+            "name": "Widgets"
+        },
+        "WidgetsTray",
+        {
+            "name": "Timeline",
+            "cfg": {
+                "expandLimit": 20
+            }
+        },
+        "Playback",
+        "FeedbackMask",
+        "StyleEditor",
+        "SidebarMenu",
+        {
+            "name": "MapViews"
+        }
+    ]
+}
