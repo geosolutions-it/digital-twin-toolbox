@@ -88,7 +88,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         security
                     },
                     appEpics: {
-                        ddtZoomToTileset: (action$, store) => action$.ofType(UPDATE_NODE)
+                        dttZoomToTileset: (action$, store) => action$.ofType(UPDATE_NODE)
                             .filter(action => action?.options?.visibility === true)
                             .switchMap((action) => {
                                 const layers = layersSelector(store.getState());
@@ -100,10 +100,10 @@ document.addEventListener('DOMContentLoaded', function() {
                                     return Observable.of(zoomToExtent(layer.bbox.bounds, layer.bbox.crs));
                                 }
                                 return Observable.defer(() => getCapabilities(layer.url))
-                                    .switchMap(({ bbox }) => {
+                                    .switchMap(({ bbox, format }) => {
                                         return Observable.of(
                                             zoomToExtent(bbox.bounds, bbox.crs),
-                                            changeLayerProperties(layer.id, { bbox })
+                                            changeLayerProperties(layer.id, { bbox, format })
                                         );
                                     });
                             })
