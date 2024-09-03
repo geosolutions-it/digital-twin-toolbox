@@ -151,8 +151,9 @@ services:
     build:
       context: ./frontend
       args:
-        - VITE_API_URL=https://${DOMAIN?Variable not set}
         - NODE_ENV=production
+    environment:
+      - DTT_VITE_API_URL=https://${DOMAIN?Variable not set}
     labels:
       - traefik.enable=true
       - traefik.docker.network=traefik-public

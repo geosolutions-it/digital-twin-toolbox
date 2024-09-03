@@ -87,11 +87,8 @@ services:
 
   frontend:
     restart: "no"
-    build:
-      context: ./frontend
-      args:
-        - VITE_API_URL=http://${DOMAIN?Variable not set}
-        - NODE_ENV=development
+    environment:
+      - DTT_VITE_API_URL=http://${DOMAIN?Variable not set}
 
 networks:
   traefik-public:

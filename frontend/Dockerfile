@@ -9,8 +9,6 @@ RUN npm install
 
 COPY ./ /app/
 
-ARG VITE_API_URL=${VITE_API_URL}
-
 RUN npm run build
 
 RUN cd /app/mapstore/ && npm install
@@ -25,3 +23,5 @@ COPY --from=build-stage /app/mapstore/dist/ /usr/share/nginx/html/mapstore
 
 COPY ./nginx.conf /etc/nginx/conf.d/default.conf
 COPY ./nginx-backend-not-found.conf /etc/nginx/extra-conf.d/backend-not-found.conf
+COPY env.sh /docker-entrypoint.d/env.sh
+RUN chmod +x /docker-entrypoint.d/env.sh

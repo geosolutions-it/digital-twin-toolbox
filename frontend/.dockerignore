@@ -3,3 +3,4 @@ dist
 mapstore/node_modules
 mapstore/dist
 mapstore/package-lock.json
+.env
