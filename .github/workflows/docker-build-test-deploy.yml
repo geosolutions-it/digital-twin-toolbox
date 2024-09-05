@@ -33,7 +33,7 @@ jobs:
             --build-arg BUILDKIT_INLINE_CACHE=1 \
             backend frontend
 
-      - name: Move cache
+      - name: Update the buildx cache with new one
         run: |
           rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
