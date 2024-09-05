@@ -38,8 +38,8 @@ jobs:
           rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
-      #- name: Run tests
-      #  run: sh scripts/test-local.sh
+      - name: Run tests
+        run: sh scripts/test-local.sh
 
   login-and-deploy:
      runs-on: ubuntu-22.04
