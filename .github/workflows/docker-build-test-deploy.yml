@@ -1,0 +1,41 @@
+name: Build frontend and backend, test and deploy
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build the docker images
+        run: |
+          docker compose build backend
+          docker compose build frontend
+
+      - name: Run tests
+        run: sh scripts/test-local.sh
+
+  login-and-deploy:
+     runs-on: ubuntu-22.04
+     needs: build-and-test
+     if: ${{ github.event_name != 'pull_request' && github.ref_name == 'main' }}
+     steps:
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Deploy the images
+        run: |
+          source .env
+          docker push $DOCKER_IMAGE_BACKEND:latest
+          docker push $DOCKER_IMAGE_FRONTEND:latest
