@@ -20,11 +20,12 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Cache Docker layers
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: /tmp/.docker-cache
-          key: ${{ runner.os }}-docker-${{ github.sha }}
+          key: ${{ runner.os }}-docker-${{ github.ref_name }}-${{ hashFiles('**/Dockerfile') }}
           restore-keys: |
+            ${{ runner.os }}-docker-${{ github.ref_name }}-
             ${{ runner.os }}-docker-
 
       - name: Build the docker images
