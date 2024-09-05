@@ -22,17 +22,21 @@ jobs:
       - name: Cache Docker layers
         uses: actions/cache@v4
         with:
-          path: /tmp/.docker-cache
-          key: ${{ runner.os }}-docker-${{ github.ref_name }}-${{ hashFiles('**/Dockerfile') }}
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.ref_name }}
           restore-keys: |
-            ${{ runner.os }}-docker-${{ github.ref_name }}-
-            ${{ runner.os }}-docker-
+            ${{ runner.os }}-buildx-
 
       - name: Build the docker images
         run: |
           DOCKER_BUILDKIT=1 docker compose build \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
             backend frontend
+
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
       #- name: Run tests
       #  run: sh scripts/test-local.sh
@@ -53,3 +57,4 @@ jobs:
           source .env
           docker push $DOCKER_IMAGE_BACKEND:latest
           docker push $DOCKER_IMAGE_FRONTEND:latest
+
