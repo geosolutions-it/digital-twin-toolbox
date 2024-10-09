@@ -25,7 +25,7 @@ ARG DDT_ENV=ddt
 
 # Install PDAL
 RUN cd / && \
-    curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba && \
+    curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/1.5.10 | tar -xvj bin/micromamba && \
     ./bin/micromamba shell init -s bash -p ~/micromamba && \
     source ~/.bashrc && \
     micromamba config append channels conda-forge && \
