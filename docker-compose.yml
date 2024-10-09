@@ -1,3 +1,9 @@
+x-common-cache: &common-cache
+  cache_from:
+    - type=local,src=/tmp/.buildx-cache
+  cache_to:
+    - type=local,dest=/tmp/.buildx-cache-new,mode=max
+
 services:
   db:
     image: postgis/postgis:12-3.4
@@ -76,6 +82,7 @@ services:
       context: ./backend
       args:
         INSTALL_DEV: ${INSTALL_DEV-false}
+      <<: *common-cache
     platform: linux/amd64 # Patch for M1 Mac
     labels:
       - traefik.enable=true
@@ -152,6 +159,7 @@ services:
       context: ./frontend
       args:
         - NODE_ENV=production
+      <<: *common-cache
     environment:
       - DTT_VITE_API_URL=https://${DOMAIN?Variable not set}
     labels:
