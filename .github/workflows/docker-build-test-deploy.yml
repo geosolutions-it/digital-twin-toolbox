@@ -1,0 +1,60 @@
+name: Build frontend and backend, test and deploy
+
+on:
+  push:
+    branches:
+      - main
+      - gha
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.ref_name }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Build the docker images
+        run: |
+          DOCKER_BUILDKIT=1 docker compose build \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            backend frontend
+
+      - name: Update the buildx cache with new one
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+      - name: Run tests
+        run: sh scripts/test-local.sh
+
+  login-and-deploy:
+     runs-on: self-hosted
+     needs: build-and-test
+     if: ${{ github.event_name != 'pull_request' && github.ref_name == 'main' }}
+     steps:
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Deploy the images
+        run: |
+          source .env
+          docker push $DOCKER_IMAGE_BACKEND:latest
+          docker push $DOCKER_IMAGE_FRONTEND:latest
+
