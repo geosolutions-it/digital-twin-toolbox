@@ -12,14 +12,17 @@ ogr2ogr_db = f"dbname='{settings.POSTGRES_TASKS_DB}' host='{settings.POSTGRES_SE
 i3dm_db = f"Host={settings.POSTGRES_SERVER};Username={settings.POSTGRES_USER};password={settings.POSTGRES_PASSWORD};Port={settings.POSTGRES_PORT};Database={settings.POSTGRES_TASKS_DB}"
 
 def earcut_js(coordinates):
-    coordinates_str = json.dumps(coordinates)
-    result = subprocess.run([
-        'node',
-        '/app/node/earcut.js',
-        coordinates_str
-    ], stdout=subprocess.PIPE)
-    output = list(map(int, result.stdout.decode("utf-8").split(',')))
-    return output
+    try:
+        coordinates_str = json.dumps(coordinates)
+        result = subprocess.run([
+            'node',
+            '/app/node/earcut.js',
+            coordinates_str
+        ], stdout=subprocess.PIPE)
+        output = list(map(int, result.stdout.decode("utf-8").split(',')))
+        return output
+    except Exception:
+        return []
 
 def identify_projection(projection):
     try:
@@ -134,8 +137,8 @@ def pg2b3dm(table_task_name, output_3dtiles_path, attributes, min_geometric_erro
             '--use_implicit_tiling', "false",
             '--max_features_per_tile', f"{int(max_features_per_tile)}"
         ],
-        capture_output = True,
-        text = True
+        # capture_output = True,
+        # text = True
     )
 
     try:

@@ -163,7 +163,6 @@ def setup_output_directory(pipeline_id):
 def create_point_instance_3dtiles(pipeline_extended):
 
     asset = pipeline_extended['asset']
-    asset_upload_path = get_asset_upload_path(asset['id'], asset['extension'])
     asset_id = asset['id']
     pipeline_id = pipeline_extended['id']
     table_name = get_asset_table_name(asset_id)
@@ -187,8 +186,6 @@ def create_point_instance_3dtiles(pipeline_extended):
         **default_config,
         **pipeline_config
     }
-
-    import_vector_to_postgres(asset_upload_path, table_name, geometry_column_name, fid_column_name)
 
     table = Table(table_name, MetaData(), autoload_with=engine_tasks)
 
@@ -303,7 +300,6 @@ def create_point_instance_3dtiles(pipeline_extended):
 def create_mesh_3dtiles(pipeline_extended):
 
     asset = pipeline_extended['asset']
-    asset_upload_path = get_asset_upload_path(asset['id'], asset['extension'])
     asset_id = asset['id']
     pipeline_id = pipeline_extended['id']
     table_name = get_asset_table_name(asset_id)
@@ -329,8 +325,6 @@ def create_mesh_3dtiles(pipeline_extended):
         **default_config,
         **pipeline_config
     }
-
-    import_vector_to_postgres(asset_upload_path, table_name, geometry_column_name, fid_column_name)
 
     table = Table(table_name, MetaData(), autoload_with=engine_tasks)
 
@@ -393,9 +387,11 @@ def create_mesh_3dtiles(pipeline_extended):
                 }
 
                 polyhedron_wkt = polyhedral_to_wkt(geometry_to_polyhedral_surface(geometry, geometry_options))
-
-                feature_properties[geometry_column_name] = polyhedron_wkt
-                session.exec(insert(table_tasks).values(feature_properties))
+                if polyhedron_wkt != 'POLYHEDRALSURFACE Z()':
+                    feature_properties[geometry_column_name] = polyhedron_wkt
+                    session.exec(insert(table_tasks).values(feature_properties))
+                else:
+                    print(f'Error creating polyhedron:', feature)
 
         session.commit()
 
