@@ -59,7 +59,7 @@ function PolygonGeometryCanvas({
       const mesh: any = group.children[i]
       mesh.geometry.dispose()
     }
-    group.remove(...group.children)
+    group.children.forEach((child: any) => group.remove(child))
     //@ts-ignore
     const [minx, miny, maxx, maxy] = turfBbox(collection)
     const center = [minx + (maxx - minx) / 2, miny + (maxy - miny) / 2, 0]

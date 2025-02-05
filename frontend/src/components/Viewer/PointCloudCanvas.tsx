@@ -99,7 +99,7 @@ function PointCloudCanvas({
       const mesh: any = group.children[i]
       mesh.geometry.dispose()
     }
-    group.remove(...group.children)
+    group.children.forEach((e: any) => group.remove(e))
     // @ts-ignore
     const textArr = text.split(/\n/)
     const [, ...rows] = textArr
