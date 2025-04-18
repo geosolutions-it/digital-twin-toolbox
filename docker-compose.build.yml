@@ -1,0 +1,20 @@
+x-common-cache: &common-cache
+  cache_from:
+    - type=local,src=/tmp/.buildx-cache
+  cache_to:
+    - type=local,dest=/tmp/.buildx-cache-new,mode=max
+
+services:
+  backend:
+    build:
+      context: ./backend
+      args:
+        INSTALL_DEV: ${INSTALL_DEV-false}
+      <<: *common-cache
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        - NODE_ENV=production
+      <<: *common-cache

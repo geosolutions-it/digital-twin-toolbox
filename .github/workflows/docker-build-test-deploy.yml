@@ -29,7 +29,7 @@ jobs:
 
       - name: Build the docker images
         run: |
-          DOCKER_BUILDKIT=1 docker compose build \
+          DOCKER_BUILDKIT=1 docker compose -f docker-compose.yml -f docker-compose.build.yml build \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
             backend frontend
 

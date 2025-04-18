@@ -1,0 +1,10 @@
+  backend:
+    volumes:
+      - ./backend/:/app
+    command: /start-reload.sh
+
+  worker:
+    restart: "no"
+    volumes:
+      - ./backend/:/app
+    command: /celery-reload.sh
