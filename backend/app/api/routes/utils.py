@@ -107,29 +107,6 @@ async def create_map_config(session: SessionDep, current_user: CurrentUser) -> A
         {
             'format': 'image/jpeg',
             'group': 'background',
-            'name': 'ne:ne-political',
-            'opacity': 1,
-            'title': 'NE Political',
-            'thumbURL': 'assets/img/ne-political.jpg',
-            'type': 'wms',
-            'url': [
-                'https://maps1.geosolutionsgroup.com/geoserver/wms',
-                'https://maps2.geosolutionsgroup.com/geoserver/wms',
-                'https://maps3.geosolutionsgroup.com/geoserver/wms',
-                'https://maps4.geosolutionsgroup.com/geoserver/wms',
-                'https://maps5.geosolutionsgroup.com/geoserver/wms',
-                'https://maps6.geosolutionsgroup.com/geoserver/wms'
-            ],
-            'tileSize': 512,
-            'visibility': False,
-            'singleTile': False,
-            'credits': {
-                'title': '<p></p>\n'
-            }
-        },
-        {
-            'format': 'image/jpeg',
-            'group': 'background',
             'name': 's2cloudless:s2cloudless',
             'opacity': 1,
             'title': 'Sentinel 2 Cloudless',
@@ -176,17 +153,15 @@ async def create_map_config(session: SessionDep, current_user: CurrentUser) -> A
         )
         pipelines = session.exec(statement.order_by(Pipeline.title.asc())).all()
 
+    catalog_services = {}
     for pipeline in pipelines:
         if pipeline.task_result and 'tileset' in pipeline.task_result:
-            layers += [
-                {
-                    'id': pipeline.id,
-                    'type': '3dtiles',
-                    'title': pipeline.title,
-                    'url': f"{settings.server_host}{pipeline.task_result['tileset']}",
-                    'visibility': False
-                }
-            ]
+            catalog_services[pipeline.id] = {
+                'url': f"{settings.server_host}{pipeline.task_result['tileset']}",
+                'type': '3dtiles',
+                'title': pipeline.title,
+                'autoload': False
+            }
 
     return {
         'version': 2,
@@ -208,7 +183,7 @@ async def create_map_config(session: SessionDep, current_user: CurrentUser) -> A
             ],
             'layers': layers
         },
-        'toc': {
-            'defaultOpen': True
+        'catalogServices': {
+            'services': catalog_services
         }
     }

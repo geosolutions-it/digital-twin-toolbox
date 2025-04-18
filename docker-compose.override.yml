@@ -54,12 +54,6 @@ services:
     restart: "no"
     ports:
       - "8888:8888"
-    # uncomment to mount the backend folder as app for development
-    # volumes:
-    #  - ./backend/:/app
-    # use the -reload command version for development
-    # command: /start-reload.sh
-    # command: sleep infinity  # Infinite loop to keep container alive doing nothing
     build:
       context: ./backend
       args:
@@ -73,11 +67,6 @@ services:
 
   worker:
     restart: "no"
-    # uncomment to mount the backend folder as app for development
-    # volumes:
-    #  - ./backend/:/app
-    # use the -reload command version for development
-    # command: /celery-reload.sh
     environment:
       SMTP_HOST: "mailcatcher"
       SMTP_PORT: "1025"
