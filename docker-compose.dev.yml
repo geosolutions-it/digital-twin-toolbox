@@ -1,3 +1,4 @@
+services:
   backend:
     volumes:
       - ./backend/:/app
