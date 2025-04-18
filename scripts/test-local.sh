@@ -10,6 +10,6 @@ if [ $(uname -s) = "Linux" ]; then
     sudo find . -type d -name __pycache__ -exec rm -r {} \+
 fi
 
-docker compose build
+docker compose -f docker-compose.yml -f docker-compose.build.yml build
 docker compose up -d
 docker compose exec -T backend bash /app/tests-start.sh "$@"
