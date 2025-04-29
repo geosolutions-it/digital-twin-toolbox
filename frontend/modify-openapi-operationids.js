@@ -1,4 +1,5 @@
 import * as fs from "node:fs"
+import * as http  from "node:http"
 
 async function modifyOpenAPIFile(filePath) {
   try {
@@ -33,4 +34,12 @@ async function modifyOpenAPIFile(filePath) {
 }
 
 const filePath = "./openapi.json"
-modifyOpenAPIFile(filePath)
+
+fs.rmSync(filePath, { force: true })
+
+http.get('http://localhost/api/v1/openapi.json', resp => {
+  const file = fs.createWriteStream(filePath);
+  file.on('finish', () => { modifyOpenAPIFile(filePath); });
+  resp.pipe(file);
+});
+

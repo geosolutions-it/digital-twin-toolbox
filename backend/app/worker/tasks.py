@@ -23,6 +23,8 @@ from app.models import Asset
 from app.worker.types import GeometryType, JSONEncoder
 from osgeo import gdal
 from pyproj import CRS
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 def complete_upload_process(options):
     asset = options['asset']
@@ -39,6 +41,7 @@ def complete_upload_process(options):
     epsg = None
     horizontal_epsg = None
     vertical_epsg = None
+    to_ellipsoidal_height = options['to_ellipsoidal_height']
 
     asset_file_path = get_asset_upload_path(asset_id, extension)
 
@@ -60,6 +63,13 @@ def complete_upload_process(options):
 
         if 'Multi' in geometry_type:
             raise Exception("Multi geometry is not supported")
+
+        coordinate_system = geometry_fields[0].get('coordinateSystem')
+
+        if coordinate_system:
+            epsg = CRS(coordinate_system['wkt']).to_epsg()
+        else:
+            raise Exception("Missing spatial reference system")
 
         supported_geometry = 'Polygon' in geometry_type or 'Point' in geometry_type
         if not supported_geometry:
@@ -86,7 +96,7 @@ def complete_upload_process(options):
         if size_kb > 1000:
             limit = (feature_count * 1000) / size_kb
 
-        import_vector_to_postgres(asset_file_path, table_name, geometry_column_name, fid_column_name)
+        import_vector_to_postgres(asset_file_path, table_name, geometry_column_name, fid_column_name, epsg, to_ellipsoidal_height)
         export_geojson_from_postgres(get_asset_upload_path(asset_id, '.json', 'sample'), table_name, limit)
         sample = True
 
@@ -297,6 +307,79 @@ def create_point_instance_3dtiles(pipeline_extended):
         'download': output_paths['output_tileset_zip']
     }
 
+def polygons_to_polyhedrons(table, table_tasks, offset, chunk_size, geometry_column_name, fid_column_name, config, default_config, lod_column_name):
+    with Session(engine_tasks) as session:
+
+        try:
+
+            rows = session.execute(select(table).offset(offset).limit(chunk_size)).all()
+            print(f"Start polyhedrons conversion - offset {offset}")
+            start = time.time()
+
+            lod = 1
+
+            if config.get('add_lod'):
+                lod = 2
+
+            meters_in_degrees = 111194.87428468118
+
+            lod_max_simplify_tolerance =  parse_expression('number', config['lod_max_simplify_tolerance'], {}, default_config['lod_max_simplify_tolerance'])
+
+            for row in rows:
+                for level in range(lod):
+                    row_obj = row._asdict()
+                    row_geometry = row_obj[geometry_column_name]
+                    as_geojson = None
+                    if level == (lod - 1):
+                        as_geojson = session.exec(text(f"SELECT ST_AsGeoJSON('{row_geometry}')"))
+                    else:
+                        tolerance = (lod_max_simplify_tolerance / pow(2, level) / meters_in_degrees)
+                        as_geojson = session.exec(text(f"SELECT ST_AsGeoJSON(ST_SimplifyPreserveTopology('{row_geometry}', {tolerance}))"))
+
+                    properties = []
+                    feature_properties = {}
+                    for key in row_obj:
+                        if not key in [geometry_column_name, fid_column_name]:
+                            pair = {}
+                            pair[key] = row_obj[key]
+                            properties.append(pair)
+                            feature_properties[key] = row_obj[key]
+
+                    geojson_string = as_geojson.first()[0]
+                    geometry = json.loads(geojson_string)
+
+                    feature = {
+                        'type': 'Feature',
+                        'properties': json.loads(json.dumps(feature_properties, cls=JSONEncoder)),
+                        'geometry': geometry
+                    }
+
+                    lower_limit = parse_expression('number', config['lower_limit_height'], feature, default_config['lower_limit_height'])
+                    upper_limit = parse_expression('number', config['upper_limit_height'], feature, default_config['upper_limit_height'])
+                    translate_z = parse_expression('number', config['translate_z'], feature, default_config['translate_z'])
+                    remove_bottom_surface = config['remove_bottom_surface']
+                    geometry_options = {
+                        'lower_limit': lower_limit,
+                        'upper_limit': upper_limit,
+                        'translate_z': translate_z,
+                        'remove_bottom_surface': remove_bottom_surface
+                    }
+
+                    polyhedron_wkt = polyhedral_to_wkt(geometry_to_polyhedral_surface(geometry, geometry_options))
+                    if polyhedron_wkt != 'POLYHEDRALSURFACE Z()':
+                        feature_properties[geometry_column_name] = polyhedron_wkt
+                        feature_properties[lod_column_name] = level
+                        session.exec(insert(table_tasks).values(feature_properties))
+                    else:
+                        print(f'Error creating polyhedron:', feature_properties)
+
+            session.commit()
+            end = time.time()
+            print(f"End polyhedrons conversion - offset {offset} elapsed time {end - start}")
+        except Exception as e:
+            print(e)
+            raise Exception
+
 def create_mesh_3dtiles(pipeline_extended):
 
     asset = pipeline_extended['asset']
@@ -305,6 +388,7 @@ def create_mesh_3dtiles(pipeline_extended):
     table_name = get_asset_table_name(asset_id)
     geometry_column_name = 'geom'
     fid_column_name = 'gid'
+    lod_column_name = 'lod'
 
     pipeline_config = {}
     if pipeline_extended['data']:
@@ -314,11 +398,14 @@ def create_mesh_3dtiles(pipeline_extended):
         'lower_limit_height': None,
         'upper_limit_height': None,
         'translate_z': 0,
-        'max_features_per_tile': 100,
+        'max_features_per_tile': 1000,
         'double_sided': False,
-        'min_geometric_error': 0,
-        'max_geometric_error': 250,
-        'remove_bottom_surface': True
+        'geometric_error_factor': 1,
+        'max_geometric_error': 500,
+        'remove_bottom_surface': True,
+        'add_lod': False,
+        'lod_max_simplify_tolerance': 5,
+        'add_outline': False
     }
 
     config = {
@@ -337,8 +424,13 @@ def create_mesh_3dtiles(pipeline_extended):
             columns.append(Column(c.name, c.type, primary_key=False, autoincrement=c.autoincrement))
 
     columns.append(Column(geometry_column_name, GeometryType))
+    columns.append(Column(lod_column_name, Integer))
 
     table_tasks = Table(table_task_name, MetaData(), *columns)
+
+    total_rows = 0
+    chunk_size = 1000
+    max_workers = 8
 
     with Session(engine_tasks) as session:
 
@@ -347,57 +439,20 @@ def create_mesh_3dtiles(pipeline_extended):
 
         table_tasks.create(session.connection())
 
-        session.exec(text(f"CREATE INDEX {table_task_name}_geom_idx ON {table_task_name} USING GIST ({geometry_column_name});"))
+        session.exec(text(f"CREATE INDEX ON {table_task_name} USING gist(st_centroid(st_envelope({geometry_column_name})));"))
         session.commit()
 
-        statement = select(table).execution_options(yield_per=1000)
-        # need to use execute to return rows instead of scalar
-        for partition in session.execute(statement).partitions():
-            for row in partition:
-                row_obj = row._asdict()
-                row_geometry = row_obj[geometry_column_name]
-                as_geojson = session.exec(text(f"SELECT ST_AsGeoJSON('{row_geometry}')"))
-                properties = []
-                feature_properties = {}
-                for key in row_obj:
-                    if not key in [geometry_column_name, fid_column_name]:
-                        pair = {}
-                        pair[key] = row_obj[key]
-                        properties.append(pair)
-                        feature_properties[key] = row_obj[key]
+        total_rows = session.exec(text(f"SELECT COUNT(*) FROM {table}")).first()[0]
 
-                geojson_string = as_geojson.first()[0]
-                geometry = json.loads(geojson_string)
+    chunks = [i for i in range(0, total_rows, chunk_size)]
 
-                feature = {
-                    'type': 'Feature',
-                    'properties': json.loads(json.dumps(feature_properties, cls=JSONEncoder)),
-                    'geometry': geometry
-                }
-
-                lower_limit = parse_expression('number', config['lower_limit_height'], feature, default_config['lower_limit_height'])
-                upper_limit = parse_expression('number', config['upper_limit_height'], feature, default_config['upper_limit_height'])
-                translate_z = parse_expression('number', config['translate_z'], feature, default_config['translate_z'])
-                remove_bottom_surface = config['remove_bottom_surface']
-                geometry_options = {
-                    'lower_limit': lower_limit,
-                    'upper_limit': upper_limit,
-                    'translate_z': translate_z,
-                    'remove_bottom_surface': remove_bottom_surface
-                }
-
-                polyhedron_wkt = polyhedral_to_wkt(geometry_to_polyhedral_surface(geometry, geometry_options))
-                if polyhedron_wkt != 'POLYHEDRALSURFACE Z()':
-                    feature_properties[geometry_column_name] = polyhedron_wkt
-                    session.exec(insert(table_tasks).values(feature_properties))
-                else:
-                    print(f'Error creating polyhedron:', feature)
-
-        session.commit()
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        for offset in chunks:
+            executor.submit(polygons_to_polyhedrons, table, table_tasks, offset, chunk_size, geometry_column_name, fid_column_name, config, default_config, lod_column_name)
 
     output_paths = setup_output_directory(pipeline_id)
 
-    min_geometric_error = parse_expression('number', config['min_geometric_error'], {}, default_config['min_geometric_error'])
+    geometric_error_factor = parse_expression('number', config['geometric_error_factor'], {}, default_config['geometric_error_factor'])
     max_geometric_error = parse_expression('number', config['max_geometric_error'], {}, default_config['max_geometric_error'])
     max_features_per_tile = parse_expression('number', config['max_features_per_tile'], {}, default_config['max_features_per_tile'])
  
@@ -408,20 +463,25 @@ def create_mesh_3dtiles(pipeline_extended):
     attributes = []
 
     for column in columns:
-        if not column.name in [geometry_column_name, fid_column_name]:
+        if not column.name in [geometry_column_name, fid_column_name, lod_column_name]:
             attributes.append(column.name)
+
+    if not config.get('add_lod'):
+        lod_column_name = None
 
     pg2b3dm(
         table_task_name,
         output_paths['output_path_3dtiles'],
         attributes,
-        min_geometric_error,
+        geometric_error_factor,
         max_geometric_error,
         geometry_column_name,
         max_features_per_tile,
         double_sided,
         fid_column_name,
-        table
+        table,
+        lod_column_name,
+        config['add_outline']
     )
 
     with Session(engine_tasks) as session:

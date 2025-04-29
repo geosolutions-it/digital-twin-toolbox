@@ -32,6 +32,7 @@ flower = "^2.0.1"
 earcut = "^1.1.5"
 py3dtiles = {extras = ["las", "ply", "postgres"], version = "^8.0.2"}
 laspy = {extras = ["laszip"], version = "^2.5.4"}
+mapbox-earcut = "^1.0.3"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"

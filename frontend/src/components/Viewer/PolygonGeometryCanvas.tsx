@@ -60,6 +60,7 @@ function PolygonGeometryCanvas({
       mesh.geometry.dispose()
     }
     group.children.forEach((child: any) => group.remove(child))
+    group.children = []
     //@ts-ignore
     const [minx, miny, maxx, maxy] = turfBbox(collection)
     const center = [minx + (maxx - minx) / 2, miny + (maxy - miny) / 2, 0]
@@ -116,11 +117,14 @@ function PolygonGeometryCanvas({
     lower_limit_height: undefined,
     upper_limit_height: undefined,
     translate_z: 0,
-    max_features_per_tile: 100,
+    max_features_per_tile: 1000,
     double_sided: false,
     remove_bottom_surface: true,
-    min_geometric_error: 0,
-    max_geometric_error: 250,
+    add_lod: false,
+    lod_max_simplify_tolerance: 5,
+    geometric_error_factor: 1,
+    max_geometric_error: 500,
+    add_outline: false,
     ...pipeline.data,
   })
 
@@ -302,19 +306,46 @@ function PolygonGeometryCanvas({
             />
           </FormControl>
           <FormControl mt={2}>
-            <FormLabel fontSize="xs" htmlFor="min_geometric_error">
-              Minimum geometric error
+            <FormLabel fontSize="xs" htmlFor="geometric_error_factor">
+              Geometric error factor
             </FormLabel>
             <Input
-              id="min_geometric_error"
+              id="geometric_error_factor"
               size="xs"
               type="number"
-              value={data?.min_geometric_error}
+              value={data?.geometric_error_factor}
               onChange={(event) =>
-                handleOnChange("min_geometric_error", event.target.value)
+                handleOnChange("geometric_error_factor", event.target.value)
               }
             />
           </FormControl>
+          <FormControl mt={2}>
+            <FormLabel fontSize="xs" htmlFor="lod_max_simplify_tolerance">
+              Max simplify tolerance (LOD)
+            </FormLabel>
+            <Input
+              id="lod_max_simplify_tolerance"
+              size="xs"
+              type="number"
+              disabled={!data?.add_lod}
+              value={data?.lod_max_simplify_tolerance}
+              onChange={(event) =>
+                handleOnChange("lod_max_simplify_tolerance", event.target.value)
+              }
+            />
+          </FormControl>
+          <Flex mt={2}>
+            <Checkbox
+              id="add_lod"
+              size="sm"
+              isChecked={data?.add_lod}
+              onChange={(event) =>
+                handleOnChange("add_lod", event.target.checked)
+              }
+            >
+              Add level of details
+            </Checkbox>
+          </Flex>
           <Flex mt={2}>
             <Checkbox
               id="remove_bottom_surface"
@@ -325,6 +356,18 @@ function PolygonGeometryCanvas({
               }
             >
               Remove bottom surface
+            </Checkbox>
+          </Flex>
+          <Flex mt={2}>
+            <Checkbox
+              id="add_outline"
+              size="sm"
+              isChecked={data?.add_outline}
+              onChange={(event) =>
+                handleOnChange("add_outline", event.target.checked)
+              }
+            >
+              Add outline
             </Checkbox>
           </Flex>
           <Flex mt={2} mb={2}>
@@ -339,7 +382,6 @@ function PolygonGeometryCanvas({
               Double sided
             </Checkbox>
           </Flex>
-
           <Divider />
         </Container>
       </Box>

@@ -56,34 +56,36 @@ def read_assets(
 
 @router.post("/", response_model=AssetPublic)
 async def create_asset(
-    *, session: SessionDep, current_user: CurrentUser, file: UploadFile
+    *, session: SessionDep, current_user: CurrentUser, file: UploadFile, to_ellipsoidal_height: bool = False
 ) -> Any:
     """
     Create new asset.
     """
 
-    check_statement = select(Asset).where(Asset.filename == file.filename).limit(1)
+    filename = file.filename
+
+    check_statement = select(Asset).where(Asset.owner_id == current_user.id).where(Asset.filename == filename).limit(1)
     results = session.exec(check_statement)
     check_asset = results.first()
 
     if check_asset:
         raise HTTPException(status_code=400, detail="Asset with this filename already exists")
 
-    if not current_user.is_superuser:
+    if not current_user.id:
         raise HTTPException(status_code=400, detail="Not enough permissions")
 
     vector_data_extensions = [".shp.zip"]
     point_cloud_data_extensions = [".laz", ".las"]
     raster_formats = [".tiff", ".tif"]
     supported_extensions = [".glb"] + vector_data_extensions + point_cloud_data_extensions + raster_formats
-    extension = "".join(Path(file.filename).suffixes)
+    extension = "".join(Path(filename).suffixes)
 
     if not extension in supported_extensions:
         supported_extensions_list = ", ".join(supported_extensions)
         raise HTTPException(status_code=500, detail=f"Not supported file, supported extensions {supported_extensions_list}")
 
     asset_in = {
-        'filename': file.filename,
+        'filename': filename,
         'content_type': file.content_type,
         'content_size': file.size,
         'extension': extension,
@@ -111,7 +113,8 @@ async def create_asset(
         'asset': asset.model_dump(),
         'vector_data_extensions': vector_data_extensions,
         'point_cloud_data_extensions': point_cloud_data_extensions,
-        'raster_formats': raster_formats
+        'raster_formats': raster_formats,
+        'to_ellipsoidal_height': to_ellipsoidal_height
     })
     asset.sqlmodel_update({
         "upload_id": task.id,

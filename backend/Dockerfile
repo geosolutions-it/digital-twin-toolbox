@@ -4,23 +4,6 @@ WORKDIR /app/
 
 SHELL ["/bin/bash", "-c"]
 
-# Install dot net libraries
-RUN apt-get update -y && apt-get upgrade -y && apt-get install --no-install-recommends -y wget git && \
-    wget https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -O packages-microsoft-prod.deb && \
-    dpkg -i packages-microsoft-prod.deb && \
-    rm packages-microsoft-prod.deb && \
-    apt update && apt install -y apt-transport-https && \
-    apt install -y dotnet-sdk-6.0 && \
-    apt-get install -y aspnetcore-runtime-6.0 && \
-    apt-get install -y dotnet-runtime-6.0 && \
-    dotnet tool install -g dotnet-serve --version 1.10.172
-
-ENV PATH="${PATH}:/root/.dotnet/tools"
-
-# POSTGRES_PASSWORD must be included in the env variable for pg2b3dm
-RUN dotnet tool install -g i3dm.export --version 2.6.0 && \
-    dotnet tool install -g pg2b3dm --version 1.8.4
-
 ARG DDT_ENV=ddt
 
 # Install PDAL
@@ -58,8 +41,6 @@ COPY ./tests-start.sh /app/
 
 COPY ./app /app/app
 
-COPY ./node/ /app/node/
-
 RUN mv /app/celery-reload.sh /celery-reload.sh && \
     mv /app/celery.sh /celery.sh
 
@@ -76,9 +57,19 @@ RUN . "$NVM_DIR/nvm.sh" && nvm install ${NODE_VERSION} && \
 
 ENV PATH="/root/.nvm/versions/node/v${NODE_VERSION}/bin/:${PATH}"
 
-RUN npm install -g nodemon && \
-    cd /app/node/ && \
-    npm install
+RUN npm install -g nodemon
+
+# Install pg2b3dm binaries
+RUN cd /bin  && \
+    wget https://github.com/Geodan/pg2b3dm/releases/download/v2.19.0/pg2b3dm-linux-x64.zip && \
+    unzip ./pg2b3dm-linux-x64.zip && \
+    rm -rf ./pg2b3dm-linux-x64.zip
+
+# Install i3dm.export binaries
+RUN cd /bin  && \
+    wget https://github.com/Geodan/i3dm.export/releases/download/v2.11.0/i3dm.export-linux-x64.zip && \
+    unzip ./i3dm.export-linux-x64.zip && \
+    rm -rf ./i3dm.export-linux-x64.zip
 
 # Activate micromamba enviroment as the default one
 RUN echo "micromamba activate ${DDT_ENV}" >> ~/.bashrc
