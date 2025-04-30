@@ -34,7 +34,7 @@
             tileHeight: 512,
             layers: 'osm:osm'
         });
-        const imageryLayer = new Cesium.ImageryLayer(provider);
+        let imageryLayer = new Cesium.ImageryLayer(provider);
         const viewer = new Cesium.Viewer('container', {
             imageryLayer: imageryLayer,
             baseLayerPicker: false,
@@ -80,6 +80,16 @@
             });
             tileset.pointCloudShading.attenuation = true;
             tileset.pointCloudShading.maximumAttenuation = 4;
+
+            gui.add({ basemap: true }, 'basemap').onChange((value) => {
+                if (value) {
+                    imageryLayer = new Cesium.ImageryLayer(provider);
+                    viewer.imageryLayers.add(imageryLayer);
+                } else {
+                    viewer.imageryLayers.remove(imageryLayer);
+                }
+                viewer.scene.requestRender();
+            });
 
             gui.add({ classification: false }, 'classification').onChange((value) => {
                 if (value) {

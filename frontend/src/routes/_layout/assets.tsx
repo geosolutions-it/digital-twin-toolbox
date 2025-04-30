@@ -30,6 +30,7 @@ import {
   Thead,
   Tr,
   useDisclosure,
+  Checkbox,
 } from "@chakra-ui/react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
@@ -297,9 +298,11 @@ const AddAsset = ({ isOpen, onClose }: AddAssetProps) => {
     defaultValues: {},
   })
 
+  const [toEllipsoidalHeight, setToEllipsoidalHeight] = React.useState(false)
+
   const mutation = useMutation({
     mutationFn: (data: any) => {
-      return AssetsService.createAsset({ formData: { file: data.file[0] } })
+      return AssetsService.createAsset({ toEllipsoidalHeight, formData: { file: data.file[0] } })
     },
 
     onSuccess: () => {
@@ -358,6 +361,20 @@ const AddAsset = ({ isOpen, onClose }: AddAssetProps) => {
                 }}
               />
             </FormControl>
+            <Flex mt={2}>
+              <Checkbox
+                id="to_ellipsoidal_height"
+                size="sm"
+                name="to_ellipsoidal_height"
+                type="to_ellipsoidal_height"
+                isChecked={toEllipsoidalHeight}
+                onChange={(event) =>
+                  setToEllipsoidalHeight(event.target.checked)
+                }
+              >
+                Convert shp.zip files to ellipsoidal height
+              </Checkbox>
+            </Flex>
           </ModalBody>
           <ModalFooter gap={3}>
             <Button

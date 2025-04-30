@@ -84,6 +84,7 @@ export type AssetsData = {
   }
   CreateAsset: {
     formData: Body_assets_create_asset
+    toEllipsoidalHeight?: boolean
   }
   GetAssetFile: {
     filename: string
@@ -499,10 +500,13 @@ export class AssetsService {
   public static createAsset(
     data: AssetsData["CreateAsset"],
   ): CancelablePromise<AssetPublic> {
-    const { formData } = data
+    const { formData, toEllipsoidalHeight = false } = data
     return __request(OpenAPI, {
       method: "POST",
       url: "/api/v1/assets/",
+      query: {
+        to_ellipsoidal_height: toEllipsoidalHeight,
+      },
       formData: formData,
       mediaType: "multipart/form-data",
       errors: {

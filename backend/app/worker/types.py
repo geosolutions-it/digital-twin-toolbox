@@ -8,7 +8,7 @@ from datetime import date, datetime
 class GeometryType(types.UserDefinedType):
     cache_ok = True
 
-    def __init__(self, geometry_type = "POLYHEDRALSURFACEZ", epsg_code = 4978):
+    def __init__(self, geometry_type = "POLYHEDRALSURFACEZ", epsg_code = 4326):
         self.geometry_type = geometry_type
         self.epsg_code = epsg_code
 

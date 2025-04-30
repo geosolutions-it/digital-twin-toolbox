@@ -7,21 +7,46 @@ import sqlalchemy.types as types
 import math
 from pyproj import CRS
 from app.worker.utils import get_asset_upload_path
+import mapbox_earcut
+import numpy as np
 
 ogr2ogr_db = f"dbname='{settings.POSTGRES_TASKS_DB}' host='{settings.POSTGRES_SERVER}' port='{settings.POSTGRES_PORT}' user='{settings.POSTGRES_USER}' password='{settings.POSTGRES_PASSWORD}'"
 i3dm_db = f"Host={settings.POSTGRES_SERVER};Username={settings.POSTGRES_USER};password={settings.POSTGRES_PASSWORD};Port={settings.POSTGRES_PORT};Database={settings.POSTGRES_TASKS_DB}"
 
-def earcut_js(coordinates):
+def earcut_flatten(data):
+
+    vertices = []
+    altitudes = []
+    
+    dimensions = len(data[0][0])
+    rings = []
+    ring_index = 0
+
+    for ring in data:
+        for p in ring:
+            vertices.append([p[0], p[1]])
+            altitudes.append(p[2])
+
+        prev_len = 0
+        if ring_index > 0:
+            prev_len = rings[ring_index - 1]
+        rings.append(prev_len + len(ring))
+        ring_index += 1
+
+    return {
+        'vertices': vertices,
+        'rings': rings,
+        'dimensions': dimensions,
+        'altitudes': altitudes
+    }
+
+
+def earcut(coordinates):
     try:
-        coordinates_str = json.dumps(coordinates)
-        result = subprocess.run([
-            'node',
-            '/app/node/earcut.js',
-            coordinates_str
-        ], stdout=subprocess.PIPE)
-        output = list(map(int, result.stdout.decode("utf-8").split(',')))
-        return output
-    except Exception:
+        data = earcut_flatten(coordinates)
+        return mapbox_earcut.triangulate_float32(data.get('vertices'), data.get('rings'))
+    except Exception as e:
+        print('Earcut error', e)
         return []
 
 def identify_projection(projection):
@@ -47,18 +72,23 @@ def identify_projection(projection):
     except Exception:
         return None
 
-def import_vector_to_postgres(asset_upload_path, table_name, geometry_column_name, fid_column_name):
+def import_vector_to_postgres(asset_upload_path, table_name, geometry_column_name, fid_column_name, epsg, to_ellipsoidal_height):
+
+    projection = ['-t_srs', 'EPSG:4326']
+
+    if to_ellipsoidal_height:
+        projection = ['-s_srs', f'EPSG:{epsg}+3855', '-t_srs', 'EPSG:4326+4979']
+
     subprocess.run([
         'ogr2ogr', '-f', 'PostgreSQL', f'PG:{ogr2ogr_db}',
         f'{asset_upload_path}',
-        '-t_srs', 'EPSG:4979',
         '-lco', f'GEOMETRY_NAME={geometry_column_name}',
         '-lco', f'FID={fid_column_name}',
         '-lco', 'SPATIAL_INDEX=GIST',
         # '-lco', 'OVERWRITE=YES',
         '-nln', table_name,
         '-dim', "3"
-        ],
+        ] + projection,
         capture_output = True,
         text = True
     )
@@ -66,8 +96,7 @@ def import_vector_to_postgres(asset_upload_path, table_name, geometry_column_nam
 def export_geojson_from_postgres(output_path, table_name, limit):
     options = []
     if limit != None:
-        options + ['-limit', f"{limit}"]
-
+        options = options + ['-limit', f"{round(limit)}"]
     subprocess.run(['ogr2ogr', '-f', 'GeoJSON', output_path, f'PG:{ogr2ogr_db}', table_name] + options,
         capture_output = True,
         text = True
@@ -83,7 +112,6 @@ def i3dm_export(table_task_name, output_3dtiles_path, max_geometric_error, geome
             '-c', i3dm_db,
             '-t', table_task_name,
             '-o', output_3dtiles_path,
-            '-f', 'cesium',
             '-g', f"{int(max_geometric_error)}",
             '--use_external_model', "true",
             '--use_scale_non_uniform', "false",
@@ -91,9 +119,7 @@ def i3dm_export(table_task_name, output_3dtiles_path, max_geometric_error, geome
             '--max_features_per_tile', f"{int(max_features_per_tile)}",
             '--use_gpu_instancing', "false",
             '--boundingvolume_heights', '0,10' # TODO: verify the usage of this parameter
-        ],
-        capture_output = True,
-        text = True
+        ]
     )
     try:
         tileset_json_path = os.path.join(output_3dtiles_path, 'tileset.json')
@@ -120,7 +146,16 @@ def i3dm_export(table_task_name, output_3dtiles_path, max_geometric_error, geome
     except Exception as e:
         raise e
 
-def pg2b3dm(table_task_name, output_3dtiles_path, attributes, min_geometric_error, max_geometric_error, geometry_column_name, max_features_per_tile, double_sided, fid_column_name, table):
+def pg2b3dm(table_task_name, output_3dtiles_path, attributes, geometric_error_factor, max_geometric_error, geometry_column_name, max_features_per_tile, double_sided, fid_column_name, table, lod_column_name, add_outline):
+
+    options = []
+
+    if add_outline:
+        options = options + ['--add_outlines', 'true']
+
+    if lod_column_name:
+        options = options + ['--lodcolumn', lod_column_name, '--refinement', 'REPLACE']
+    
     subprocess.run(
         [
             'pg2b3dm',
@@ -132,13 +167,12 @@ def pg2b3dm(table_task_name, output_3dtiles_path, attributes, min_geometric_erro
             '-c', geometry_column_name,
             '-t', table_task_name,
             '-a', ",".join(attributes),
-            '-g', f"{max_geometric_error},{min_geometric_error}",
+            '--geometricerror', f"{max_geometric_error}",
             '--double_sided', double_sided,
             '--use_implicit_tiling', "false",
-            '--max_features_per_tile', f"{int(max_features_per_tile)}"
-        ],
-        # capture_output = True,
-        # text = True
+            '--max_features_per_tile', f"{int(max_features_per_tile)}",
+            '--geometricerrorfactor', f"{int(geometric_error_factor)}",
+        ] + options
     )
 
     try:

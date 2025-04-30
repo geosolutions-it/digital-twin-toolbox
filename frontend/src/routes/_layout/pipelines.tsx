@@ -405,6 +405,19 @@ const AddPipeline = ({ isOpen, onClose }: AddPipelineProps) => {
           <ModalHeader>Add Pipeline</ModalHeader>
           <ModalCloseButton />
           <ModalBody pb={6}>
+            <FormControl isRequired isInvalid={!!errors.asset_id}>
+              <FormLabel htmlFor="asset">Asset</FormLabel>
+              <SelectAssets
+                id="asset_id"
+                {...register("asset_id", {
+                  required: "Asset is required."
+                })}
+                placeholder="Select asset"
+              />
+              {errors.asset_id && (
+                <FormErrorMessage>{errors.asset_id.message}</FormErrorMessage>
+              )}
+            </FormControl>
             <FormControl isRequired isInvalid={!!errors.title}>
               <FormLabel htmlFor="title">Title</FormLabel>
               <Input
@@ -417,19 +430,6 @@ const AddPipeline = ({ isOpen, onClose }: AddPipelineProps) => {
               />
               {errors.title && (
                 <FormErrorMessage>{errors.title.message}</FormErrorMessage>
-              )}
-            </FormControl>
-            <FormControl isRequired isInvalid={!!errors.asset_id}>
-              <FormLabel htmlFor="asset">Asset</FormLabel>
-              <SelectAssets
-                id="asset_id"
-                {...register("asset_id", {
-                  required: "Asset is required.",
-                })}
-                placeholder="Select asset"
-              />
-              {errors.asset_id && (
-                <FormErrorMessage>{errors.asset_id.message}</FormErrorMessage>
               )}
             </FormControl>
           </ModalBody>

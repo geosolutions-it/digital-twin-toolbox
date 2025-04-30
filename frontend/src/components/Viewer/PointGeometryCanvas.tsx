@@ -138,6 +138,7 @@ function PointGeometryCanvas({
       mesh.geometry.dispose()
     }
     group.children.forEach((child: any) => group.remove(child))
+    group.children = []
     // @ts-ignore collection is currently a simple object in the response
     const [minx, miny, maxx, maxy] = turfBbox(collection)
     const center = [minx + (maxx - minx) / 2, miny + (maxy - miny) / 2, 0]

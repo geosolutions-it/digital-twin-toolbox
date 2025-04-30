@@ -73,13 +73,16 @@ function ThreeCanvas({ onMount }: ThreeCanvasProps) {
         mesh.geometry.dispose()
       }
       group.children.forEach((child: any) => group.remove(child))
+      group.children = []
       renderer.dispose()
     }
   }, [])
 
+  const _onMount = React.useRef(() => {});
+  _onMount.current = () => onMount(options.current);
   React.useEffect(() => {
-    onMount(options.current)
-  }, [onMount])
+    _onMount.current();
+  }, [])
   return (
     <canvas
       ref={canvas}

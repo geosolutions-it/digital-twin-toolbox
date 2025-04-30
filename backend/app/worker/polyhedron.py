@@ -1,5 +1,4 @@
-from app.worker.cartesian import convert_to_cartesian
-from app.worker.processes import earcut_js
+from app.worker.processes import earcut
 
 def parse_coords(coords, z, translate_z):
     height = coords[2]
@@ -31,7 +30,7 @@ def sum_until_index(arr, index):
 
 def triangulate(coordinates, reverse):
 
-    indices = earcut_js(coordinates)
+    indices = earcut(coordinates)
 
     vertices = []
 
@@ -45,17 +44,17 @@ def triangulate(coordinates, reverse):
         if i % 3 == 0:
             if reverse:
                 polyhedron.append([
-                    convert_to_cartesian(vertices[indices[i]]),
-                    convert_to_cartesian(vertices[indices[i + 2]]),
-                    convert_to_cartesian(vertices[indices[i + 1]]),
-                    convert_to_cartesian(vertices[indices[i]])
+                    vertices[indices[i]],
+                    vertices[indices[i + 2]],
+                    vertices[indices[i + 1]],
+                    vertices[indices[i]]
                 ])
             else:
                 polyhedron.append([
-                    convert_to_cartesian(vertices[indices[i]]),
-                    convert_to_cartesian(vertices[indices[i + 1]]),
-                    convert_to_cartesian(vertices[indices[i + 2]]),
-                    convert_to_cartesian(vertices[indices[i]])
+                    vertices[indices[i]],
+                    vertices[indices[i + 1]],
+                    vertices[indices[i + 2]],
+                    vertices[indices[i]]
                 ])
     return polyhedron
 
@@ -64,10 +63,10 @@ def plane_to_wall(lower_ring, upper_ring):
 
     for i in range(len(lower_ring) - 1):
         if lower_ring[i + 1]:
-            bl = convert_to_cartesian(lower_ring[i])
-            br = convert_to_cartesian(lower_ring[i + 1])
-            tl = convert_to_cartesian(upper_ring[i])
-            tr = convert_to_cartesian(upper_ring[i + 1])
+            bl = lower_ring[i]
+            br = lower_ring[i + 1]
+            tl = upper_ring[i]
+            tr = upper_ring[i + 1]
             polyhedron.append([bl, tl, br, bl])
             polyhedron.append([br, tl, tr, br])
 
