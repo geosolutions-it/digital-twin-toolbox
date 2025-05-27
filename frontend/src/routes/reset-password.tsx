@@ -75,48 +75,52 @@ function ResetPassword() {
 
   return (
     <Container
-      as="form"
-      onSubmit={handleSubmit(onSubmit)}
       h="calc(var(--dtt-vh))"
-      maxW="sm"
-      alignItems="stretch"
       justifyContent="center"
-      gap={4}
       centerContent
     >
-      <Heading size="xl" color="ui.main" textAlign="center" mb={2}>
-        Reset Password
-      </Heading>
-      <Text textAlign="center">
-        Please enter your new password and confirm it to reset your password.
-      </Text>
-      <FormControl mt={4} isInvalid={!!errors.new_password}>
-        <FormLabel htmlFor="password">Set Password</FormLabel>
-        <Input
-          id="password"
-          {...register("new_password", passwordRules())}
-          placeholder="Password"
-          type="password"
-        />
-        {errors.new_password && (
-          <FormErrorMessage>{errors.new_password.message}</FormErrorMessage>
-        )}
-      </FormControl>
-      <FormControl mt={4} isInvalid={!!errors.confirm_password}>
-        <FormLabel htmlFor="confirm_password">Confirm Password</FormLabel>
-        <Input
-          id="confirm_password"
-          {...register("confirm_password", confirmPasswordRules(getValues))}
-          placeholder="Password"
-          type="password"
-        />
-        {errors.confirm_password && (
-          <FormErrorMessage>{errors.confirm_password.message}</FormErrorMessage>
-        )}
-      </FormControl>
-      <Button variant="primary" type="submit">
-        Reset Password
-      </Button>
+      <Container
+        as="form"
+        onSubmit={handleSubmit(onSubmit)}
+        alignItems="stretch"
+        gap={4}
+        maxW="sm"
+        centerContent
+      >
+        <Heading size="xl" color="ui.main" textAlign="center" mb={2}>
+          Reset Password
+        </Heading>
+        <Text textAlign="center">
+          Please enter your new password and confirm it to reset your password.
+        </Text>
+        <FormControl mt={4} isInvalid={!!errors.new_password}>
+          <FormLabel htmlFor="password">Set Password</FormLabel>
+          <Input
+            id="password"
+            {...register("new_password", passwordRules())}
+            placeholder="Password"
+            type="password"
+          />
+          {errors.new_password && (
+            <FormErrorMessage>{errors.new_password.message}</FormErrorMessage>
+          )}
+        </FormControl>
+        <FormControl mt={4} isInvalid={!!errors.confirm_password}>
+          <FormLabel htmlFor="confirm_password">Confirm Password</FormLabel>
+          <Input
+            id="confirm_password"
+            {...register("confirm_password", confirmPasswordRules(getValues))}
+            placeholder="Password"
+            type="password"
+          />
+          {errors.confirm_password && (
+            <FormErrorMessage>{errors.confirm_password.message}</FormErrorMessage>
+          )}
+        </FormControl>
+        <Button variant="primary" type="submit">
+          Reset Password
+        </Button>
+      </Container>
     </Container>
   )
 }
