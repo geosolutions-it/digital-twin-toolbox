@@ -59,7 +59,7 @@ function Pipeline() {
   }
 
   return (
-    <Box w="100%" pos="relative" h="calc(100vh)" m="0">
+    <Box w="100%" pos="relative" h="calc(var(--dtt-vh))" m="0">
       <Flex pos="absolute" w="100%" h="100%">
         {data?.asset?.geometry_type === "PointCloud" ? (
           <PointCloudCanvas

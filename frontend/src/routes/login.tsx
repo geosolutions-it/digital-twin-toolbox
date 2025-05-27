@@ -68,82 +68,86 @@ function Login() {
   return (
     <>
       <Container
-        as="form"
-        onSubmit={handleSubmit(onSubmit)}
-        h="100vh"
-        maxW="sm"
-        alignItems="stretch"
+        h="calc(var(--dtt-vh))"
         justifyContent="center"
-        gap={4}
         centerContent
       >
-        <Flex alignItems="center" justifyContent="center" mb={4}>
-          <Image
-            src={Logo}
-            alt="Digital Twin Toolbox logo"
-            height="48px"
-            maxW="2xs"
-            alignSelf="center"
-            mr={2}
-          />
-          <Text as="h1" fontSize="30px">
-            Digital Twin Toolbox
-          </Text>
-        </Flex>
-        <FormControl id="username" isInvalid={!!errors.username || !!error}>
-          <Input
-            id="username"
-            {...register("username", {
-              required: "Username is required",
-              pattern: emailPattern,
-            })}
-            placeholder="Email"
-            type="email"
-            required
-          />
-          {errors.username && (
-            <FormErrorMessage>{errors.username.message}</FormErrorMessage>
-          )}
-        </FormControl>
-        <FormControl id="password" isInvalid={!!error}>
-          <InputGroup>
+        <Container
+          as="form"
+          onSubmit={handleSubmit(onSubmit)}
+          alignItems="stretch"
+          gap={4}
+          maxW="sm"
+          centerContent
+        >
+          <Flex alignItems="center" justifyContent="center" mb={4}>
+            <Image
+              src={Logo}
+              alt="Digital Twin Toolbox logo"
+              height="48px"
+              maxW="2xs"
+              alignSelf="center"
+              mr={2}
+            />
+            <Text as="h1" fontSize="30px">
+              Digital Twin Toolbox
+            </Text>
+          </Flex>
+          <FormControl id="username" isInvalid={!!errors.username || !!error}>
             <Input
-              {...register("password", {
-                required: "Password is required",
+              id="username"
+              {...register("username", {
+                required: "Username is required",
+                pattern: emailPattern,
               })}
-              type={show ? "text" : "password"}
-              placeholder="Password"
+              placeholder="Email"
+              type="email"
               required
             />
-            <InputRightElement
-              color="ui.dim"
-              _hover={{
-                cursor: "pointer",
-              }}
-            >
-              <Icon
-                as={show ? ViewOffIcon : ViewIcon}
-                onClick={setShow.toggle}
-                aria-label={show ? "Hide password" : "Show password"}
+            {errors.username && (
+              <FormErrorMessage>{errors.username.message}</FormErrorMessage>
+            )}
+          </FormControl>
+          <FormControl id="password" isInvalid={!!error}>
+            <InputGroup>
+              <Input
+                {...register("password", {
+                  required: "Password is required",
+                })}
+                type={show ? "text" : "password"}
+                placeholder="Password"
+                required
+              />
+              <InputRightElement
+                color="ui.dim"
+                _hover={{
+                  cursor: "pointer",
+                }}
               >
-                {show ? <ViewOffIcon /> : <ViewIcon />}
-              </Icon>
-            </InputRightElement>
-          </InputGroup>
-          {error && <FormErrorMessage>{error}</FormErrorMessage>}
-        </FormControl>
-        <Link as={RouterLink} to="/recover-password" color="blue.500">
-          Forgot password?
-        </Link>
-        <Button variant="primary" type="submit" isLoading={isSubmitting}>
-          Log In
-        </Button>
-        <Text>
-          Don't have an account?{" "}
-          <Link as={RouterLink} to="/signup" color="blue.500">
-            Sign up
+                <Icon
+                  as={show ? ViewOffIcon : ViewIcon}
+                  onClick={setShow.toggle}
+                  aria-label={show ? "Hide password" : "Show password"}
+                >
+                  {show ? <ViewOffIcon /> : <ViewIcon />}
+                </Icon>
+              </InputRightElement>
+            </InputGroup>
+            {error && <FormErrorMessage>{error}</FormErrorMessage>}
+          </FormControl>
+          <Link as={RouterLink} to="/recover-password" color="blue.500">
+            Forgot password?
           </Link>
-        </Text>
+          <Button variant="primary" type="submit" isLoading={isSubmitting}>
+            Log In
+          </Button>
+          <Text>
+            Don't have an account?{" "}
+            <Link as={RouterLink} to="/signup" color="blue.500">
+              Sign up
+            </Link>
+          </Text>
+        </Container>
       </Container>
     </>
   )

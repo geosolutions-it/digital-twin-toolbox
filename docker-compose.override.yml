@@ -81,8 +81,8 @@ services:
 
   frontend:
     restart: "no"
-    environment:
-      - DTT_VITE_API_URL=http://${DOMAIN?Variable not set}
+    env_file:
+      - .env
 
 networks:
   traefik-public:

@@ -67,38 +67,42 @@ function RecoverPassword() {
 
   return (
     <Container
-      as="form"
-      onSubmit={handleSubmit(onSubmit)}
-      h="100vh"
-      maxW="sm"
-      alignItems="stretch"
+      h="calc(var(--dtt-vh))"
       justifyContent="center"
-      gap={4}
       centerContent
     >
-      <Heading size="xl" color="ui.main" textAlign="center" mb={2}>
-        Password Recovery
-      </Heading>
-      <Text align="center">
-        A password recovery email will be sent to the registered account.
-      </Text>
-      <FormControl isInvalid={!!errors.email}>
-        <Input
-          id="email"
-          {...register("email", {
-            required: "Email is required",
-            pattern: emailPattern,
-          })}
-          placeholder="Email"
-          type="email"
-        />
-        {errors.email && (
-          <FormErrorMessage>{errors.email.message}</FormErrorMessage>
-        )}
-      </FormControl>
-      <Button variant="primary" type="submit" isLoading={isSubmitting}>
-        Continue
-      </Button>
+      <Container
+        as="form"
+        onSubmit={handleSubmit(onSubmit)}
+        alignItems="stretch"
+        gap={4}
+        maxW="sm"
+        centerContent
+      >
+        <Heading size="xl" color="ui.main" textAlign="center" mb={2}>
+          Password Recovery
+        </Heading>
+        <Text align="center">
+          A password recovery email will be sent to the registered account.
+        </Text>
+        <FormControl isInvalid={!!errors.email}>
+          <Input
+            id="email"
+            {...register("email", {
+              required: "Email is required",
+              pattern: emailPattern,
+            })}
+            placeholder="Email"
+            type="email"
+          />
+          {errors.email && (
+            <FormErrorMessage>{errors.email.message}</FormErrorMessage>
+          )}
+        </FormControl>
+        <Button variant="primary" type="submit" isLoading={isSubmitting}>
+          Continue
+        </Button>
+      </Container>
     </Container>
   )
 }

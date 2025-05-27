@@ -45,7 +45,6 @@ import { FiDownload, FiEdit, FiFileMinus, FiTrash } from "react-icons/fi"
 import { z } from "zod"
 import { AssetsService, PipelinesService } from "../../client"
 import type { ApiError, PipelineCreate } from "../../client"
-import { OpenAPI } from "../../client/core/OpenAPI"
 import useCustomToast from "../../hooks/useCustomToast"
 import { handleError } from "../../utils"
 
@@ -235,7 +234,7 @@ function PipelinesTable() {
           ) : (
             <Tbody>
               {pipelines?.data.map((pipeline) => {
-                const download: string = `${OpenAPI.BASE}${pipeline?.task_result?.download}`
+                const download: string = `${pipeline?.task_result?.download}`
                 return (
                   <Tr key={pipeline.id} opacity={isPlaceholderData ? 0.5 : 1}>
                     <Td>

@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     POSTGRES_DB: str = ""
     POSTGRES_TASKS_DB: str = ""
     ASSETS_DATA: str = ""
+    DTT_ENABLE_USERS_MANAGEMENT: bool = False
 
     @computed_field  # type: ignore[prop-decorator]
     @property
