@@ -17,6 +17,7 @@ import { FiLogOut, FiMenu } from "react-icons/fi"
 import type { UserPublic } from "../../client"
 import useAuth from "../../hooks/useAuth"
 import SidebarItems from "./SidebarItems"
+import { hideUserSections } from '../../utils'
 
 const Sidebar = () => {
   const queryClient = useQueryClient()
@@ -26,6 +27,7 @@ const Sidebar = () => {
   const currentUser = queryClient.getQueryData<UserPublic>(["currentUser"])
   const { isOpen, onOpen, onClose } = useDisclosure()
   const { logout } = useAuth()
+  const shouldHideUserSections = hideUserSections();
 
   const handleLogout = async () => {
     logout()
@@ -51,7 +53,7 @@ const Sidebar = () => {
             <Flex flexDir="column" justify="space-between">
               <Box>
                 <SidebarItems onClose={onClose} />
-                <Flex
+                {!shouldHideUserSections && <Flex
                   as="button"
                   onClick={handleLogout}
                   p={2}
@@ -61,9 +63,9 @@ const Sidebar = () => {
                 >
                   <FiLogOut />
                   <Text ml={2}>Log out</Text>
-                </Flex>
+                </Flex>}
               </Box>
-              {currentUser?.email && (
+              {!shouldHideUserSections && currentUser?.email && (
                 <Text color={textColor} noOfLines={2} fontSize="sm" p={2}>
                   Logged in as: {currentUser.email}
                 </Text>
@@ -77,7 +79,7 @@ const Sidebar = () => {
       <Box
         bg={bgColor}
         p={3}
-        h="100vh"
+        h="calc(var(--dtt-vh))"
         position="sticky"
         top="0"
         display={{ base: "none", md: "flex" }}
@@ -92,7 +94,7 @@ const Sidebar = () => {
           <Box>
             <SidebarItems />
           </Box>
-          {currentUser?.email && (
+          {!shouldHideUserSections && currentUser?.email && (
             <Text
               color={textColor}
               noOfLines={2}

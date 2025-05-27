@@ -31,6 +31,7 @@ import {
 import { parseExpression } from "../../utils/expression"
 import InputExpression from "./InputExpression.js"
 import ThreeCanvas from "./ThreeCanvas"
+import { getPublicBasePath } from '../../utils'
 
 const collectionToPointInstances = (collection: any, options: any) => {
   const computeOptions = options.computeOptions
@@ -233,7 +234,7 @@ function PointGeometryCanvas({
   // @ts-ignore collection
   const properties = collection?.features?.[0]?.properties
   const tileset: any = pipeline?.task_result?.tileset
-  const download: string = `${OpenAPI.BASE}${pipeline?.task_result?.download}`
+  const download: string = `${pipeline?.task_result?.download}`
 
   if (isPending || isModelPending) {
     return (
@@ -322,7 +323,7 @@ function PointGeometryCanvas({
                 {
                   <a
                     target="_blank"
-                    href={`/preview.html?${OpenAPI.BASE}${tileset}`}
+                    href={`${getPublicBasePath()}preview.html?${tileset}`}
                     rel="noreferrer"
                   >
                     {tileset}

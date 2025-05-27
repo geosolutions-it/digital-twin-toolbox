@@ -5,7 +5,7 @@ const NotFound = () => {
   return (
     <>
       <Container
-        h="100vh"
+        h="calc(var(--dtt-vh))"
         alignItems="stretch"
         justifyContent="center"
         textAlign="center"

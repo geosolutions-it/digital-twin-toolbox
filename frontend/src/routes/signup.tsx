@@ -61,11 +61,11 @@ function SignUp() {
 
   return (
     <>
-      <Flex flexDir={{ base: "column", md: "row" }} justify="center" h="100vh">
+      <Flex flexDir={{ base: "column", md: "row" }} justify="center" h="calc(var(--dtt-vh))">
         <Container
           as="form"
           onSubmit={handleSubmit(onSubmit)}
-          h="100vh"
+          h="calc(var(--dtt-vh))"
           maxW="sm"
           alignItems="stretch"
           justifyContent="center"

@@ -77,7 +77,7 @@ function ResetPassword() {
     <Container
       as="form"
       onSubmit={handleSubmit(onSubmit)}
-      h="100vh"
+      h="calc(var(--dtt-vh))"
       maxW="sm"
       alignItems="stretch"
       justifyContent="center"

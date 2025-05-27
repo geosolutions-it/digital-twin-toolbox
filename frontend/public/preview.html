@@ -70,7 +70,8 @@
                 debugShowBoundingVolume: false,
                 debugShowGeometricError: false,
                 debugShowRenderingStatistics: false,
-                debugShowMemoryUsage: false
+                debugShowMemoryUsage: false,
+                maximumScreenSpaceError: 16
             };
             Object.keys(controls).forEach(key => {
                 gui.add(controls, key).onChange((value) => {

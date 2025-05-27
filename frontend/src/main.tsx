@@ -1,21 +1,30 @@
 import { ChakraProvider } from "@chakra-ui/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { RouterProvider, createRouter } from "@tanstack/react-router"
+import { RouterProvider, createRouter, createHashHistory } from "@tanstack/react-router"
 import ReactDOM from "react-dom/client"
 import { routeTree } from "./routeTree.gen"
 
 import { StrictMode } from "react"
 import { OpenAPI } from "./client"
+import './main.css'
 import theme from "./theme"
+import { enableHashHistory, getRouterBasePath, getViteApiUrl } from './utils'
 
-OpenAPI.BASE = import.meta.env.VITE_API_URL
+OpenAPI.BASE = getViteApiUrl()
+
 OpenAPI.TOKEN = async () => {
   return localStorage.getItem("access_token") || ""
 }
 
 const queryClient = new QueryClient()
 
-const router = createRouter({ routeTree })
+const hashHistory = createHashHistory()
+const router = createRouter({
+  routeTree,
+  basepath: getRouterBasePath(),
+  ...(enableHashHistory() ? { history: hashHistory } : {}),
+})
+
 declare module "@tanstack/react-router" {
   interface Register {
     router: typeof router

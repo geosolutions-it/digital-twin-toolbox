@@ -27,8 +27,9 @@ import {
 } from "three"
 import { AssetsService } from "../../client"
 import type { PipelinePublicExtended } from "../../client"
-import { OpenAPI } from "../../client/core/OpenAPI"
 import ThreeCanvas from "./ThreeCanvas"
+import { getPublicBasePath } from '../../utils'
+
 interface PolygonGeometryCanvasProps {
   pipeline: PipelinePublicExtended
   onRun: (payload: any) => any
@@ -184,7 +185,7 @@ function PointCloudCanvas({
 
   // @ts-ignore collection
   const tileset: any = pipeline?.task_result?.tileset
-  const download: string = `${OpenAPI.BASE}${pipeline?.task_result?.download}`
+  const download: string = `${pipeline?.task_result?.download}`
 
   if (isPending) {
     return (
@@ -266,7 +267,7 @@ function PointCloudCanvas({
                 {
                   <a
                     target="_blank"
-                    href={`/preview.html?${OpenAPI.BASE}${tileset}`}
+                    href={`${getPublicBasePath()}preview.html?${tileset}`}
                     rel="noreferrer"
                   >
                     {tileset}

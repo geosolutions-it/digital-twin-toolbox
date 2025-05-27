@@ -6,7 +6,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt.exceptions import InvalidTokenError
 from pydantic import ValidationError
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.core import security
 from app.core.config import settings
@@ -27,7 +27,10 @@ SessionDep = Annotated[Session, Depends(get_db)]
 TokenDep = Annotated[str, Depends(reusable_oauth2)]
 
 
+
 def get_current_user(session: SessionDep, token: TokenDep) -> User:
+   
+
     try:
         payload = jwt.decode(
             token, settings.SECRET_KEY, algorithms=[security.ALGORITHM]
@@ -45,9 +48,18 @@ def get_current_user(session: SessionDep, token: TokenDep) -> User:
         raise HTTPException(status_code=400, detail="Inactive user")
     return user
 
+def get_no_security_user(session: SessionDep) -> User:
+    user = session.exec(
+        select(User).where(User.email == settings.FIRST_SUPERUSER)
+    ).first()
+    return user
 
-CurrentUser = Annotated[User, Depends(get_current_user)]
+def get_annotated_current_user():
+    if not settings.DTT_ENABLE_USERS_MANAGEMENT:
+        return Annotated[User, Depends(get_no_security_user)]
+    return Annotated[User, Depends(get_current_user)]
 
+CurrentUser = get_annotated_current_user()
 
 def get_current_active_superuser(current_user: CurrentUser) -> User:
     if not current_user.is_superuser:

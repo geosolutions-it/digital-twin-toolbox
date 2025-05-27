@@ -3,9 +3,9 @@ services:
   db:
     image: postgis/postgis:12-3.4
     restart: always
+    platform: linux/amd64 # Patch for M1 Mac
     volumes:
       - app-db-data:/var/lib/postgresql/data/pgdata
-      - ./backend/scripts/create_tasks_db.sh:/docker-entrypoint-initdb.d/create_tasks_db.sh
     env_file:
       - .env
     environment:
@@ -153,8 +153,8 @@ services:
       context: ./frontend
       args:
         - NODE_ENV=production
-    environment:
-      - DTT_VITE_API_URL=https://${DOMAIN?Variable not set}
+    env_file:
+      - .env
     labels:
       - traefik.enable=true
       - traefik.docker.network=traefik-public
