@@ -1,0 +1,12 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      args:
+        INSTALL_DEV: ${INSTALL_DEV-false}
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        - NODE_ENV=production
