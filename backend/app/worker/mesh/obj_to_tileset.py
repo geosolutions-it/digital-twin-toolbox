@@ -6,42 +6,18 @@ import math
 import json
 import time
 import sys
+
 argv = sys.argv
-if '--' in argv:
-    argv = argv[argv.index("--") + 1:] 
-else:
-    argv = []
 
-input_file = argv[0]
-output_dir = argv[1]
+# review argument parsing
+input_file = argv[1]
+output_dir = argv[2]
 
-depth = argv[2]
-if not depth:
-    depth = 2
-else:
-    depth = int(depth)
-
-mesh_faces_target = argv[3]
-if not mesh_faces_target:
-    mesh_faces_target = 500000
-else:
-    mesh_faces_target = int(mesh_faces_target)
-
-tile_faces_target = argv[4]
-if not tile_faces_target:
-    tile_faces_target = 40000
-else:
-    tile_faces_target = int(tile_faces_target)
-
-remove_doubles_factor = argv[5]
-if not remove_doubles_factor:
-    remove_doubles_factor = 0.025
-else:
-    remove_doubles_factor = float(remove_doubles_factor)
-
-input_image = argv[6]
-if not input_image:
-    input_image = None
+depth = 3
+mesh_faces_target = 500000
+tile_faces_target = 40000
+remove_doubles_factor = 0.025
+input_image = None
 
 if __name__ == '__main__':
 
@@ -146,12 +122,7 @@ if __name__ == '__main__':
         bpy.ops.object.select_all(action="SELECT")
         bpy.ops.object.delete(True)
 
-        # this import is slower
-        # bpy.ops.import_mesh.ply(filepath=filepath)
-        # the experimental import needs the make single user operation
-        # bpy.ops.wm.ply_import(filepath=filepath)
-        bpy.ops.wm.obj_import(filepath=filepath , forward_axis='X', up_axis='Z')
-        bpy.ops.object.make_single_user(object=True, obdata=True, material=True, animation=False, obdata_animation=False)
+        bpy.ops.wm.obj_import(filepath=filepath , forward_axis='Y', up_axis='Z')
 
         mesh_objects = [obj for obj in scene.objects if obj.type == 'MESH']
 
@@ -180,7 +151,7 @@ if __name__ == '__main__':
         info = {
             'size': [obj.dimensions[0], obj.dimensions[1], obj.dimensions[2]],
             'depth': depth,
-            'center': [x, y, z]
+            'offset': [x, y, z]
         }
 
         info_path =  os.path.join(output_path, 'info.json')
@@ -204,7 +175,7 @@ if __name__ == '__main__':
         vertex_color_node.select = True
         mat.node_tree.links.new( vertex_color_node.outputs[0], bsdf.inputs['Emission Color'] )
 
-        obj.data.materials.append(mat)
+        # obj.data.materials.append(mat)
 
         return [obj, mat]
 
@@ -217,6 +188,8 @@ if __name__ == '__main__':
             use_selection=True,
             export_format="GLB",
             export_draco_mesh_compression_enable=True,
+
+            export_normals=False,
 
             # Values range 0 - 6
             export_draco_mesh_compression_level=6,
@@ -285,73 +258,73 @@ if __name__ == '__main__':
             decimate.use_collapse_triangulate = True
             bpy.ops.object.modifier_apply(modifier="decimate")
 
-    def get_image_plane(dimensions):
-        print('get image plane')
+    # def get_image_plane(dimensions):
+    #     print('get image plane')
 
-        bpy.ops.mesh.primitive_plane_add(
-            size=1,
-            enter_editmode=False,
-            align='WORLD',
-            location=(0, 0, dimensions[2]),
-            scale=(1, 1, 1)
-        )
+    #     bpy.ops.mesh.primitive_plane_add(
+    #         size=1,
+    #         enter_editmode=False,
+    #         align='WORLD',
+    #         location=(0, 0, dimensions[2]),
+    #         scale=(1, 1, 1)
+    #     )
         
-        plane = bpy.context.object
-        plane.scale.x = dimensions[0]
-        plane.scale.y = dimensions[1]
+    #     plane = bpy.context.object
+    #     plane.scale.x = dimensions[0]
+    #     plane.scale.y = dimensions[1]
         
-        bpy.ops.object.transform_apply()
+    #     bpy.ops.object.transform_apply()
         
-        mat = bpy.data.materials.new(name='PlaneMaterial')
-        mat.use_nodes = True
-        bsdf = mat.node_tree.nodes["Principled BSDF"]
-        bsdf.inputs['Specular'].default_value = 0
-        bsdf.inputs['Roughness'].default_value = 1
-        texture_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
-        texture_node.name = 'BaseImageNode'
-        texture_node.select = True
-        texture_node.image = bpy.data.images.load(filepath=input_image, check_existing=False)
-        mat.node_tree.links.new(bsdf.inputs['Base Color'], texture_node.outputs['Color'])
-        mat.node_tree.nodes.active = texture_node
+    #     mat = bpy.data.materials.new(name='PlaneMaterial')
+    #     mat.use_nodes = True
+    #     bsdf = mat.node_tree.nodes["Principled BSDF"]
+    #     bsdf.inputs['Specular'].default_value = 0
+    #     bsdf.inputs['Roughness'].default_value = 1
+    #     texture_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
+    #     texture_node.name = 'BaseImageNode'
+    #     texture_node.select = True
+    #     texture_node.image = bpy.data.images.load(filepath=input_image, check_existing=False)
+    #     mat.node_tree.links.new(bsdf.inputs['Base Color'], texture_node.outputs['Color'])
+    #     mat.node_tree.nodes.active = texture_node
         
-        plane.data.materials.append(mat)
+    #     plane.data.materials.append(mat)
         
-        bpy.ops.object.vertex_group_add()
+    #     bpy.ops.object.vertex_group_add()
         
-        bpy.ops.object.mode_set(mode='EDIT')
+    #     bpy.ops.object.mode_set(mode='EDIT')
 
-        for subdivide_count in range(0, 10):
-            bpy.ops.mesh.subdivide()
+    #     for subdivide_count in range(0, 10):
+    #         bpy.ops.mesh.subdivide()
 
-        bpy.ops.object.vertex_group_assign()
-        bpy.ops.object.mode_set(mode='OBJECT')
+    #     bpy.ops.object.vertex_group_assign()
+    #     bpy.ops.object.mode_set(mode='OBJECT')
         
-        shrinkwrap = plane.modifiers.new(type="SHRINKWRAP", name="shrinkwrap")
-        shrinkwrap.wrap_method = 'PROJECT'
-        shrinkwrap.use_positive_direction = True
-        shrinkwrap.use_negative_direction = True
-        shrinkwrap.target = merged
-        bpy.ops.object.modifier_apply(modifier="shrinkwrap")
+    #     shrinkwrap = plane.modifiers.new(type="SHRINKWRAP", name="shrinkwrap")
+    #     shrinkwrap.wrap_method = 'PROJECT'
+    #     shrinkwrap.use_positive_direction = True
+    #     shrinkwrap.use_negative_direction = True
+    #     shrinkwrap.target = merged
+    #     bpy.ops.object.modifier_apply(modifier="shrinkwrap")
         
-        vertex_weight_proximity = plane.modifiers.new(type="VERTEX_WEIGHT_PROXIMITY", name="vertex_weight_proximity")
-        vertex_weight_proximity.target = merged
-        vertex_weight_proximity.vertex_group = 'Group'
-        vertex_weight_proximity.max_dist = 0.0001
-        vertex_weight_proximity.min_dist = 0.0002
-        vertex_weight_proximity.proximity_mode = 'GEOMETRY'
-        vertex_weight_proximity.proximity_geometry = {'FACE'}
-        vertex_weight_proximity.normalize = True
-        bpy.ops.object.modifier_apply(modifier="vertex_weight_proximity")
+    #     vertex_weight_proximity = plane.modifiers.new(type="VERTEX_WEIGHT_PROXIMITY", name="vertex_weight_proximity")
+    #     vertex_weight_proximity.target = merged
+    #     vertex_weight_proximity.vertex_group = 'Group'
+    #     vertex_weight_proximity.max_dist = 0.0001
+    #     vertex_weight_proximity.min_dist = 0.0002
+    #     vertex_weight_proximity.proximity_mode = 'GEOMETRY'
+    #     vertex_weight_proximity.proximity_geometry = {'FACE'}
+    #     vertex_weight_proximity.normalize = True
+    #     bpy.ops.object.modifier_apply(modifier="vertex_weight_proximity")
 
-        mask = plane.modifiers.new(type="MASK", name="mask")
-        mask.vertex_group = 'Group'
-        bpy.ops.object.modifier_apply(modifier="mask")
+    #     mask = plane.modifiers.new(type="MASK", name="mask")
+    #     mask.vertex_group = 'Group'
+    #     bpy.ops.object.modifier_apply(modifier="mask")
         
-        bpy.ops.object.select_all(action="DESELECT")
+    #     bpy.ops.object.select_all(action="DESELECT")
 
-        return plane
+    #     return plane
 
-    def split_tile(target, bbox, margin, filepath, name, bake_img, remove_doubles_threshold, bake_mat, plane):
+    def split_tile(target, bbox, margin, filepath, name, base_mat, bake_img, remove_doubles_threshold, bake_mat, target_model):
 
         for obj in scene.objects:
             obj.select_set(False)
@@ -403,23 +376,30 @@ if __name__ == '__main__':
         bpy.ops.uv.smart_project()
         bpy.ops.object.editmode_toggle()
 
+        # remove the default material from the tiled texture
+        # this needs to be moved before
+        # clone -> remove mat -> assign new mat
+        tile.data.materials.clear()
+        tile.data.materials.append(base_mat)
+
         bake_img.select = True
         mat = tile.material_slots[0].material
         mat.node_tree.nodes.active = bake_img
 
         # bake
-        bpy.context.scene.cycles.bake_type = 'EMIT'
-        bpy.context.scene.render.bake.use_selected_to_active = False
-        bpy.context.scene.render.bake.cage_extrusion = 0
-        bpy.ops.object.bake(type='EMIT',use_clear=True)
-
-        if plane:
-            plane.select_set(True)
+        if target_model:
+            target_model.select_set(True)
             bpy.context.scene.cycles.bake_type = 'DIFFUSE'
             bpy.context.scene.render.bake.use_selected_to_active = True
             bpy.context.scene.render.bake.cage_extrusion = 0.001 # (m) to avoid black pixels
             bpy.ops.object.bake(type='DIFFUSE',use_clear=False)
-            plane.select_set(False)
+            target_model.select_set(False)
+        else:
+            # bake from vertex color
+            bpy.context.scene.cycles.bake_type = 'EMIT'
+            bpy.context.scene.render.bake.use_selected_to_active = False
+            bpy.context.scene.render.bake.cage_extrusion = 0
+            bpy.ops.object.bake(type='EMIT',use_clear=True)
 
         # remove all material from tile copy
         tile.data.materials.clear()
@@ -467,7 +447,7 @@ if __name__ == '__main__':
     width = merged.dimensions[0]
     height = merged.dimensions[1]
 
-    plane = None
+    target_model = None
 
     if input_image:
         print('Input image:', input_image)
@@ -481,7 +461,15 @@ if __name__ == '__main__':
             bpy.ops.object.editmode_toggle()
         '''
 
-        plane = get_image_plane(merged.dimensions)
+        # target_model = get_image_plane(merged.dimensions)
+    else:
+        merged.select_set(True)
+        bpy.context.view_layer.objects.active = merged
+        bpy.ops.object.duplicate()
+        target_model = bpy.context.active_object
+        target_model.name = 'target_model'
+        bpy.ops.object.select_all(action="DESELECT")
+        merged.select_set(True)
 
     for z in range(0, depth + 1):
 
@@ -548,12 +536,13 @@ if __name__ == '__main__':
                 print(minx, miny, maxx, maxy)
                 tile_name = f"{z}_{y}_{x}"
                 filepath = os.path.join(output_dir, f"{tile_name}.glb")
-                split_tile(clonded_merged, (minx, miny, maxx, maxy), 4, filepath, tile_name, bake_img, remove_doubles_threshold, bake_mat, plane)
+                split_tile(clonded_merged, (minx, miny, maxx, maxy), 4, filepath, tile_name, mat, bake_img, remove_doubles_threshold, bake_mat, target_model)
                 print(f"done {tile_name} in")
                 print("--- %s seconds ---" % ((time.time() - tile_start_time)))
 
         remove_obj(clonded_merged)
 
     remove_obj(merged)
+    remove_obj(target_model)
 
     print("--- %s minutes ---" % ((time.time() - start_time) / 60))

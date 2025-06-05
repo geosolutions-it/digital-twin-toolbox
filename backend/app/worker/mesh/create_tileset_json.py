@@ -4,35 +4,17 @@ import math
 import numpy as np
 from pyproj import Transformer
 
-file = {
-    "name": "output"  
-}
-
-config = {
-    "zOffset": 0,
-    "geometricErrors": "200,100,20,5,0",
-    "crs": "EPSG:7791"
-}
-
-def cs2cs(coords, from_proj, to_proj):
-    transformer = Transformer.from_proj(from_proj, to_proj, always_xy=True)
+def reproject(coords, from_proj, to_proj):
+    transformer = Transformer.from_proj(from_proj, to_proj)
     x, y, z = transformer.transform(
         coords[0], coords[1], coords[2] if len(coords) > 2 else 0.0
     )
     return [x, y, z]
 
-def check_uri(output_dir, leaf):
-    if os.path.exists(os.path.join(output_dir, leaf['uri'])):
-        return [leaf]
-    return []
-
 def multiply_matrix(m1, m2):
     return np.array(m1).reshape(4, 4).dot(np.array(m2).reshape(4, 4)).flatten().tolist()
 
-def convert_to_column_major_order(m):
-    return np.array(m).reshape(4, 4).T.flatten().tolist()
-
-def to_ecef_transform(params):
+def get_transform(params):
     s = params['scale']
     lat = params['latitude'] * math.pi / 180
     lon = params['longitude'] * math.pi / 180
@@ -82,6 +64,7 @@ def to_ecef_transform(params):
     ]
 
     mult = multiply_matrix(res, rot)
+
     scale_matrix = [
         s, 0, 0, 0,
         0, s, 0, 0,
@@ -89,40 +72,47 @@ def to_ecef_transform(params):
         0, 0, 0, 1
     ]
 
-    return multiply_matrix(convert_to_column_major_order(mult), scale_matrix)
+    column_major_order = np.array(mult).reshape(4, 4).T.flatten().tolist()
+
+    return multiply_matrix(column_major_order, scale_matrix)
 
 def rad(deg):
     return deg * math.pi / 180
 
-def create_tileset(file, config):
-    output_dir = f"{file['name']}/"
-    
-    if not os.path.exists(os.path.join(output_dir, "info.json")):
-        raise FileNotFoundError(f"{output_dir}info.json not available")
-    
-    with open(os.path.join(output_dir, "info.json"), 'r') as f:
-        info = json.load(f)
-    
+def to_box(x, y, level, size):
+    level_size = 2 ** level
+    w_unit = size[0] / level_size
+    h_unit = size[1] / level_size
+    center_x = -(size[0] / 2) + (x * w_unit) + w_unit / 2
+    center_y = (size[1] / 2) - (y * h_unit) - h_unit / 2
+    return [
+        center_x, center_y, 0,
+        w_unit / 2, 0, 0,
+        0, h_unit / 2, 0,
+        0, 0, size[2] / 2
+    ]
+
+def create_tileset(info, config):
+
     size = info.get('size')
     depth = info.get('depth')
-    center_offset = info.get('center')
+    offset = info.get('offset')
+    center = info.get('center')
+    coordinates = center.get('coordinates')
+    crs = center.get('crs')
 
-    lat0, lon0, alt0 = 43.7742375737494, 11.258511650022717, 0
-
-    center = cs2cs([lat0, lon0, alt0], 'WGS84', config.get('crs', 'EPSG:7791'))
-    if center_offset:
-        center[0] += center_offset[0]
-        center[1] += center_offset[1]
-        center[2] += center_offset[2] if len(center_offset) > 2 else 0
+    if offset:
+        coordinates[0] += offset[0]
+        coordinates[1] += offset[1]
+        coordinates[2] += offset[2] if len(offset) > 2 else 0
     
     z_offset = config.get('zOffset', 0)
-    geometric_errors_config = config.get('geometricErrors', '200,100,20,5,0')
-    crs = config.get('crs', 'EPSG:7791')
+    geometric_errors_config = config.get('geometricErrors', '300,200,50,5,0')
     geometric_errors = [float(x) for x in geometric_errors_config.split(',')]
-    coords = cs2cs([center[0], center[1]], crs, 'WGS84')
-    latitude= coords[1]
-    longitude = coords[0]
-    z = center[2] + z_offset
+    coords = reproject([coordinates[0], coordinates[1]], crs, 'WGS84')
+    latitude= coords[0]
+    longitude = coords[1]
+    z = coordinates[2] + z_offset
     size_ = size
     height = size_[1]
     width = size_[0]
@@ -133,8 +123,8 @@ def create_tileset(file, config):
 
     def region(bbox):
         minx, miny, maxx, maxy = bbox
-        lb = cs2cs([minx, miny], crs, 'WGS84')
-        rt = cs2cs([maxx, maxy], crs, 'WGS84')
+        lb = reproject([minx, miny], crs, 'WGS84')
+        rt = reproject([maxx, maxy], crs, 'WGS84')
         return [rad(lb[1]), rad(lb[0]), rad(rt[1]), rad(rt[0]), min_z, max_z]
     
 
@@ -156,7 +146,10 @@ def create_tileset(file, config):
         }
         
         if bbox:
-            leaf['boundingVolume'] = {'region': region(bbox)}
+            leaf['boundingVolume'] = {
+                # 'region': region(bbox),
+                'box': to_box(x, y, level, size)
+            }
         if uri:
             leaf['content'] = {'uri': uri}
             
@@ -183,11 +176,14 @@ def create_tileset(file, config):
             ]
             
             for q in quads:
-                children.extend([quad(child) for child in check_uri(output_dir, q)])
+                children.extend([quad(q)])
                 
             if transform:
                 return {
-                    'boundingVolume': {'region': region(bbox)} if bbox else None,
+                    'boundingVolume': {
+                        # 'region': region(bbox),
+                        'box': to_box(0, 0, 0, size)
+                    },
                     'transform': transform,
                     'geometricError': geometric_errors[level],
                     'refine': 'REPLACE',
@@ -197,8 +193,8 @@ def create_tileset(file, config):
             
         return leaf
 
-    print(latitude, longitude, z ,"values for ecef")
-    transform = to_ecef_transform({'scale': 1, 'latitude': latitude, 'longitude': longitude, 'altitude': z})
+    transform = get_transform({ 'scale': 1, 'latitude': latitude, 'longitude': longitude, 'altitude': z })
+
     tileset = {
         'asset': {
             'version': '1.1'
@@ -207,24 +203,39 @@ def create_tileset(file, config):
             'x': 0,
             'y': 0,
             'bbox': [
-                center[0] - width / 2,
-                center[1] - height / 2,
-                center[0] + width / 2,
-                center[1] + height / 2
+                coordinates[0] - width / 2,
+                coordinates[1] - height / 2,
+                coordinates[0] + width / 2,
+                coordinates[1] + height / 2
             ],
             'level': 0,
             'transform': transform,
             'uri': '0_0_0.glb'
         })
     }
-    with open(os.path.join(output_dir, 'tileset.json'), 'w') as f:
-        json.dump(tileset, f)
-    
-    print(f"Tileset created successfully at {output_dir}tileset.json")
     return tileset
 
-if __name__ == "__main__":
-    try:
-        create_tileset(file, config)
-    except Exception as e:
-        print(f"Error creating tileset: {e}")
+# coordinates = reproject([43.7742375737494, 11.258511650022717, 0], 'WGS84', 'EPSG:7791')
+
+# info = {
+#     "size": [
+#         513.4364013671875,
+#         513.428955078125,
+#         116.2471923828125
+#     ],
+#     "depth": 3,
+#     "offset": [
+#         -12.180679321289062,
+#         -27.103591918945312,
+#         102.7359619140625
+#     ],
+#     "center": {
+#         "coordinates": coordinates,
+#         "crs": "EPSG:7791"
+#     }
+# }
+
+# tileset = create_tileset(info, {})
+
+# with open(os.path.join('./output/tileset.json'), 'w') as f:
+#     json.dump(tileset, f)
