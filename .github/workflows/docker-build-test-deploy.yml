@@ -55,6 +55,6 @@ jobs:
       - name: Deploy the images
         run: |
           source .env
-          docker push $DOCKER_IMAGE_BACKEND:latest
-          docker push $DOCKER_IMAGE_FRONTEND:latest
+          docker push $DOCKER_IMAGE_BACKEND:$TAG
+          docker push $DOCKER_IMAGE_FRONTEND:$TAG
 
