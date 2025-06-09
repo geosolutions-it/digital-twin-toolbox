@@ -5,6 +5,7 @@ import { PipelinesService } from "../../../client"
 import PointCloudCanvas from "../../../components/Viewer/PointCloudCanvas"
 import PointGeometryCanvas from "../../../components/Viewer/PointGeometryCanvas"
 import PolygonGeometryCanvas from "../../../components/Viewer/PolygonGeometryCanvas"
+import PhotogrammetryCanvas from "../../../components/Viewer/PhotogrammetryCanvas"
 
 export const Route = createFileRoute("/_layout/pipeline/$pipelineId")({
   component: Pipeline,
@@ -81,6 +82,15 @@ function Pipeline() {
         ) : null}
         {data?.asset?.geometry_type === "Polygon" ? (
           <PolygonGeometryCanvas
+            assetId={assetId}
+            pipeline={data}
+            onUpdate={handleOnUpdate}
+            onRun={handleOnRun}
+            onCancel={handleOnCancel}
+          />
+        ) : null}
+        {data?.asset?.asset_type === "Photogrammetry" ? (
+          <PhotogrammetryCanvas
             assetId={assetId}
             pipeline={data}
             onUpdate={handleOnUpdate}

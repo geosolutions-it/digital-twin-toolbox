@@ -63,6 +63,10 @@ def create_mesh_3dtiles(pipeline_extended):
 def create_point_cloud_3dtiles(pipeline_extended):
     return tasks.create_point_cloud_3dtiles(pipeline_extended)
 
+@celery.task(name="create_reconstructed_mesh", base=PipelineDatabaseTask)
+def create_reconstructed_mesh(pipeline_extended):
+    return tasks.create_reconstructed_mesh(pipeline_extended)
+
 @celery.task(name="complete_upload_process", base=AssetDatabaseTask)
 def complete_upload_process(options):
     return tasks.complete_upload_process(options)

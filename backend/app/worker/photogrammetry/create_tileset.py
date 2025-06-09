@@ -1,5 +1,3 @@
-import os
-import json
 import math
 import numpy as np
 from pyproj import Transformer
@@ -92,12 +90,12 @@ def to_box(x, y, level, size):
         0, 0, size[2] / 2
     ]
 
-def create_tileset(info, config):
+def run(config):
 
-    size = info.get('size')
-    depth = info.get('depth')
-    offset = info.get('offset')
-    center = info.get('center')
+    size = config.get('size')
+    depth = config.get('depth')
+    offset = config.get('offset')
+    center = config.get('center')
     coordinates = center.get('coordinates')
     crs = center.get('crs')
 
@@ -106,16 +104,23 @@ def create_tileset(info, config):
         coordinates[1] += offset[1]
         coordinates[2] += offset[2] if len(offset) > 2 else 0
     
-    z_offset = config.get('zOffset', 0)
-    geometric_errors_config = config.get('geometricErrors', '300,200,50,5,0')
-    geometric_errors = [float(x) for x in geometric_errors_config.split(',')]
+    diagonal = math.sqrt(size[0] ** 2 + size[1] ** 2)
+
+    max_geometric_error = config.get('max_geometric_error', diagonal / 4)
+
+    geometric_errors = []
+    for level in range(depth + 1):
+        geometric_errors.append(max_geometric_error / ((level + 1) ** 2))
+
+    geometric_errors.append(0)
+
     coords = reproject([coordinates[0], coordinates[1]], crs, 'WGS84')
     latitude= coords[0]
     longitude = coords[1]
-    z = coordinates[2] + z_offset
-    size_ = size
-    height = size_[1]
-    width = size_[0]
+    z = coordinates[2]
+
+    height = size[1]
+    width = size[0]
 
     min_z = z - size[2] / 2
     max_z = z + size[2] / 2
@@ -147,7 +152,6 @@ def create_tileset(info, config):
         
         if bbox:
             leaf['boundingVolume'] = {
-                # 'region': region(bbox),
                 'box': to_box(x, y, level, size)
             }
         if uri:
@@ -181,7 +185,7 @@ def create_tileset(info, config):
             if transform:
                 return {
                     'boundingVolume': {
-                        # 'region': region(bbox),
+                        'region': region(bbox),
                         'box': to_box(0, 0, 0, size)
                     },
                     'transform': transform,
@@ -214,28 +218,3 @@ def create_tileset(info, config):
         })
     }
     return tileset
-
-# coordinates = reproject([43.7742375737494, 11.258511650022717, 0], 'WGS84', 'EPSG:7791')
-
-# info = {
-#     "size": [
-#         513.4364013671875,
-#         513.428955078125,
-#         116.2471923828125
-#     ],
-#     "depth": 3,
-#     "offset": [
-#         -12.180679321289062,
-#         -27.103591918945312,
-#         102.7359619140625
-#     ],
-#     "center": {
-#         "coordinates": coordinates,
-#         "crs": "EPSG:7791"
-#     }
-# }
-
-# tileset = create_tileset(info, {})
-
-# with open(os.path.join('./output/tileset.json'), 'w') as f:
-#     json.dump(tileset, f)

@@ -10,6 +10,7 @@ from pathlib import Path
 import uuid
 from app.worker.utils import get_asset_upload_path
 from app.worker.main import complete_upload_process, complete_asset_remove_process
+import zipfile
 
 router = APIRouter()
 
@@ -64,6 +65,30 @@ async def create_asset(
 
     filename = file.filename
 
+    extension = "".join(Path(filename).suffixes)
+
+    if extension == '.zip':
+        zip_file = file.file
+        archive = zipfile.ZipFile(zip_file, 'r')
+        with archive as z:
+            zip_filenames = z.namelist()
+            if len(zip_filenames) == 0:
+                raise HTTPException(status_code=500, detail=f"Not supported file, empty zip file")
+            zip_file_extensions = []
+            for zip_filename in zip_filenames:
+                zip_file_extension = "".join(Path(zip_filename).suffixes).lower()
+                zip_file_extensions.append(zip_file_extension)
+            if '.shp' in zip_file_extensions:
+                filename = filename.replace('.zip', '.shp.zip')
+                extension = "".join(Path(filename).suffixes)
+            else:
+                if not all(ext in ['.jpg', '.json'] for ext in zip_file_extensions):
+                    raise HTTPException(status_code=500, detail=f"Not supported file, empty zip file")
+                else:
+                    filename = filename.replace('.zip', '.phg.zip')
+                    extension = "".join(Path(filename).suffixes)
+
+
     check_statement = select(Asset).where(Asset.owner_id == current_user.id).where(Asset.filename == filename).limit(1)
     results = session.exec(check_statement)
     check_asset = results.first()
@@ -77,8 +102,8 @@ async def create_asset(
     vector_data_extensions = [".shp.zip"]
     point_cloud_data_extensions = [".laz", ".las"]
     raster_formats = [".tiff", ".tif"]
-    supported_extensions = [".glb"] + vector_data_extensions + point_cloud_data_extensions + raster_formats
-    extension = "".join(Path(filename).suffixes)
+    photogrammetry_formats = [".phg.zip"]
+    supported_extensions = [".glb"] + vector_data_extensions + point_cloud_data_extensions + raster_formats + photogrammetry_formats
 
     if not extension in supported_extensions:
         supported_extensions_list = ", ".join(supported_extensions)
@@ -93,10 +118,11 @@ async def create_asset(
     }
 
     asset = Asset.model_validate(asset_in, update={"owner_id": current_user.id})
-    output_file_path = get_asset_upload_path(asset.id, extension)
+    output_file_path = get_asset_upload_path(f"{asset.id}/index{asset.extension}")
 
     try:
         os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
+        file.file.seek(0)
         with open(output_file_path, 'wb') as f:
             while contents := file.file.read(1024 * 1024):
                 f.write(contents)
@@ -114,6 +140,7 @@ async def create_asset(
         'vector_data_extensions': vector_data_extensions,
         'point_cloud_data_extensions': point_cloud_data_extensions,
         'raster_formats': raster_formats,
+        'photogrammetry_formats': photogrammetry_formats,
         'to_ellipsoidal_height': to_ellipsoidal_height
     })
     asset.sqlmodel_update({
@@ -140,7 +167,7 @@ async def get_asset_file(session: SessionDep, current_user: CurrentUser, filenam
     if not current_user.is_superuser and (asset.owner_id != current_user.id):
         raise HTTPException(status_code=400, detail="Not enough permissions")
 
-    output_path = get_asset_upload_path(asset.id, asset.extension)
+    output_path = get_asset_upload_path(f"{asset.id}/index{asset.extension}")
     return FileResponse(output_path)
 
 @router.get("/{id}/download", response_model=None)
@@ -154,7 +181,7 @@ async def download_asset(session: SessionDep, current_user: CurrentUser, id: uui
     if not current_user.is_superuser and (asset.owner_id != current_user.id):
         raise HTTPException(status_code=400, detail="Not enough permissions")
 
-    output_path = get_asset_upload_path(asset.id, asset.extension)
+    output_path = get_asset_upload_path(f"{asset.id}/index{asset.extension}")
     return FileResponse(output_path)
 
 @router.get("/{id}/sample", response_model=None)
@@ -175,7 +202,7 @@ async def read_asset_sample(session: SessionDep, current_user: CurrentUser, id: 
     if asset.geometry_type == 'PointCloud':
         sample_extension = '.xyz'
 
-    sample_file_path = get_asset_upload_path(asset.id, sample_extension, 'sample')
+    sample_file_path = get_asset_upload_path(f"{asset.id}/sample{sample_extension}")
     if not os.path.isfile(sample_file_path):
         raise HTTPException(status_code=500, detail="Sample file not available")
 

@@ -388,7 +388,7 @@ def process_las(
     ground_classification=False
 ):
 
-    asset_upload_path = get_asset_upload_path(asset['id'], asset['extension'])
+    asset_upload_path = get_asset_upload_path(f"{asset['id']}/index{asset['extension']}")
     pipeline = []
     if sample_radius:
         pipeline += [
@@ -450,8 +450,8 @@ def process_las(
     if len(pipeline) == 0:
         return asset_upload_path
 
-    output_processed_laz_path = get_asset_upload_path(asset['id'], '.laz', pipeline_id)
-    pipeline_process_path = get_asset_upload_path(asset['id'], '.json', f"{pipeline_id}.pipeline")
+    output_processed_laz_path = get_asset_upload_path(f"{asset['id']}/{pipeline_id}.laz")
+    pipeline_process_path = get_asset_upload_path(f"{asset['id']}/{pipeline_id}.pipeline.json")
 
     pipeline = [{
         "filename": asset_upload_path,

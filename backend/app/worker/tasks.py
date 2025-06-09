@@ -25,6 +25,10 @@ from osgeo import gdal
 from pyproj import CRS
 import time
 from concurrent.futures import ThreadPoolExecutor
+import zipfile
+import app.worker.photogrammetry.images_to_point_cloud as images_to_point_cloud
+import app.worker.photogrammetry.point_cloud_to_mesh as point_cloud_to_mesh
+import app.worker.photogrammetry.mesh_to_3dtile as mesh_to_3dtile
 
 def complete_upload_process(options):
     asset = options['asset']
@@ -32,6 +36,7 @@ def complete_upload_process(options):
     extension = asset['extension']
     vector_data_extensions = options['vector_data_extensions']
     point_cloud_data_extensions = options['point_cloud_data_extensions']
+    photogrammetry_formats = options['photogrammetry_formats']
     raster_formats = options['raster_formats']
     asset_type = None
     geometry_type = None
@@ -43,7 +48,7 @@ def complete_upload_process(options):
     vertical_epsg = None
     to_ellipsoidal_height = options['to_ellipsoidal_height']
 
-    asset_file_path = get_asset_upload_path(asset_id, extension)
+    asset_file_path = get_asset_upload_path(f"{asset_id}/index{extension}")
 
     if extension in vector_data_extensions:
         try:
@@ -82,7 +87,7 @@ def complete_upload_process(options):
         if 'Polygon' in geometry_type:
             geometry_type = 'Polygon'
 
-        with open(get_asset_upload_path(asset_id, '.json', 'metadata'), 'w') as f:
+        with open(get_asset_upload_path(f"{asset_id}/metadata.json"), 'w') as f:
             json.dump(info, f)
 
         metadata = True
@@ -97,19 +102,19 @@ def complete_upload_process(options):
             limit = (feature_count * 1000) / size_kb
 
         import_vector_to_postgres(asset_file_path, table_name, geometry_column_name, fid_column_name, epsg, to_ellipsoidal_height)
-        export_geojson_from_postgres(get_asset_upload_path(asset_id, '.json', 'sample'), table_name, limit)
+        export_geojson_from_postgres(get_asset_upload_path(f"{asset_id}/sample.json"), table_name, limit)
         sample = True
 
     if extension in point_cloud_data_extensions:
 
         metadata_json = pdal_metadata(asset_file_path)
-        with open(get_asset_upload_path(asset_id, '.json', 'metadata'), 'w') as f:
+        with open(get_asset_upload_path(f"{asset_id}/metadata.json"), 'w') as f:
             json.dump(metadata_json, f)
 
         metadata = True
 
         stats_json = pdal_stats(asset_file_path)
-        with open(get_asset_upload_path(asset_id, '.json', 'stats'), 'w') as f:
+        with open(get_asset_upload_path(f"{asset_id}/stats.json"), 'w') as f:
             json.dump(stats_json, f)
 
         stats = True
@@ -118,7 +123,7 @@ def complete_upload_process(options):
         horizontal_epsg = identify_projection(metadata_json['metadata']['srs']['horizontal'])
         vertical_epsg = identify_projection(metadata_json['metadata']['srs']['vertical'])
 
-        point_cloud_preview(asset_file_path, get_asset_upload_path(asset_id, '.xyz', 'sample'), metadata_json, stats_json)
+        point_cloud_preview(asset_file_path, get_asset_upload_path(f"{asset_id}/sample.xyz"), metadata_json, stats_json)
         sample = True
 
         asset_type = 'LAS'
@@ -132,10 +137,17 @@ def complete_upload_process(options):
 
         epsg = CRS(info['coordinateSystem']['wkt']).to_epsg()
 
-        with open(get_asset_upload_path(asset_id, '.json', 'metadata'), 'w') as f:
+        with open(get_asset_upload_path(f"{asset_id}/metadata.json"), 'w') as f:
             json.dump(info, f)
 
         metadata = True
+
+    if extension in photogrammetry_formats:
+        asset_type = 'Photogrammetry'
+        unzip_directory = get_asset_upload_path(f"{asset_id}/process/images/")
+        os.makedirs(unzip_directory, exist_ok=True)
+        with zipfile.ZipFile(asset_file_path, 'r') as zip_ref:
+           zip_ref.extractall(unzip_directory)
 
     return {
         'asset_type': asset_type,
@@ -293,7 +305,7 @@ def create_point_instance_3dtiles(pipeline_extended):
             statement = select(Asset).where(Asset.filename == model).limit(1)
             results = session.exec(statement)
             model_asset = results.first()
-            model_asset_path = get_asset_upload_path(model_asset.id, model_asset.extension)
+            model_asset_path = get_asset_upload_path(f"{model_asset.id}/index{model_asset.extension}")
             shutil.copy(model_asset_path, os.path.join(output_paths['output_path_3dtiles'], 'content', model))
 
     try:
@@ -534,7 +546,7 @@ def create_point_cloud_3dtiles(pipeline_extended):
             statement = select(Asset).where(Asset.filename == colorization_image).limit(1)
             results = session.exec(statement)
             image_asset = results.first()
-            colorization_image_path = get_asset_upload_path(image_asset.id, image_asset.extension)
+            colorization_image_path = get_asset_upload_path(f"{image_asset.id}/index{image_asset.extension}")
 
     input_file = process_las(
         pipeline_id,
@@ -576,6 +588,58 @@ def create_point_cloud_3dtiles(pipeline_extended):
         'download': output_paths['output_tileset_zip']
     }
 
+def create_reconstructed_mesh(pipeline_extended):
+
+    asset = pipeline_extended.get('asset')
+    asset_id = asset.get('id')
+    pipeline_id = pipeline_extended.get('id')
+
+    pipeline_config = {}
+    if pipeline_extended['data']:
+        pipeline_config = pipeline_extended['data']
+
+    default_config = {
+        "stage": 'all',
+        "feature_process_size": 2048,
+        "depthmap_resolution": 2048
+    }
+
+    config = {
+        **default_config,
+        **pipeline_config
+    }
+
+    output_paths = setup_output_directory(pipeline_id)
+
+    process_dir = get_asset_upload_path(f"{asset_id}/process/")
+
+    stage = config.get('stage')
+
+    if stage == 'all' or stage == 'images_to_point_cloud':
+
+        feature_process_size = parse_expression('number', config['feature_process_size'], {}, default_config['feature_process_size'])
+        depthmap_resolution = parse_expression('number', config['depthmap_resolution'], {}, default_config['depthmap_resolution'])
+
+        config_overrides = {
+            'processes': 4,
+            'read_processes': 4,
+            'feature_process_size': feature_process_size,
+            'depthmap_resolution': depthmap_resolution,
+        }
+        images_to_point_cloud.run(process_dir, config_overrides)
+
+    if stage == 'all' or stage == 'point_cloud_to_mesh':
+        point_cloud_to_mesh.run(process_dir)
+
+    if stage == 'all' or stage == 'mesh_to_3dtile':
+        mesh_to_3dtile.run(process_dir, output_paths.get('output_path_3dtiles'))
+
+    return {
+        'output': output_paths['output_path'],
+        'tileset': output_paths['output_tileset'],
+        'download': output_paths['output_tileset_zip']
+    }
+
 def complete_pipeline_remove_process(options):
 
     pipeline = options['pipeline']
@@ -607,7 +671,7 @@ def complete_asset_remove_process(options):
 
     try:
         # remove uploaded file
-        upload_file_directory = os.path.dirname(get_asset_upload_path(asset['id'], asset['extension']))
+        upload_file_directory = os.path.dirname(get_asset_upload_path(f"{asset['id']}/index{asset['extension']}"))
         shutil.rmtree(upload_file_directory)
     except Exception:
         pass

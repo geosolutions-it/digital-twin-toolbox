@@ -5,7 +5,7 @@ from sqlmodel import func, select
 import uuid
 from app.models import Pipeline, PipelinePublic, PipelinesPublic, PipelinePublicExtended, PipelineCreate, Message, Asset, PipelinesActionTypes, PipelineUpdate
 
-from app.worker.main import create_point_instance_3dtiles, create_mesh_3dtiles, create_point_cloud_3dtiles, complete_pipeline_remove_process
+from app.worker.main import create_point_instance_3dtiles, create_mesh_3dtiles, create_point_cloud_3dtiles, create_reconstructed_mesh, complete_pipeline_remove_process
 # from app.tasks import create_point_instance_3dtiles, create_mesh_3dtiles
 from celery.result import AsyncResult
 from celery.states import REVOKED, PENDING
@@ -20,6 +20,8 @@ def get_pipeline_task(pipeline_extended):
         return create_mesh_3dtiles
     if asset['geometry_type'] == "PointCloud":
         return create_point_cloud_3dtiles
+    if asset['asset_type'] == 'Photogrammetry':
+        return create_reconstructed_mesh
     return None
 
 @router.get("/", response_model=PipelinesPublic)
