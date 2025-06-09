@@ -10,14 +10,11 @@ import {
   FormLabel,
   Heading,
   Input,
-  Spinner,
   Select,
   Text,
 } from "@chakra-ui/react"
-import { useQuery } from "@tanstack/react-query"
 import React from "react"
 import { FiDownload } from "react-icons/fi"
-import { AssetsService } from "../../client"
 import type { PipelinePublicExtended } from "../../client"
 import ThreeCanvas from "./ThreeCanvas"
 import { getPublicBasePath } from '../../utils'
@@ -35,14 +32,13 @@ function PhotogrammetryCanvas({
   onRun,
   onUpdate,
   onCancel,
-  assetId,
 }: PhotogrammetryCanvasCanvasProps) {
 //   const { data: text, isPending } = useQuery({
 //     queryFn: () => AssetsService.readAssetSample({ id: assetId }),
 //     queryKey: ["pipeline-asset-sample", assetId],
 //   })
 
-  const updateScene = (group: any, material: any) => {
+  const updateScene = (group: any) => {
     if (!group) {
       return null
     }
@@ -72,7 +68,7 @@ function PhotogrammetryCanvas({
   function handleInitializeScene(config: any) {
     group.current = config.group
     material.current = config.pointMaterial
-    updateScene(group.current, material.current)
+    updateScene(group.current)
   }
 
   // @ts-ignore collection
