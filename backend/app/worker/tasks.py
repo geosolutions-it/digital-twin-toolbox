@@ -623,8 +623,8 @@ def create_reconstructed_mesh(pipeline_extended):
         config_overrides = {
             'processes': 4,
             'read_processes': 4,
-            'feature_process_size': feature_process_size,
-            'depthmap_resolution': depthmap_resolution,
+            'feature_process_size': int(feature_process_size),
+            'depthmap_resolution': int(depthmap_resolution),
         }
         images_to_point_cloud.run(process_dir, config_overrides)
 
@@ -632,7 +632,12 @@ def create_reconstructed_mesh(pipeline_extended):
         point_cloud_to_mesh.run(process_dir)
 
     if stage == 'all' or stage == 'mesh_to_3dtile':
+        os.makedirs(output_paths.get('output_path_3dtiles'), exist_ok=True)
         mesh_to_3dtile.run(process_dir, output_paths.get('output_path_3dtiles'))
+        try:
+            shutil.make_archive(output_paths['output_path_3dtiles_zip'], 'zip', output_paths['output_path_3dtiles'])
+        except Exception as e:
+            raise e
 
     return {
         'output': output_paths['output_path'],
