@@ -312,7 +312,7 @@ def run(process_dir, output_dir):
     # review argument parsing
     input_file = os.path.join(process_dir, 'textured', 'mesh.obj')
 
-    depth = 3
+    depth = 4
     mesh_faces_target = 500000
     tile_faces_target = 40000
     remove_doubles_factor = 0.025

@@ -8,6 +8,8 @@ import pdal
 import open3d as o3d
 import subprocess
 import shutil
+import cv2
+from PIL import Image
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -340,6 +342,130 @@ def xyz_to_mesh(points, output_ply):
     logger.info("Exporting mesh")
     o3d.io.write_triangle_mesh(output_ply, cropped_mesh)
 
+
+def downscale_images(source_dir, target_dir, target_resolution):
+    """
+    Downscale images from source directory to target directory.
+
+    Args:
+        source_dir (str): Directory containing source images
+        target_dir (str): Directory where downscaled images will be saved
+        target_resolution (int): Target resolution (max dimension) for downscaled images
+
+    Returns:
+        int: Number of images processed
+    """
+    logger.info(f"Downscaling images to max dimension of {target_resolution}px")
+
+    if os.path.exists(target_dir):
+        shutil.rmtree(target_dir)
+    os.makedirs(target_dir, exist_ok=True)
+
+    image_count = 0
+    supported_extensions = ('.jpg', '.png', '.tif', '.jpeg')
+
+    for fname in os.listdir(source_dir):
+        if fname.lower().endswith(supported_extensions):
+            image_path = os.path.join(source_dir, fname)
+            target_path = os.path.join(target_dir, fname)
+
+            img = cv2.imread(image_path)
+            if img is None:
+                logger.warning(f"Failed to read image: {image_path}")
+                continue
+
+            h, w = img.shape[:2]
+            scale = target_resolution / max(h, w)
+
+            if scale < 1.0:
+                img_resized = cv2.resize(img, (int(w * scale), int(h * scale)))
+                logger.debug(f"Downscaled {fname} from {w}x{h} to {int(w * scale)}x{int(h * scale)}")
+            else:
+                img_resized = img
+                logger.debug(f"Kept original size for {fname} ({w}x{h})")
+
+            cv2.imwrite(target_path, img_resized)
+            image_count += 1
+
+    logger.info(f"Downscaled {image_count} images to {target_dir}")
+    return image_count
+
+def process_nvm_file(input_nvm_path, output_nvm_path, images_dir, texture_image_resolution ):
+    """
+    Process NVM file to create a downscaled version.
+
+    Args:
+        input_nvm_path: Path to the input NVM file
+        output_nvm_path: Path to the output NVM file
+        images_dir: Directory containing the original images
+        texture_image_resolution: Resolution for the texture images (e.g., 2048)
+    """
+
+    with open(input_nvm_path, 'r') as f:
+        lines = f.readlines()
+
+    header_lines = []
+    i = 0
+    while i < len(lines) and not lines[i].strip().isdigit():
+        header_lines.append(lines[i])
+        i += 1
+
+    num_images = int(lines[i].strip())
+    i += 1
+
+    new_image_lines = []
+    for _ in range(num_images):
+        if i >= len(lines):
+            break
+
+        line = lines[i].strip()
+        if not line:
+            break
+
+        parts = line.split(' ')
+
+        img_path = parts[0]
+        img_filename = os.path.basename(img_path)
+        new_img_path = f"images_downsample/{img_filename}"
+
+        try:
+            full_img_path = os.path.join(images_dir, img_filename)
+            with Image.open(full_img_path) as img:
+                width, height = img.size
+
+            max_dimension = max(width, height)
+
+            original_focal = float(parts[1])
+
+            focal_ratio = original_focal / max_dimension
+            new_focal_length = texture_image_resolution * focal_ratio
+
+            parts[0] = new_img_path
+            parts[1] = f"{new_focal_length}"
+
+            new_image_lines.append(' '.join(parts))
+
+        except Exception as e:
+            print(f"Error processing {img_path}: {e}")
+            new_image_lines.append(line)
+
+        i += 1
+
+    footer_lines = lines[i:]
+    with open(output_nvm_path, 'w') as f:
+        for line in header_lines:
+            f.write(line)
+
+        f.write(f"{len(new_image_lines)}\n")
+
+        for line in new_image_lines:
+            f.write(f"{line}\n")
+
+        for line in footer_lines:
+            f.write(line)
+
+    print(f"Created {output_nvm_path} with {len(new_image_lines)} images")
+
 def run(process_dir):
 
     dense_ply = os.path.join(process_dir, 'undistorted', 'depthmaps', 'merged.ply')
@@ -417,7 +543,24 @@ def run(process_dir):
     xyz_to_mesh(points, output_ply)
 
     logger.info("Create mesh texture")
-    reconstruction_nvm = os.path.join(process_dir, 'undistorted', 'reconstruction.nvm')
+
+    texture_image_downsample = True
+    texture_image_resolution = 4096
+
+    if texture_image_downsample:
+        undistorted_images_dir = os.path.join(process_dir, 'undistorted', 'images')
+        downsampled_images_dir = os.path.join(process_dir, 'undistorted', 'images_downsample')
+        downscale_images(undistorted_images_dir, downsampled_images_dir, texture_image_resolution)
+
+        input_nvm = os.path.join(process_dir, 'undistorted', 'reconstruction.nvm')
+        output_nvm = os.path.join(process_dir, 'undistorted', 'reconstruction_downsample.nvm')
+        process_nvm_file(input_nvm, output_nvm, undistorted_images_dir, texture_image_resolution)
+
+    if not texture_image_downsample:
+        reconstruction_nvm = os.path.join(process_dir, 'undistorted', 'reconstruction.nvm')
+    else:
+        reconstruction_nvm = os.path.join(process_dir, 'undistorted', 'reconstruction_downsample.nvm')
+
     output_textured_dir = os.path.join(process_dir, 'textured')
     if os.path.exists(output_textured_dir):
         shutil.rmtree(output_textured_dir)

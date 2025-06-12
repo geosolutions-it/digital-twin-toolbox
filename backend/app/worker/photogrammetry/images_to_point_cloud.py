@@ -29,11 +29,11 @@ def run(process_dir, config):
                 shutil.rmtree(f_path)
 
     config_yaml = {
-        'processes': 2,
-        'read_processes': 2,
+        'processes': 8,
+        'read_processes': 8,
 
         'feature_type': 'SIFT',
-        'feature_process_size': 7096, # 4096
+        'feature_process_size': 2048, # 4096
         'feature_min_frames': 30000,
         'sift_peak_threshold': 0.066,
 
@@ -57,7 +57,7 @@ def run(process_dir, config):
         'undistorted_image_format': 'jpg', # tif
 
         'depthmap_min_consistent_views': 3,
-        'depthmap_resolution': 2048,
+        'depthmap_resolution': 4096,
         **config
     }
 

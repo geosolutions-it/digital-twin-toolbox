@@ -621,8 +621,6 @@ def create_reconstructed_mesh(pipeline_extended):
         depthmap_resolution = parse_expression('number', config['depthmap_resolution'], {}, default_config['depthmap_resolution'])
 
         config_overrides = {
-            'processes': 4,
-            'read_processes': 4,
             'feature_process_size': int(feature_process_size),
             'depthmap_resolution': int(depthmap_resolution),
         }
