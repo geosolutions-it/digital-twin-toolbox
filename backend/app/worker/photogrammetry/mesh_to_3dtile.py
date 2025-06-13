@@ -216,7 +216,7 @@ def decimate_obj(obj, _faces_target):
         decimate.use_collapse_triangulate = True
         bpy.ops.object.modifier_apply(modifier="decimate")
 
-def split_tile(target, bbox, margin, filepath, name, bake_img, remove_doubles_threshold, bake_mat, target_model, tile_faces_target):
+def split_tile(target, bbox, margin, filepath, name, bake_img, remove_doubles_threshold, bake_mat, target_model, tile_faces_target,current_lod=None, max_lod=None):
 
     for obj in bpy.context.scene.objects:
         obj.select_set(False)
@@ -294,11 +294,11 @@ def split_tile(target, bbox, margin, filepath, name, bake_img, remove_doubles_th
     bpy.ops.mesh.remove_doubles()
     bpy.ops.object.editmode_toggle()
 
-    decimate_obj(tile, tile_faces_target)
-
-    bpy.ops.object.editmode_toggle()
-    bpy.ops.mesh.remove_doubles(threshold=remove_doubles_threshold)
-    bpy.ops.object.editmode_toggle()
+    if current_lod is None or max_lod is None or current_lod < max_lod:
+        decimate_obj(tile, tile_faces_target)
+        bpy.ops.object.editmode_toggle()
+        bpy.ops.mesh.remove_doubles(threshold=remove_doubles_threshold)
+        bpy.ops.object.editmode_toggle()
 
     bpy.ops.object.shade_smooth()
 
@@ -331,7 +331,7 @@ def run(process_dir, output_dir):
     print('Merged object:', merged)
     print('Material:', mat)
     # initial decimation to keep mesh under 500000 faces
-    decimate_obj(merged, mesh_faces_target)
+    # decimate_obj(merged, mesh_faces_target)
 
     merged.select_set(True)
     bpy.context.view_layer.objects.active = merged
@@ -418,7 +418,7 @@ def run(process_dir, output_dir):
                 print(minx, miny, maxx, maxy)
                 tile_name = f"{z}_{y}_{x}"
                 filepath = os.path.join(output_dir, f"{tile_name}.glb")
-                split_tile(clonded_merged, (minx, miny, maxx, maxy), 4, filepath, tile_name, bake_img, remove_doubles_threshold, bake_mat, target_model, tile_faces_target)
+                split_tile(clonded_merged, (minx, miny, maxx, maxy), 4, filepath, tile_name, bake_img, remove_doubles_threshold, bake_mat, target_model, tile_faces_target,current_lod=z, max_lod=depth)
                 print(f"done {tile_name} in")
                 print("--- %s seconds ---" % ((time.time() - tile_start_time)))
 
