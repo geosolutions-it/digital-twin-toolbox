@@ -3,4 +3,5 @@ node_modules/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
-my-changes.patch
+*.patch
+.env
