@@ -294,7 +294,7 @@ def xyz_to_mesh(points, output_ply):
     pcd = o3d.geometry.PointCloud()
 
     pcd.points = o3d.utility.Vector3dVector(to_2D_array(points[['X', 'Y', 'Z']]))
-    pcd.colors = o3d.utility.Vector3dVector(to_2D_array(points[['Red', 'Green', 'Blue']]))
+    pcd.colors = o3d.utility.Vector3dVector(to_2D_array(points[['Red', 'Green', 'Blue']]) / 255)
     pcd.normals = o3d.utility.Vector3dVector(to_2D_array(points[['NormalX', 'NormalY', 'NormalZ']]))
 
     # logger.info("Computing average distance")
@@ -576,4 +576,5 @@ def run(process_dir):
         '--no_intermediate_results',
         '--num_threads=1'
     ])
+    shutil.make_archive(output_textured_dir, 'zip', output_textured_dir)
     logger.info("Mesh conversion completed")
