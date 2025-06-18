@@ -144,10 +144,6 @@ def complete_upload_process(options):
 
     if extension in photogrammetry_formats:
         asset_type = 'Photogrammetry'
-        unzip_directory = get_asset_upload_path(f"{asset_id}/process/images/")
-        os.makedirs(unzip_directory, exist_ok=True)
-        with zipfile.ZipFile(asset_file_path, 'r') as zip_ref:
-           zip_ref.extractall(unzip_directory)
 
     return {
         'asset_type': asset_type,
@@ -167,7 +163,9 @@ def setup_output_directory(pipeline_id):
     output_path = os.path.join(settings.ASSETS_DATA, relative_output_path)
 
     try:
-        shutil.rmtree(output_path)
+        for filename in os.listdir(output_path):
+            if filename != 'process':
+                shutil.rmtree(os.path.join(output_path, filename))
     except Exception:
         pass
 
@@ -593,6 +591,18 @@ def create_reconstructed_mesh(pipeline_extended):
     asset = pipeline_extended.get('asset')
     asset_id = asset.get('id')
     pipeline_id = pipeline_extended.get('id')
+    asset_extension = asset.get('extension')
+    print(asset_extension)
+    asset_file_path = get_asset_upload_path(f"{asset_id}/index{asset_extension}")
+
+    output_paths = setup_output_directory(pipeline_id)
+
+    process_dir = f"{output_paths['output_path']}/process"
+    if not os.path.exists(process_dir):
+        images_dir = f"{process_dir}/images"
+        os.makedirs(images_dir, exist_ok=True)
+        with zipfile.ZipFile(asset_file_path, 'r') as zip_ref:
+            zip_ref.extractall(images_dir)
 
     pipeline_config = {}
     if pipeline_extended['data']:
@@ -608,10 +618,6 @@ def create_reconstructed_mesh(pipeline_extended):
         **default_config,
         **pipeline_config
     }
-
-    output_paths = setup_output_directory(pipeline_id)
-
-    process_dir = get_asset_upload_path(f"{asset_id}/process/")
 
     stage = config.get('stage')
 

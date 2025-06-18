@@ -1,9 +1,13 @@
+import logging
 import bpy
 import os
 import bmesh
 import time
 import json
 import app.worker.photogrammetry.create_tileset as create_tileset
+import pathlib
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # clean up
 def clean_up():
@@ -35,10 +39,11 @@ def clean_up():
             bpy.data.images.remove(block)
 
 def remove_obj(target):
-    bpy.ops.object.select_all(action='DESELECT')
-    target.select_set(True)
-    bpy.data.meshes.remove(target.data)
-    bpy.ops.object.delete()
+    if target:
+        bpy.ops.object.select_all(action='DESELECT')
+        target.select_set(True)
+        bpy.data.meshes.remove(target.data)
+        bpy.ops.object.delete()
 
 def create_bake_material():
     name = "TileMaterial"
@@ -47,7 +52,6 @@ def create_bake_material():
         bake_mat = bpy.data.materials.new(name=name)
         bake_mat.use_nodes = True
         bsdf = bake_mat.node_tree.nodes["Principled BSDF"]
-        # bsdf.inputs['Specular'].default_value = 0
         bsdf.inputs['Roughness'].default_value = 1
         texture_node = bake_mat.node_tree.nodes.new('ShaderNodeTexImage')
         texture_node.name = 'TileImageNode'
@@ -63,7 +67,7 @@ def create_image(bake_mat, size):
     texture_node.image = bpy.data.images.new(name=f'TileImage_{size}', width=size, height=size, alpha=False)
     return texture_node
 
-def setup(bake_mat):
+def setup_bake_setting():
 
     bpy.context.preferences.edit.use_global_undo = False
     bpy.context.preferences.edit.undo_steps = 0
@@ -78,32 +82,15 @@ def setup(bake_mat):
 
     bpy.context.scene.render.bake.margin = 2
 
-    # setup bake material
-    bake_img_1024 = create_image(bake_mat, 1024)
-    bake_img_512 = create_image(bake_mat, 512)
-    return [bake_img_1024, bake_img_512]
 
-# merge parts
-def merge_parts(filepath):
+# import mesh
+def import_mesh(filepath, create_material):
 
-    if bpy.context.active_object:
-        bpy.ops.object.mode_set(mode='OBJECT')
-
-    for obj in bpy.context.scene.objects:
-        obj.select_set(False)
-        obj.hide_set(False)
-
-    bpy.ops.object.select_all(action="SELECT")
-    bpy.ops.object.delete(True)
-
-    bpy.ops.wm.obj_import(filepath=filepath , forward_axis='Y', up_axis='Z')
-
-    mesh_objects = [obj for obj in bpy.context.scene.objects if obj.type == 'MESH']
-
-    for obj in mesh_objects:
-        obj.select_set(True)
-
-    bpy.context.view_layer.objects.active = mesh_objects[0]
+    extension = pathlib.Path(filepath).suffix
+    if extension == '.ply':
+        bpy.ops.wm.ply_import(filepath=filepath , forward_axis='Y', up_axis='Z')
+    else:
+        bpy.ops.wm.obj_import(filepath=filepath , forward_axis='Y', up_axis='Z')
 
     obj = bpy.context.object
     bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
@@ -122,20 +109,23 @@ def merge_parts(filepath):
         'offset': [x, y, z]
     }
 
-    mat = bpy.data.materials.new(name='EmissionMaterial')
-    mat.use_nodes = True
-    bsdf = mat.node_tree.nodes["Principled BSDF"]
+    mat = None
+    if create_material:
+        mat = bpy.data.materials.new(name='EmissionMaterial')
+        mat.use_nodes = True
+        bsdf = mat.node_tree.nodes["Principled BSDF"]
 
-    bsdf.inputs['Base Color'].default_value = (0, 0, 0, 1)
-    # bsdf.inputs['Specular'].default_value = 0
-    bsdf.inputs['Roughness'].default_value = 1
+        bsdf.inputs['Base Color'].default_value = (0, 0, 0, 1)
+        bsdf.inputs['Roughness'].default_value = 1
+        bsdf.inputs['Emission Strength'].default_value = 1
 
-    vertex_color_node = mat.node_tree.nodes.new('ShaderNodeVertexColor')
-    vertex_color_node.name = 'VertexColorNode'
-    vertex_color_node.select = True
-    mat.node_tree.links.new( vertex_color_node.outputs[0], bsdf.inputs['Emission Color'] )
+        vertex_color_node = mat.node_tree.nodes.new('ShaderNodeVertexColor')
+        vertex_color_node.name = 'VertexColorNode'
+        vertex_color_node.select = True
+        mat.node_tree.links.new( vertex_color_node.outputs[0], bsdf.inputs['Emission Color'] )
+        obj.data.materials.append(mat)
 
-    return [obj, mat, info]
+    return [obj, info, mat]
 
 def export_gltf(filepath, export_jpeg_quality):
     bpy.ops.export_scene.gltf(
@@ -206,11 +196,11 @@ def export_gltf(filepath, export_jpeg_quality):
 
 def decimate_obj(obj, _faces_target):
     ratio = _faces_target / len(obj.data.polygons)
-    print('faces', len(obj.data.polygons))
+    logger.info(f"Object faces: {len(obj.data.polygons)}")
     bpy.context.view_layer.objects.active = obj
     obj.select_set(True)
     if ratio < 1:
-        print('ratio', ratio)
+        logger.info(f"Decimate object by {ratio} ratio")
         decimate = obj.modifiers.new(type="DECIMATE", name="decimate")
         decimate.ratio = ratio
         decimate.use_collapse_triangulate = True
@@ -250,6 +240,7 @@ def split_tile(target, bbox, margin, filepath, name, bake_img, remove_doubles_th
     bpy.ops.object.mode_set(mode='OBJECT')
     tile = bpy.data.objects['full.001']
     tile.name = 'tile'
+    tile.hide_render = False
     bpy.ops.object.select_all(action="DESELECT")
 
     remove_obj(full)
@@ -257,11 +248,6 @@ def split_tile(target, bbox, margin, filepath, name, bake_img, remove_doubles_th
     tile.select_set(True)
     bpy.context.view_layer.objects.active = tile
 
-    bpy.ops.object.editmode_toggle()
-    bpy.ops.mesh.select_all(action = 'SELECT')
-    bpy.ops.mesh.remove_doubles()
-    bpy.ops.mesh.dissolve_degenerate()
-    bpy.ops.object.editmode_toggle()
     # unwrap the uv
     bpy.ops.object.editmode_toggle()
     bpy.ops.mesh.select_all(action = 'SELECT')
@@ -272,13 +258,22 @@ def split_tile(target, bbox, margin, filepath, name, bake_img, remove_doubles_th
     mat = tile.material_slots[0].material
     mat.node_tree.nodes.active = bake_img
 
-    # bake
-    target_model.select_set(True)
-    bpy.context.scene.cycles.bake_type = 'DIFFUSE'
-    bpy.context.scene.render.bake.use_selected_to_active = True
-    bpy.context.scene.render.bake.cage_extrusion = 0.001 # (m) to avoid black pixels
-    bpy.ops.object.bake(type='DIFFUSE',use_clear=False)
-    target_model.select_set(False)
+    # bake vertex color to texture
+    bpy.context.scene.cycles.bake_type = 'EMIT'
+    bpy.context.scene.render.bake.use_selected_to_active = False
+    bpy.context.scene.render.bake.cage_extrusion = 0
+    bpy.ops.object.bake(type='EMIT',use_clear=True)
+
+    # bake texture to texture
+    if target_model:
+        target_model.hide_render = False
+        target_model.select_set(True)
+        bpy.context.scene.cycles.bake_type = 'DIFFUSE'
+        bpy.context.scene.render.bake.use_selected_to_active = True
+        bpy.context.scene.render.bake.cage_extrusion = 0.001 # (m) to avoid black pixels
+        bpy.ops.object.bake(type='DIFFUSE',use_clear=False)
+        target_model.select_set(False)
+        target_model.hide_render = True
 
     # remove all material from tile copy
     tile.data.materials.clear()
@@ -309,59 +304,36 @@ def split_tile(target, bbox, margin, filepath, name, bake_img, remove_doubles_th
 
 def run(process_dir, output_dir):
 
-    # review argument parsing
-    input_file = os.path.join(process_dir, 'textured', 'mesh.obj')
+    input_file = os.path.join(process_dir, 'mesh.ply')
+    textured_file = os.path.join(process_dir, 'textured', 'mesh.obj')
 
-    depth = 4
-    mesh_faces_target = 500000
+    depth = 1
     tile_faces_target = 40000
     remove_doubles_factor = 0.025
+    texture_image_size = 1024
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
     start_time = time.time()
-    print("Start time:", start_time)
-    print("Input file:", input_file)
-
+    logger.info(f"Start time: {start_time}")
     clean_up()
 
     bake_mat = create_bake_material()
 
-    merged, mat, info = merge_parts(input_file)
+    target_model, target_model_info, target_model_mat = import_mesh(textured_file, False)
+    target_model.hide_render = True
+    merged, info, mat = import_mesh(input_file, True)
+    merged.hide_render = True
 
-    print('Merged object:', merged)
-    print('Material:', mat)
-    # initial decimation to keep mesh under 500000 faces
-    # decimate_obj(merged, mesh_faces_target)
-
-    merged.select_set(True)
-    bpy.context.view_layer.objects.active = merged
-    bpy.ops.object.duplicate()
-    target_model = bpy.context.active_object
-    target_model.name = 'target_model'
-    bpy.ops.object.select_all(action="DESELECT")
-    merged.select_set(True)
-    bpy.context.view_layer.objects.active = merged
-
-    # remove the default material from the merged textured model
-    merged.data.materials.clear()
-    merged.data.materials.append(mat)
-
-    bake_imgs = setup(mat)
-    print('Bake images:', bake_imgs)
+    setup_bake_setting()
+    # setup bake material
+    bake_img = create_image(mat, texture_image_size)
+ 
     merged.name = 'merged'
 
     width = merged.dimensions[0]
     height = merged.dimensions[1]
 
     for z in range(0, depth + 1):
-
-        for img in bake_imgs:
-            img.select = False
-
-        bake_img = bake_imgs[1] # 512
-
-        if z == depth:
-            bake_img = bake_imgs[0] # 1024
 
         size = pow(2, z)
         w_unit = width / size
@@ -371,12 +343,12 @@ def run(process_dir, output_dir):
         if z == depth:
             remove_doubles_threshold = 0.0001
 
-        # decimate merged
         merged.select_set(True)
         bpy.context.view_layer.objects.active = merged
         bpy.ops.object.duplicate()
         clonded_merged = bpy.context.active_object
         clonded_merged.name = 'clonded_merged'
+        clonded_merged.hide_render = True
 
         bpy.ops.object.mode_set(mode='EDIT')
 
@@ -403,10 +375,10 @@ def run(process_dir, output_dir):
         for y in range(0, size):
             for x in range(0, size):
 
-                print('Meshes', len(bpy.data.meshes))
-                print('Materials', len(bpy.data.materials))
-                print('Textures', len(bpy.data.textures))
-                print('Images', len(bpy.data.images))
+                logger.info(f"Meshes: {len(bpy.data.meshes)}")
+                logger.info(f"Materials: {len(bpy.data.materials)}")
+                logger.info(f"Textures: {len(bpy.data.textures)}")
+                logger.info(f"Images: {len(bpy.data.images)}")
 
                 tile_start_time = time.time()
 
@@ -414,20 +386,20 @@ def run(process_dir, output_dir):
                 miny = (height / 2) - (y + 1) * h_unit
                 maxx = (x + 1) * w_unit - width / 2
                 maxy = (height / 2) - y * h_unit
-
-                print(minx, miny, maxx, maxy)
                 tile_name = f"{z}_{y}_{x}"
+                logger.info(f"tile {tile_name} extent ({minx}, {miny}, {maxx}, {maxy})")
                 filepath = os.path.join(output_dir, f"{tile_name}.glb")
                 split_tile(clonded_merged, (minx, miny, maxx, maxy), 4, filepath, tile_name, bake_img, remove_doubles_threshold, bake_mat, target_model, tile_faces_target,current_lod=z, max_lod=depth)
-                print(f"done {tile_name} in")
-                print("--- %s seconds ---" % ((time.time() - tile_start_time)))
+                elapsed_time = (time.time() - tile_start_time)
+                logger.info(f"tile {tile_name} completed in {elapsed_time} seconds")
 
         remove_obj(clonded_merged)
 
     remove_obj(merged)
     remove_obj(target_model)
 
-    print("--- %s minutes ---" % ((time.time() - start_time) / 60))
+    elapsed_time = (time.time() - start_time) / 60
+    logger.info(f"tiling completed in {elapsed_time} minutes")
 
     asset_config = None
     asset_config_path = os.path.join(process_dir, 'images', 'config.json')
