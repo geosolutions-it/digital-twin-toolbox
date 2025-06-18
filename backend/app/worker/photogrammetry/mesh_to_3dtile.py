@@ -307,7 +307,7 @@ def run(process_dir, output_dir):
     input_file = os.path.join(process_dir, 'mesh.ply')
     textured_file = os.path.join(process_dir, 'textured', 'mesh.obj')
 
-    depth = 1
+    depth = 4
     tile_faces_target = 40000
     remove_doubles_factor = 0.025
     texture_image_size = 1024
