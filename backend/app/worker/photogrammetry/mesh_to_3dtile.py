@@ -84,7 +84,7 @@ def setup_bake_setting():
 
 
 # import mesh
-def import_mesh(filepath, create_material):
+def import_mesh(filepath):
 
     extension = pathlib.Path(filepath).suffix
     if extension == '.ply':
@@ -109,23 +109,24 @@ def import_mesh(filepath, create_material):
         'offset': [x, y, z]
     }
 
-    mat = None
-    if create_material:
-        mat = bpy.data.materials.new(name='EmissionMaterial')
-        mat.use_nodes = True
-        bsdf = mat.node_tree.nodes["Principled BSDF"]
+    return [obj, info]
 
-        bsdf.inputs['Base Color'].default_value = (0, 0, 0, 1)
-        bsdf.inputs['Roughness'].default_value = 1
-        bsdf.inputs['Emission Strength'].default_value = 1
+def apply_default_material(obj):
+    mat = bpy.data.materials.new(name='EmissionMaterial')
+    mat.use_nodes = True
+    bsdf = mat.node_tree.nodes["Principled BSDF"]
 
-        vertex_color_node = mat.node_tree.nodes.new('ShaderNodeVertexColor')
-        vertex_color_node.name = 'VertexColorNode'
-        vertex_color_node.select = True
-        mat.node_tree.links.new( vertex_color_node.outputs[0], bsdf.inputs['Emission Color'] )
-        obj.data.materials.append(mat)
+    bsdf.inputs['Base Color'].default_value = (0, 0, 0, 1)
+    bsdf.inputs['Roughness'].default_value = 1
+    bsdf.inputs['Emission Strength'].default_value = 1
 
-    return [obj, info, mat]
+    vertex_color_node = mat.node_tree.nodes.new('ShaderNodeVertexColor')
+    vertex_color_node.name = 'VertexColorNode'
+    vertex_color_node.select = True
+    mat.node_tree.links.new( vertex_color_node.outputs[0], bsdf.inputs['Emission Color'] )
+    obj.data.materials.clear()
+    obj.data.materials.append(mat)
+    return mat
 
 def export_gltf(filepath, export_jpeg_quality):
     bpy.ops.export_scene.gltf(
@@ -259,10 +260,10 @@ def split_tile(target, bbox, margin, filepath, name, bake_img, remove_doubles_th
     mat.node_tree.nodes.active = bake_img
 
     # bake vertex color to texture
-    bpy.context.scene.cycles.bake_type = 'EMIT'
-    bpy.context.scene.render.bake.use_selected_to_active = False
-    bpy.context.scene.render.bake.cage_extrusion = 0
-    bpy.ops.object.bake(type='EMIT',use_clear=True)
+    # bpy.context.scene.cycles.bake_type = 'EMIT'
+    # bpy.context.scene.render.bake.use_selected_to_active = False
+    # bpy.context.scene.render.bake.cage_extrusion = 0
+    # bpy.ops.object.bake(type='EMIT',use_clear=True)
 
     # bake texture to texture
     if target_model:
@@ -304,8 +305,7 @@ def split_tile(target, bbox, margin, filepath, name, bake_img, remove_doubles_th
 
 def run(process_dir, output_dir):
 
-    input_file = os.path.join(process_dir, 'mesh.ply')
-    textured_file = os.path.join(process_dir, 'textured', 'mesh.obj')
+    input_file = os.path.join(process_dir, 'textured', 'mesh.obj')
 
     depth = 4
     tile_faces_target = 40000
@@ -319,10 +319,23 @@ def run(process_dir, output_dir):
 
     bake_mat = create_bake_material()
 
-    target_model, target_model_info, target_model_mat = import_mesh(textured_file, False)
-    target_model.hide_render = True
-    merged, info, mat = import_mesh(input_file, True)
+    merged, info = import_mesh(input_file)
     merged.hide_render = True
+
+    merged.select_set(True)
+    bpy.context.view_layer.objects.active = merged
+    bpy.ops.object.duplicate()
+    target_model = bpy.context.active_object
+    target_model.name = 'target_model'
+    target_model.hide_render = True
+
+    for obj in bpy.context.scene.objects:
+        obj.select_set(False)
+
+    merged.select_set(True)
+    bpy.context.view_layer.objects.active = merged
+
+    mat = apply_default_material(merged)
 
     setup_bake_setting()
     # setup bake material
