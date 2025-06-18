@@ -177,11 +177,6 @@ services:
 volumes:
   app-db-data:
   app-assets-data:
-    driver: local
-    driver_opts:
-      o: bind
-      type: none
-      device: /Users/anupdahal/geosolutions/airborne_data_processing/results_sfm/point-cloud-to-mesh/output/dtt # /mnt/comunefi_data_output
 
 networks:
   traefik-public:
