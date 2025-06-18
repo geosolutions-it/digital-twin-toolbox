@@ -181,7 +181,7 @@ volumes:
     driver_opts:
       o: bind
       type: none
-      device: ./output # /mnt/comunefi_data_output
+      device: /Users/anupdahal/geosolutions/airborne_data_processing/results_sfm/point-cloud-to-mesh/output/dtt # /mnt/comunefi_data_output
 
 networks:
   traefik-public:

@@ -574,6 +574,7 @@ def run(process_dir):
         '-o', 'gauss_clamping',
         '-t', 'none',
         '--no_intermediate_results',
+        '--keep_unseen_faces',
         '--num_threads=1'
     ])
     output_textured_dir_zip = os.path.join(process_dir, 'textured.zip')
