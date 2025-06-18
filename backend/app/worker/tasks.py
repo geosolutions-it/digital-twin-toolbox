@@ -592,7 +592,6 @@ def create_reconstructed_mesh(pipeline_extended):
     asset_id = asset.get('id')
     pipeline_id = pipeline_extended.get('id')
     asset_extension = asset.get('extension')
-    print(asset_extension)
     asset_file_path = get_asset_upload_path(f"{asset_id}/index{asset_extension}")
 
     output_paths = setup_output_directory(pipeline_id)
@@ -622,13 +621,9 @@ def create_reconstructed_mesh(pipeline_extended):
     stage = config.get('stage')
 
     if stage == 'all' or stage == 'images_to_point_cloud':
-
-        feature_process_size = parse_expression('number', config['feature_process_size'], {}, default_config['feature_process_size'])
-        depthmap_resolution = parse_expression('number', config['depthmap_resolution'], {}, default_config['depthmap_resolution'])
-
         config_overrides = {
-            'feature_process_size': int(feature_process_size),
-            'depthmap_resolution': int(depthmap_resolution),
+            'feature_process_size': int(config['feature_process_size']),
+            'depthmap_resolution': int(config['depthmap_resolution']),
         }
         images_to_point_cloud.run(process_dir, config_overrides)
 

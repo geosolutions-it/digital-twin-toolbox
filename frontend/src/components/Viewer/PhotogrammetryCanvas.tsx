@@ -55,8 +55,8 @@ function PhotogrammetryCanvas({
 
   const [data, setData] = React.useState({
     stage: 'all',
-    image_process_size: 2048,
-    depthmap_process_size: 2048,
+    feature_process_size: 2048,
+    depthmap_resolution: 2048,
     ...pipeline.data,
   })
 
@@ -191,30 +191,30 @@ function PhotogrammetryCanvas({
             </Select>
           </FormControl>
           <FormControl mt={2} mb={2}>
-            <FormLabel fontSize="xs" htmlFor="image_process_size">
-              Image process size
+            <FormLabel fontSize="xs" htmlFor="feature_process_size">
+              Feature process size
             </FormLabel>
             <Input
-              id="image_process_size"
+              id="feature_process_size"
               size="xs"
               type="number"
-              defaultValue={data?.image_process_size}
+              defaultValue={data?.feature_process_size}
               onChange={(event) =>
-                handleOnChange("image_process_size", event.target.value)
+                handleOnChange("feature_process_size", event.target.value)
               }
             />
           </FormControl>
           <FormControl mt={2} mb={2}>
-            <FormLabel fontSize="xs" htmlFor="depthmap_process_size">
-              Depth map process size
+            <FormLabel fontSize="xs" htmlFor="depthmap_resolution">
+              Depth map resolution
             </FormLabel>
             <Input
-              id="depthmap_process_size"
+              id="depthmap_resolution"
               size="xs"
               type="number"
-              defaultValue={data?.depthmap_process_size}
+              defaultValue={data?.depthmap_resolution}
               onChange={(event) =>
-                handleOnChange("depthmap_process_size", event.target.value)
+                handleOnChange("depthmap_resolution", event.target.value)
               }
             />
           </FormControl>

@@ -576,5 +576,8 @@ def run(process_dir):
         '--no_intermediate_results',
         '--num_threads=1'
     ])
+    output_textured_dir_zip = os.path.join(process_dir, 'textured.zip')
+    if os.path.exists(output_textured_dir_zip):
+        os.remove(output_textured_dir_zip)
     shutil.make_archive(output_textured_dir, 'zip', output_textured_dir)
     logger.info("Mesh conversion completed")
