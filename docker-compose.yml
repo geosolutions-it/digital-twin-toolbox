@@ -104,6 +104,7 @@ services:
 
   redis:
     image: redis:7
+    container_name: redis
 
   worker:
     restart: always
@@ -176,6 +177,11 @@ services:
 volumes:
   app-db-data:
   app-assets-data:
+    driver: local
+    driver_opts:
+      o: bind
+      type: none
+      device: ./output # /mnt/comunefi_data_output
 
 networks:
   traefik-public:
