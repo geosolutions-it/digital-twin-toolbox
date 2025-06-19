@@ -8,6 +8,7 @@ import shutil
 import sys
 import psutil
 import cv2
+import math
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -90,55 +91,45 @@ def calculate_resource_allocation(images_dir: str):
     
 
     #TODO: Adjust these values based on benchmarking  specific workload
-    # memory_per_process_mb = 2000 + (20 * max_mp) 
-    # print(f"Memory per process: {memory_per_process_mb}MB")
-    # memory_limited_processes = max(1, int(available_memory_mb / memory_per_process_mb))
-    # logger.info(f"Memory-limited processes: {memory_limited_processes}")
     
     processes = max(1, cpu_count)
     logger.info(f"Calculated processes: {processes}")
     depthmap_resolution = 2048  
     feature_process_size = 2048
-    if processes > 16 and available_memory_mb > 16000:
-        depthmap_resolution = max(4096, max(max_width, max_height))
-        feature_process_size = 4096
-    elif processes > 8 and available_memory_mb > 8000:
-        depthmap_resolution = max(2048, max(max_width, max_height)/2)
-        feature_process_size = 2048
+    max_dimension = max(max_width, max_height)
+    if processes >= 16 and available_memory_mb >= 16000:
+        feature_process_size = max_dimension if max_dimension < feature_process_size *2  else feature_process_size*2
+        depthmap_resolution = max_dimension if max_dimension < depthmap_resolution *2  else depthmap_resolution * 2
+    elif processes >= 8 and available_memory_mb >= 8000:
+        feature_process_size = max_dimension if max_dimension < feature_process_size else feature_process_size
+        depthmap_resolution = max_dimension if max_dimension < depthmap_resolution else depthmap_resolution
     else:
-        depthmap_resolution = max(1024, max(max_width, max_height)/4)
-
+        feature_process_size=max_dimension if max_dimension < feature_process_size /2  else feature_process_size/2
+        depthmap_resolution = max_dimension if max_dimension < depthmap_resolution/2 else depthmap_resolution/2
     
-    depthmap_processes = max(1, int(processes / 2))  
-
+    depthmap_processes = max(1, math.ceil(processes / 2))
 
     return {
         "processes": processes,
         "read_processes": processes,
-        "depthmap_resolution": depthmap_resolution,
+        "depthmap_resolution": int(depthmap_resolution),
         "depthmap_processes": depthmap_processes,
-        "feature_process_size": feature_process_size,
+        "feature_process_size": int(feature_process_size),
         "memory_mb": available_memory_mb
     }
 
-def update_config_for_stage(process_dir: str, config_updates):
+def create_config_for_stage(process_dir: str, config_yaml:dict):
     """Update the config.yaml file for a specific pipeline stage"""
     config_path = os.path.join(process_dir, 'config.yaml')
     
-    with open(config_path, 'r') as f:
-        config_lines = f.readlines()
-    
-    config_dict = {}
-    for line in config_lines:
-        if ':' in line:
-            key, value = line.split(':', 1)
-            config_dict[key.strip()] = value.strip()
-    
-    config_dict.update(config_updates)
-    
-    config_list = [f"{key}: {value}" for key, value in config_dict.items()]
+    if os.path.exists(config_path):
+        os.remove(config_path)
+
+    config_updates = []
+    for key, value in config_yaml.items():
+        config_updates.append(f'{key}: {value}')
     with open(config_path, 'w') as f:
-        f.write('\n'.join(config_list))
+        f.write('\n'.join(config_updates))
     
     logger.info(f"Updated configuration for next stage: {config_updates}")
 
@@ -158,7 +149,8 @@ def run(process_dir, config):
     resources = calculate_resource_allocation(images_dir)
     
     logger.info(f"Resource allocation: {resources['processes']} processes, "
-                f"{resources['feature_process_size']} feature process size")
+                f"{resources['feature_process_size']} feature process size, "
+                f"{resources['depthmap_resolution']} depthmap resolution")
 
     config_yaml = {
         'processes': resources['processes'],
@@ -189,16 +181,11 @@ def run(process_dir, config):
         'undistorted_image_format': 'jpg', # tif
 
         'depthmap_min_consistent_views': 3,
-        'depthmap_resolution': 4096,
+        'depthmap_resolution': resources['depthmap_resolution'],
         **config
     }
 
-    config_list = []
-    for key in config_yaml:
-        config_list.append(f'{key}: {config_yaml[key]}')
-
-    with open(os.path.join(process_dir, 'config.yaml'), 'w') as f:
-        f.write('\n'.join(config_list))
+    create_config_for_stage(process_dir, config_yaml)
     
     original_camera_models_overrides = os.path.join(images_dir, 'camera_models_overrides.json')
     camera_models_overrides = os.path.join(process_dir, 'camera_models_overrides.json')
@@ -235,11 +222,12 @@ def run(process_dir, config):
     with open(cameras_path, 'w') as f:
         json.dump(cameras, f, indent=4)
 
-    update_config_for_stage(process_dir, {
+    config_yaml.update({
         'processes': resources['depthmap_processes'],
         'read_processes': resources['depthmap_processes'],
         'depthmap_resolution': resources['depthmap_resolution'],
     })
+    create_config_for_stage(process_dir, config_yaml)
     subprocess.run(cmd + ['undistort', process_dir])
     subprocess.run(cmd + ['compute_depthmaps', process_dir])
     subprocess.run(cmd + ['export_visualsfm', process_dir])

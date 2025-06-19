@@ -608,9 +608,7 @@ def create_reconstructed_mesh(pipeline_extended):
         pipeline_config = pipeline_extended['data']
 
     default_config = {
-        "stage": 'all',
-        "feature_process_size": 2048,
-        "depthmap_resolution": 2048
+        "stage": 'all'
     }
 
     config = {
@@ -621,10 +619,7 @@ def create_reconstructed_mesh(pipeline_extended):
     stage = config.get('stage')
 
     if stage == 'all' or stage == 'images_to_point_cloud':
-        config_overrides = {
-            'feature_process_size': int(config['feature_process_size']),
-            'depthmap_resolution': int(config['depthmap_resolution']),
-        }
+        config_overrides = {}
         images_to_point_cloud.run(process_dir, config_overrides)
 
     if stage == 'all' or stage == 'point_cloud_to_mesh':
