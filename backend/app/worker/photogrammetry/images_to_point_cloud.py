@@ -98,21 +98,26 @@ def calculate_resource_allocation(images_dir: str):
     processes = max(1, cpu_count)
     logger.info(f"Calculated processes: {processes}")
     depthmap_resolution = 2048  
-    if processes > 16:
+    feature_process_size = 2048
+    if processes > 16 and available_memory_mb > 16000:
         depthmap_resolution = max(4096, max(max_width, max_height))
-    elif processes > 8:
+        feature_process_size = 4096
+    elif processes > 8 and available_memory_mb > 8000:
         depthmap_resolution = max(2048, max(max_width, max_height)/2)
+        feature_process_size = 2048
     else:
         depthmap_resolution = max(1024, max(max_width, max_height)/4)
+
     
-    dpethmap_processes = max(1, int(processes / 2))  
+    depthmap_processes = max(1, int(processes / 2))  
+
 
     return {
         "processes": processes,
         "read_processes": processes,
         "depthmap_resolution": depthmap_resolution,
-        "depthmap_processes": dpethmap_processes,
-        "feature_process_size": 2048,
+        "depthmap_processes": depthmap_processes,
+        "feature_process_size": feature_process_size,
         "memory_mb": available_memory_mb
     }
 
@@ -212,7 +217,7 @@ def run(process_dir, config):
     subprocess.run(cmd + ['detect_features', process_dir],check=True)
     subprocess.run(cmd + ['match_features', process_dir],check=True)
     subprocess.run(cmd + ['create_tracks', process_dir],check=True)
-    subprocess.run(cmd + ['reconstruct', '--algorithm', 'triangulation', process_dir],check=True)
+    subprocess.run(cmd + ['reconstruct', '--algorithm', 'triangulation', process_dir])
 
     subprocess.run(cmd + ['compute_statistics', process_dir])
     subprocess.run(cmd + ['export_report', process_dir])
