@@ -10,6 +10,7 @@ import subprocess
 import shutil
 import cv2
 from PIL import Image
+from pyproj import CRS
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -239,6 +240,17 @@ def transformation_to_string(transformation):
 
     return " ".join(string)
 
+def get_transformation_matrix(reference_lla, projection):
+    reference = TopocentricConverter(
+        reference_lla["latitude"],
+        reference_lla["longitude"],
+        reference_lla["altitude"]
+    )
+    pyproj_projection = pyproj.Proj(projection)
+    t = _get_transformation(reference, pyproj_projection)
+    t_inv = np.linalg.inv(t)
+    return [t, t_inv]
+
 def transform_extent_to_local(reference_lla, config):
 
     if not config or not reference_lla:
@@ -247,17 +259,11 @@ def transform_extent_to_local(reference_lla, config):
     extent = config.get('extent')
     if not projection or not extent:
         return None
-    reference = TopocentricConverter(
-        reference_lla["latitude"],
-        reference_lla["longitude"],
-        reference_lla["altitude"]
-    )
-    projection = pyproj.Proj(projection)
-    t = _get_transformation(reference, projection)
-    t_inv = np.linalg.inv(t)
+    pyproj_projection = pyproj.Proj(projection)
+    t, t_inv = get_transformation_matrix(reference_lla, projection)
 
-    xmin, ymin = projection(extent[0], extent[1])
-    xmax, ymax = projection(extent[2], extent[3])
+    xmin, ymin = pyproj_projection(extent[0], extent[1])
+    xmax, ymax = pyproj_projection(extent[2], extent[3])
 
     proj_extent = [xmin, ymin, xmax, ymax]
 
@@ -468,6 +474,8 @@ def process_nvm_file(input_nvm_path, output_nvm_path, images_dir, texture_image_
 
 def run(process_dir):
 
+    to_ellipsoidal_height = True
+
     dense_ply = os.path.join(process_dir, 'undistorted', 'depthmaps', 'merged.ply')
 
     output_ply = os.path.join(process_dir, 'mesh.ply')
@@ -507,7 +515,28 @@ def run(process_dir):
                 "bounds": f"([{xmin},{xmax}],[{ymin},{ymax}])"
             },
         ]
-
+    projection = config.get('projection')
+    if to_ellipsoidal_height and projection:
+        t, t_inv = get_transformation_matrix(reference_lla, projection)
+        # EGM2008
+        vertical_epsg = 3855
+        geodetic_crs = CRS(projection).geodetic_crs.to_epsg()
+        pipeline += [
+            {
+                "type":"filters.transformation",
+                "matrix": transformation_to_string(t)
+            },
+            {
+                "type": 'filters.reprojection',
+                "in_srs": f"{projection}+{vertical_epsg}",
+                "out_srs": f"{projection}+{geodetic_crs}",
+                "error_on_failure": True
+            },
+            {
+                "type":"filters.transformation",
+                "matrix": transformation_to_string(t_inv)
+            },
+        ]
 
     pipeline += [
         {
