@@ -7,17 +7,27 @@ import {
   Divider,
   Flex,
   FormControl,
+  Checkbox,
   FormLabel,
   Heading,
   Input,
   Select,
   Text,
+  Radio,
+  RadioGroup,
+  Stack,
+  Icon
 } from "@chakra-ui/react"
-import React from "react"
-import { FiDownload } from "react-icons/fi"
+import { useRef, useState, useCallback } from "react"
+import * as THREE from "three"
+// @ts-ignore
+import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader"
+import { FiDownload, FiX } from "react-icons/fi"
 import type { PipelinePublicExtended } from "../../client"
 import ThreeCanvas from "./ThreeCanvas"
 import { getPublicBasePath } from '../../utils'
+import { PhotogrammeteryResultService } from "../../client"
+import { useQuery } from "@tanstack/react-query"
 
 interface PhotogrammetryCanvasCanvasProps {
   pipeline: PipelinePublicExtended
@@ -32,11 +42,38 @@ function PhotogrammetryCanvas({
   onRun,
   onUpdate,
   onCancel,
+  assetId,
 }: PhotogrammetryCanvasCanvasProps) {
-//   const { data: text, isPending } = useQuery({
-//     queryFn: () => AssetsService.readAssetSample({ id: assetId }),
-//     queryKey: ["pipeline-asset-sample", assetId],
-//   })
+
+  const [activeLayer, setActiveLayer] = useState<string | null>(null);
+
+  console.log(assetId, 'assetId')
+  console.log(pipeline, 'pipeline')
+
+  const { data: text_sparse, isPending: isPendingSparse } = useQuery({
+    queryFn: () => PhotogrammeteryResultService.getResconstruction(pipeline?.id),
+    queryKey: ["pipeline-photogrammetry-sparse", pipeline?.id],
+  })
+
+  const { data: text_dense, isPending: isPendingDense } = useQuery({
+    queryFn: () => PhotogrammeteryResultService.getPointcloud(pipeline?.id),
+    queryKey: ["pipeline-photogrammetry-dense", pipeline?.id],
+  })
+
+  const group = useRef()
+  const material = useRef()
+  const [data, setData] = useState({
+    stage: 'all',
+    feature_process_size: 2048,
+    depthmap_resolution: 2048,
+    force_delete: false,
+    auto_resolutions_computation: true,
+    ...pipeline.data,
+  })
+
+  const tileset: any = pipeline?.task_result?.tileset
+  const download: string = `${pipeline?.task_result?.download}`
+
 
   const updateScene = (group: any) => {
     if (!group) {
@@ -50,15 +87,44 @@ function PhotogrammetryCanvas({
     group.children = []
   }
 
-  const group = React.useRef()
-  const material = React.useRef()
+  const displayPLY = useCallback((text: string, point_size: number) => {
+    if (!text || !group.current) {
+      console.error("No PLY data or scene available");
+      return;
+    }
 
-  const [data, setData] = React.useState({
-    stage: 'all',
-    feature_process_size: 2048,
-    depthmap_resolution: 2048,
-    ...pipeline.data,
-  })
+    try {
+      const loader = new PLYLoader();
+      const geometry = loader.parse(text);
+      updateScene(group.current); // Clear previous scene
+      geometry.rotateX(-Math.PI / 2);
+      const pointMaterial = new THREE.PointsMaterial({
+        size: point_size,
+        vertexColors: true
+      });
+      const points = new THREE.Points(geometry, pointMaterial);
+      // @ts-ignore
+      group.current.add(points);
+      const box = new THREE.Box3().setFromObject(points);
+      const center = new THREE.Vector3();
+      box.getCenter(center);
+      points.position.sub(center);
+    } catch (error) {
+      console.error("Error displaying PLY data:", error);
+    }
+  }, [text_sparse, text_dense]);
+
+  const handleLayerChange = (value: string) => {
+    setActiveLayer(value);
+
+    if (value === "sparse" && typeof text_sparse === "string") {
+      displayPLY(text_sparse, 4);
+    } else if (value === "dense" && typeof text_dense === "string") {
+      displayPLY(text_dense, 0.001);
+    } else if (value === "none") {
+      updateScene(group.current);
+    }
+  };
 
   function handleOnChange(key: string, value: any) {
     const newData = { ...data, [key]: value }
@@ -71,18 +137,14 @@ function PhotogrammetryCanvas({
     updateScene(group.current)
   }
 
-  // @ts-ignore collection
-  const tileset: any = pipeline?.task_result?.tileset
-  const download: string = `${pipeline?.task_result?.download}`
-
-//   if (isPending) {
-//     return (
-//       <Container maxW="full" pt={12}>
-//         {" "}
-//         <Spinner size="xl" />
-//       </Container>
-//     )
-//   }
+  //   if (isPending) {
+  //     return (
+  //       <Container maxW="full" pt={12}>
+  //         {" "}
+  //         <Spinner size="xl" />
+  //       </Container>
+  //     )
+  //   }
 
   return (
     <>
@@ -200,7 +262,7 @@ function PhotogrammetryCanvas({
               type="number"
               defaultValue={data?.feature_process_size}
               onChange={(event) =>
-                handleOnChange("feature_process_size", event.target.value)
+                handleOnChange("feature_process_size", parseInt(event.target.value))
               }
             />
           </FormControl>
@@ -214,11 +276,102 @@ function PhotogrammetryCanvas({
               type="number"
               defaultValue={data?.depthmap_resolution}
               onChange={(event) =>
-                handleOnChange("depthmap_resolution", event.target.value)
+                handleOnChange("depthmap_resolution", parseInt(event.target.value))
+              }
+            />
+          </FormControl>
+          <FormControl mt={2} mb={2} display="flex" alignItems="center">
+            <FormLabel fontSize="xs" htmlFor="force_delete" mb="0">
+              Restart
+            </FormLabel>
+            <Checkbox
+              id="force_delete"
+              size="sm"
+              isChecked={data?.force_delete || false}
+              onChange={(event) =>
+                handleOnChange("force_delete", event.target.checked)
+              }
+            />
+          </FormControl>
+          <FormControl mt={2} mb={2} display="flex" alignItems="center">
+            <FormLabel fontSize="xs" htmlFor="auto_resolutions_computation" mb="0">
+              Auto-compute resources
+            </FormLabel>
+            <Checkbox
+              id="auto_resolutions_computation"
+              size="sm"
+              isChecked={data?.auto_resolutions_computation !== false}
+              onChange={(event) =>
+                handleOnChange("auto_resolutions_computation", event.target.checked)
               }
             />
           </FormControl>
           <Divider />
+          <Box mt={4} mb={3}>
+            <Text fontSize="sm" fontWeight="bold" mb={2}>
+              Layers
+            </Text>
+            <Box
+              border="1px"
+              borderColor="gray.200"
+              borderRadius="md"
+              p={2}
+              bg="gray.50"
+            >
+              <Flex justify="flex-end" mb={2}>
+                <Button
+                  size="xs"
+                  colorScheme="gray"
+                  variant="outline"
+                  leftIcon={<Icon as={FiX} fontSize="10px" />}
+                  onClick={() => handleLayerChange("none")}
+                  isDisabled={!activeLayer}
+                >
+                  Clear View
+                </Button>
+              </Flex>
+
+              <RadioGroup onChange={handleLayerChange} value={activeLayer ?? undefined}>
+                <Stack spacing={2}>
+                  {text_sparse && !isPendingSparse && (
+                    <Flex
+                      alignItems="center"
+                      justifyContent="space-between"
+                      p={1}
+                      borderRadius="sm"
+                      _hover={{ bg: "gray.100" }}
+                      transition="all 0.2s"
+                    >
+                      <Radio value="sparse" size="sm" colorScheme="blue">
+                        <Text fontSize="xs">Sparse Points</Text>
+                      </Radio>
+                      <Badge size="sm" colorScheme="blue" variant="subtle">
+                        Camera Pose
+                      </Badge>
+                    </Flex>
+                  )}
+
+                  {text_dense && !isPendingDense && (
+                    <Flex
+                      alignItems="center"
+                      justifyContent="space-between"
+                      p={1}
+                      borderRadius="sm"
+                      _hover={{ bg: "gray.100" }}
+                      transition="all 0.2s"
+                    >
+                      <Radio value="dense" size="sm" colorScheme="orange">
+                        <Text fontSize="xs">Dense Points</Text>
+                      </Radio>
+                      <Badge size="sm" colorScheme="orange" variant="subtle">
+                        Points
+                      </Badge>
+                    </Flex>
+                  )}
+                </Stack>
+              </RadioGroup>
+            </Box>
+          </Box>
         </Container>
       </Box>
       <Divider orientation="vertical" />

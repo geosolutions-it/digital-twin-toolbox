@@ -303,12 +303,10 @@ def split_tile(target, bbox, margin, filepath, name, bake_img, remove_doubles_th
     remove_obj(tile)
     return
 
-def run(process_dir, output_dir):
+def run(process_dir, output_dir ,depth=4,tileset=True, tile_faces_target = 40000):
 
     input_file = os.path.join(process_dir, 'textured', 'mesh.obj')
 
-    depth = 4
-    tile_faces_target = 40000
     remove_doubles_factor = 0.025
     texture_image_size = 1024
 
@@ -414,31 +412,33 @@ def run(process_dir, output_dir):
     elapsed_time = (time.time() - start_time) / 60
     logger.info(f"tiling completed in {elapsed_time} minutes")
 
-    asset_config = None
-    asset_config_path = os.path.join(process_dir, 'images', 'config.json')
-    if os.path.exists(asset_config_path):
-        with open(asset_config_path, 'r') as f:
-            asset_config = json.load(f)
 
-    reference_lla = None
-    reference_lla_path = os.path.join(process_dir, 'reference_lla.json')
-    with open(reference_lla_path, 'r') as f:
-        reference_lla = json.load(f)
+    if tileset:
+        asset_config = None
+        asset_config_path = os.path.join(process_dir, 'images', 'config.json')
+        if os.path.exists(asset_config_path):
+            with open(asset_config_path, 'r') as f:
+                asset_config = json.load(f)
 
-    crs = asset_config.get('projection')
-    coordinates = create_tileset.reproject([ reference_lla.get('latitude', 0), reference_lla.get('longitude', 0), reference_lla.get('altitude', 0) ], 'WGS84', crs)
-    config = {
-        **info,
-        "depth": depth,
-        "center": {
-            "coordinates": coordinates,
-            "crs": crs
+        reference_lla = None
+        reference_lla_path = os.path.join(process_dir, 'reference_lla.json')
+        with open(reference_lla_path, 'r') as f:
+            reference_lla = json.load(f)
+
+        crs = asset_config.get('projection')
+        coordinates = create_tileset.reproject([ reference_lla.get('latitude', 0), reference_lla.get('longitude', 0), reference_lla.get('altitude', 0) ], 'WGS84', crs)
+        config = {
+            **info,
+            "depth": depth,
+            "center": {
+                "coordinates": coordinates,
+                "crs": crs
+            }
         }
-    }
 
-    tileset = create_tileset.run(config)
+        tileset = create_tileset.run(config)
 
-    with open(os.path.join(output_dir, 'tileset.json'), 'w') as f:
-        json.dump(tileset, f)
+        with open(os.path.join(output_dir, 'tileset.json'), 'w') as f:
+            json.dump(tileset, f)
 
-    return tileset
+        return tileset
