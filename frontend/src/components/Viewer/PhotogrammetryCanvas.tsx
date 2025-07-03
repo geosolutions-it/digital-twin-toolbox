@@ -30,14 +30,14 @@ import { useQuery } from "@tanstack/react-query"
 
 const VITE_API_URL = import.meta.env.VITE_API_URL
 
-class PhotogrammeteryResultService {
+class PhotogrammetryResultService {
   /**
    * Get Photogrammetry Output
    * Get photogrammetry output by pipeline ID.
    * @returns Promise<string> Successful Response
    * @throws Error
    */
-  public static async getResconstruction(id: string): Promise<string> {
+  public static async getReconstruction(id: string): Promise<string> {
     try {
       const response = await fetch(`${VITE_API_URL}/api/v1/output/${id}/process/reconstruction.ply`, {
         method: "GET",
@@ -105,12 +105,12 @@ function PhotogrammetryCanvas({
 
   const [activeLayer, setActiveLayer] = useState<string | null>(null);
   const { data: text_sparse, isPending: isPendingSparse } = useQuery({
-    queryFn: () => PhotogrammeteryResultService.getResconstruction(pipeline?.id),
+    queryFn: () => PhotogrammetryResultService.getReconstruction(pipeline?.id),
     queryKey: ["pipeline-photogrammetry-sparse", pipeline?.id],
   })
 
   const { data: text_dense, isPending: isPendingDense } = useQuery({
-    queryFn: () => PhotogrammeteryResultService.getPointcloud(pipeline?.id),
+    queryFn: () => PhotogrammetryResultService.getPointcloud(pipeline?.id),
     queryKey: ["pipeline-photogrammetry-dense", pipeline?.id],
   })
 
@@ -121,7 +121,10 @@ function PhotogrammetryCanvas({
     feature_process_size: 2048,
     depthmap_resolution: 2048,
     force_delete: false,
-    auto_resolutions_computation: true,
+    auto_resolutions_computation: false,
+    processes: 1,
+    read_processes: 4,
+    depthmap_processes: 1,
     ...pipeline.data,
   })
 
@@ -314,19 +317,21 @@ function PhotogrammetryCanvas({
               id="feature_process_size"
               size="xs"
               type="number"
+              disabled={data?.auto_resolutions_computation}
               defaultValue={data?.feature_process_size}
               onChange={(event) =>
                 handleOnChange("feature_process_size", parseInt(event.target.value))
               }
             />
           </FormControl>
-          <FormControl mt={2} mb={2}>
+          <FormControl mt={2} mb={2} >
             <FormLabel fontSize="xs" htmlFor="depthmap_resolution">
               Depth map resolution
             </FormLabel>
             <Input
               id="depthmap_resolution"
               size="xs"
+              disabled={data?.auto_resolutions_computation}
               type="number"
               defaultValue={data?.depthmap_resolution}
               onChange={(event) =>
@@ -334,10 +339,64 @@ function PhotogrammetryCanvas({
               }
             />
           </FormControl>
-          <FormControl mt={2} mb={2} display="flex" alignItems="center">
-            <FormLabel fontSize="xs" htmlFor="force_delete" mb="0">
-              Restart
+          <FormControl mt={2} mb={2} >
+            <FormLabel fontSize="xs" htmlFor="processes">
+              Processes
             </FormLabel>
+            <Input
+              id="processes"
+              size="xs"
+              disabled={data?.auto_resolutions_computation}
+              type="number"
+              defaultValue={data?.processes}
+              onChange={(event) =>
+                handleOnChange("processes", parseInt(event.target.value))
+              }
+            />
+          </FormControl>
+          <FormControl mt={2} mb={2} >
+            <FormLabel fontSize="xs" htmlFor="read_processes">
+              Read processes
+            </FormLabel>
+            <Input
+              id="read_processes"
+              size="xs"
+              disabled={data?.auto_resolutions_computation}
+              type="number"
+              defaultValue={data?.read_processes}
+              onChange={(event) =>
+                handleOnChange("read_processes", parseInt(event.target.value))
+              }
+            />
+          </FormControl>
+          <FormControl mt={2} mb={2} >
+            <FormLabel fontSize="xs" htmlFor="depthmap_processes">
+              Depth map processes
+            </FormLabel>
+            <Input
+              id="depthmap_processes"
+              size="xs"
+              disabled={data?.auto_resolutions_computation}
+              type="number"
+              defaultValue={data?.depthmap_processes}
+              onChange={(event) =>
+                handleOnChange("depthmap_processes", parseInt(event.target.value))
+              }
+            />
+          </FormControl>
+          <Flex mt={2}>
+            <Checkbox
+              id="auto_resolutions_computation"
+              size="sm"
+              isChecked={data?.auto_resolutions_computation}
+              onChange={(event) =>
+                handleOnChange("auto_resolutions_computation", event.target.checked)
+              }
+            >
+              Auto compute resources
+            </Checkbox>
+          </Flex>
+          <Flex mt={2} mb={2}>
             <Checkbox
               id="force_delete"
               size="sm"
@@ -345,25 +404,14 @@ function PhotogrammetryCanvas({
               onChange={(event) =>
                 handleOnChange("force_delete", event.target.checked)
               }
-            />
-          </FormControl>
-          <FormControl mt={2} mb={2} display="flex" alignItems="center">
-            <FormLabel fontSize="xs" htmlFor="auto_resolutions_computation" mb="0">
-              Auto-compute resources
-            </FormLabel>
-            <Checkbox
-              id="auto_resolutions_computation"
-              size="sm"
-              isChecked={data?.auto_resolutions_computation !== false}
-              onChange={(event) =>
-                handleOnChange("auto_resolutions_computation", event.target.checked)
-              }
-            />
-          </FormControl>
+            >
+              Delete previous process
+            </Checkbox>
+          </Flex>
           <Divider />
           <Box mt={4} mb={3}>
             <Text fontSize="sm" fontWeight="bold" mb={2}>
-              Layers
+              Preview
             </Text>
             <Box
               border="1px"
@@ -384,43 +432,19 @@ function PhotogrammetryCanvas({
                   Clear View
                 </Button>
               </Flex>
-
               <RadioGroup onChange={handleLayerChange} value={activeLayer ?? undefined}>
                 <Stack spacing={2}>
                   {text_sparse && !isPendingSparse && (
-                    <Flex
-                      alignItems="center"
-                      justifyContent="space-between"
-                      p={1}
-                      borderRadius="sm"
-                      _hover={{ bg: "gray.100" }}
-                      transition="all 0.2s"
-                    >
-                      <Radio value="sparse" size="sm" colorScheme="blue">
-                        <Text fontSize="xs">Sparse Points</Text>
-                      </Radio>
-                      <Badge size="sm" colorScheme="blue" variant="subtle">
-                        Camera Pose
-                      </Badge>
-                    </Flex>
+                    <Radio value="sparse" size="sm" colorScheme="blue">
+                      <Text fontSize="xs">
+                        Sparse points with camera poses
+                      </Text>
+                    </Radio>
                   )}
-
                   {text_dense && !isPendingDense && (
-                    <Flex
-                      alignItems="center"
-                      justifyContent="space-between"
-                      p={1}
-                      borderRadius="sm"
-                      _hover={{ bg: "gray.100" }}
-                      transition="all 0.2s"
-                    >
-                      <Radio value="dense" size="sm" colorScheme="orange">
-                        <Text fontSize="xs">Dense Points</Text>
-                      </Radio>
-                      <Badge size="sm" colorScheme="orange" variant="subtle">
-                        Points
-                      </Badge>
-                    </Flex>
+                    <Radio value="dense" size="sm" colorScheme="orange">
+                      <Text fontSize="xs">Dense points</Text>
+                    </Radio>
                   )}
                 </Stack>
               </RadioGroup>
