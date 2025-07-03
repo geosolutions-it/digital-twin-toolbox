@@ -26,8 +26,67 @@ import { FiDownload, FiX } from "react-icons/fi"
 import type { PipelinePublicExtended } from "../../client"
 import ThreeCanvas from "./ThreeCanvas"
 import { getPublicBasePath } from '../../utils'
-import { PhotogrammeteryResultService } from "../../client"
 import { useQuery } from "@tanstack/react-query"
+
+const VITE_API_URL = import.meta.env.VITE_API_URL
+
+class PhotogrammeteryResultService {
+  /**
+   * Get Photogrammetry Output
+   * Get photogrammetry output by pipeline ID.
+   * @returns Promise<string> Successful Response
+   * @throws Error
+   */
+  public static async getResconstruction(id: string): Promise<string> {
+    try {
+      const response = await fetch(`${VITE_API_URL}/api/v1/output/${id}/process/reconstruction.ply`, {
+        method: "GET",
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Error fetching reconstruction: ${response.status}`);
+      }
+      
+      return await response.text();
+    } catch (error) {
+      console.error("Failed to get reconstruction:", error);
+      throw error;
+    }
+  }
+
+  public static async getPointcloud(id: string): Promise<string> {
+    try {
+      const response = await fetch(`${VITE_API_URL}/api/v1/output/${id}/process/undistorted/depthmaps/merged_preview.ply`, {
+        method: "GET",
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Error fetching pointcloud: ${response.status}`);
+      }
+      
+      return await response.text();
+    } catch (error) {
+      console.error("Failed to get pointcloud:", error);
+      throw error;
+    }
+  }
+
+  public static async getModel(id: string): Promise<any> {
+    try {
+      const response = await fetch(`${VITE_API_URL}/api/v1/output/${id}/process/preview/0_0_0.glb`, {
+        method: "GET",
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Error fetching model: ${response.status}`);
+      }
+      return await response.arrayBuffer();
+    } catch (error) {
+      console.error("Failed to get model:", error);
+      throw error;
+    }
+  }
+}
 
 interface PhotogrammetryCanvasCanvasProps {
   pipeline: PipelinePublicExtended
@@ -42,14 +101,9 @@ function PhotogrammetryCanvas({
   onRun,
   onUpdate,
   onCancel,
-  assetId,
 }: PhotogrammetryCanvasCanvasProps) {
 
   const [activeLayer, setActiveLayer] = useState<string | null>(null);
-
-  console.log(assetId, 'assetId')
-  console.log(pipeline, 'pipeline')
-
   const { data: text_sparse, isPending: isPendingSparse } = useQuery({
     queryFn: () => PhotogrammeteryResultService.getResconstruction(pipeline?.id),
     queryKey: ["pipeline-photogrammetry-sparse", pipeline?.id],

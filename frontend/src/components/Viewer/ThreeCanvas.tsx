@@ -42,8 +42,8 @@ function ThreeCanvas({ onMount }: ThreeCanvasProps) {
     const axesHelper = new THREE.AxesHelper(500)
     scene.add(axesHelper)
 
-    // const gridGround = new THREE.GridHelper(3000, 150, 0x3f3f3f, 0x3f3f3f)
-    // scene.add(gridGround)
+    const gridGround = new THREE.GridHelper(3000, 150, 0x3f3f3f, 0x3f3f3f)
+    scene.add(gridGround)
     let removed = false
     let requestAnimation: any
     function animate() {
