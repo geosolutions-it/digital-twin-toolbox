@@ -587,7 +587,7 @@ def create_point_cloud_3dtiles(pipeline_extended):
     }
 
 def create_reconstructed_mesh(pipeline_extended):
-
+    print(pipeline_extended, 'pipeine extended')
     asset = pipeline_extended.get('asset')
     asset_id = asset.get('id')
     pipeline_id = pipeline_extended.get('id')
@@ -606,9 +606,15 @@ def create_reconstructed_mesh(pipeline_extended):
     pipeline_config = {}
     if pipeline_extended['data']:
         pipeline_config = pipeline_extended['data']
+    
+    print(pipeline_config, 'pipeline config')
 
     default_config = {
-        "stage": 'all'
+        "stage": 'all',
+        "force_delete": False,
+        "feature_process_size": 2048,
+        "depthmap_resolution": 2048,
+        "auto_resolutions_computation": False,
     }
 
     config = {
@@ -619,11 +625,16 @@ def create_reconstructed_mesh(pipeline_extended):
     stage = config.get('stage')
 
     if stage == 'all' or stage == 'images_to_point_cloud':
-        config_overrides = {}
+        config_overrides = {
+            **config,
+        }
         images_to_point_cloud.run(process_dir, config_overrides)
 
     if stage == 'all' or stage == 'point_cloud_to_mesh':
-        point_cloud_to_mesh.run(process_dir)
+        config_overrides = {
+            **config,
+        }
+        point_cloud_to_mesh.run(process_dir ,config_overrides)
 
     if stage == 'all' or stage == 'mesh_to_3dtile':
         os.makedirs(output_paths.get('output_path_3dtiles'), exist_ok=True)

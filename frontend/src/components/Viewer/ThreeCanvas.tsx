@@ -3,7 +3,7 @@ import * as THREE from "three"
 import { MapControls } from "three/examples/jsm/controls/MapControls.js"
 
 const setDefaultCameraLocation = (camera: any, controls: any) => {
-  camera.position.set(0, 1500, 1500)
+  camera.position.set(0, 3000, 0)
   controls.target.set(0, 0, 0)
 }
 

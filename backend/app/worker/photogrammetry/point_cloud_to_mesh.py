@@ -11,6 +11,10 @@ import shutil
 import cv2
 from PIL import Image
 from pyproj import CRS
+import time
+import app.worker.photogrammetry.mesh_to_3dtile as mesh_to_3dtile
+import bpy
+import laspy
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -230,7 +234,7 @@ def _get_transformation(reference, projection) :
         ]
     )
     return transformation
-# end from opensfm
+
 
 def transformation_to_string(transformation):
     string = []
@@ -292,29 +296,15 @@ def get_tex_recon_bin():
 
 def xyz_to_mesh(points, output_ply):
 
-    depth = 11
+    depth = 10
     remove_vertices_threshold = 0.002
 
     logger.info("Start conversion of dense point cloud to mesh")
-
     pcd = o3d.geometry.PointCloud()
 
     pcd.points = o3d.utility.Vector3dVector(to_2D_array(points[['X', 'Y', 'Z']]))
     pcd.colors = o3d.utility.Vector3dVector(to_2D_array(points[['Red', 'Green', 'Blue']]) / 255)
     pcd.normals = o3d.utility.Vector3dVector(to_2D_array(points[['NormalX', 'NormalY', 'NormalZ']]))
-
-    # logger.info("Computing average distance")
-    # distances = pcd.compute_nearest_neighbor_distance()
-    # average_distance = np.mean(distances)
-    # logger.info(f"Average distance: {average_distance}")
-
-    # logger.info("Down sample of point cloud")
-    # voxel_size_multipler = 0.15
-    # voxel_size = average_distance * voxel_size_multipler
-    # pcd_down = pcd.voxel_down_sample(voxel_size=voxel_size)
-
-    # cl, ind = pcd_down.remove_statistical_outlier(nb_neighbors=8, std_ratio=2)
-    # pcd_filtered_stat = pcd_down.select_by_index(ind)
 
     logger.info("Initialize poisson reconstruction")
     mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(pcd, depth=depth, n_threads=1, linear_fit=True)
@@ -322,8 +312,6 @@ def xyz_to_mesh(points, output_ply):
     mesh.remove_vertices_by_mask(vertices_to_remove)
     logger.info("Poisson reconstruction completed")
 
-    # mesh.filter_smooth_simple(number_of_iterations=3)
-    # mesh.filter_smooth_laplacian(number_of_iterations=2)
     number_of_iterations = 10
     logger.info(f"Smooth surface with Taubin, number of iterations {number_of_iterations}")
     mesh = mesh.filter_smooth_taubin(number_of_iterations=number_of_iterations)
@@ -332,14 +320,6 @@ def xyz_to_mesh(points, output_ply):
     target_number_of_triangles = 2000000
     logger.info(f"Simplify mesh, target number of triangles {target_number_of_triangles}")
     mesh = mesh.simplify_quadric_decimation(target_number_of_triangles=target_number_of_triangles)
-
-    # with o3d.utility.VerbosityContextManager(o3d.utility.VerbosityLevel.Debug) as cm:
-    #     triangle_clusters, cluster_n_triangles, cluster_area = mesh.cluster_connected_triangles()
-    #     triangle_clusters = np.asarray(triangle_clusters)
-    #     cluster_n_triangles = np.asarray(cluster_n_triangles)
-    #     largest_cluster_idx = cluster_n_triangles.argmax()
-    #     triangles_to_remove = triangle_clusters != largest_cluster_idx
-    #     mesh.remove_triangles_by_mask(triangles_to_remove)
 
     logger.info("Cropping mesh")
     bbox = pcd.get_axis_aligned_bounding_box()
@@ -472,53 +452,77 @@ def process_nvm_file(input_nvm_path, output_nvm_path, images_dir, texture_image_
 
     print(f"Created {output_nvm_path} with {len(new_image_lines)} images")
 
-def run(process_dir):
 
-    to_ellipsoidal_height = True
-
-    dense_ply = os.path.join(process_dir, 'undistorted', 'depthmaps', 'merged.ply')
-
-    output_ply = os.path.join(process_dir, 'mesh.ply')
-    if os.path.exists(output_ply):
-        os.remove(output_ply)
+def get_completed_steps(process_dir: str):
+    """Read completion markers to determine completed steps"""
+    completed_steps = {}
 
     output_laz = os.path.join(process_dir, 'merged.laz')
     if os.path.exists(output_laz):
-        os.remove(output_laz)
+        completed_steps['process_pointcloud'] = True
+    
+    output_ply = os.path.join(process_dir, 'mesh.ply')
+    if os.path.exists(output_ply):
+        completed_steps['create_mesh'] = True
+    
+    output_textured_dir_zip = os.path.join(process_dir, 'textured.zip')
+    if os.path.exists(output_textured_dir_zip):
+        completed_steps['create_texture'] = True
+    
+    preview_file = os.path.join(process_dir, 'preview','0_0_0.glb')
+    if os.path.exists(preview_file):
+        completed_steps['create_preview'] = True
 
+    logger.info(f"Found completed steps: {list(completed_steps.keys())}")
+    return completed_steps
+
+
+def run_step(step_name, func, *args, **kwargs):
+    """Run a processing step if it hasn't been completed yet"""
+    process_dir = args[0] if args else kwargs.get('process_dir', '')
+    force_delete = kwargs.pop('force_delete', False) if 'force_delete' in kwargs else False
+    completed_steps = get_completed_steps(process_dir)
+    
+    if step_name in completed_steps and not force_delete:
+        logger.info(f"Skipping already completed step: {step_name}")
+        return True
+    
+    logger.info(f"Running step: {step_name}")
+    try:
+        return func(*args, **kwargs)
+    except Exception as e:
+        logger.error(f"Step {step_name} failed: {e}")
+        return False
+
+def process_point_cloud(process_dir, config, to_ellipsoidal_height=True):
+    """Process point cloud to LAZ format"""
+    cropped_dense_ply = os.path.join(process_dir, 'undistorted', 'depthmaps', 'merged_cropped.ply')
+    output_laz = os.path.join(process_dir, 'merged.laz')
+    
+    if os.path.exists(output_laz) and config.get('force_delete', False):
+        os.remove(output_laz)
+    
     reference_lla = None
     reference_lla_path = os.path.join(process_dir, 'reference_lla.json')
     with open(reference_lla_path, 'r') as f:
         reference_lla = json.load(f)
 
-    config = None
+    config_data = None
     config_path = os.path.join(process_dir, 'images', 'config.json')
     if os.path.exists(config_path):
         with open(config_path, 'r') as f:
-            config = json.load(f)
+            config_data = json.load(f)
 
     pipeline = [
         {
             "type": "readers.ply",
-            "filename": dense_ply
+            "filename": cropped_dense_ply
         },
     ]
 
-    local_extent = transform_extent_to_local(reference_lla, config)
-    if local_extent:
-        xmin, ymin = (local_extent[0], local_extent[1])
-        xmax, ymax = (local_extent[2], local_extent[3])
-        logger.info(f"Local extent: ([{xmin},{xmax}],[{ymin},{ymax}])")
-        pipeline += [
-            {
-                "type": "filters.crop",
-                "bounds": f"([{xmin},{xmax}],[{ymin},{ymax}])"
-            },
-        ]
-    projection = config.get('projection')
+    projection = config_data.get('projection') if config_data else None
     if to_ellipsoidal_height and projection:
         t, t_inv = get_transformation_matrix(reference_lla, projection)
-        # EGM2008
         vertical_epsg = 3855
         geodetic_crs = CRS(projection).geodetic_crs.to_epsg()
         pipeline += [
@@ -540,17 +544,13 @@ def run(process_dir):
 
     pipeline += [
         {
-            "type": "filters.sample",
-            "radius": 0.1
-        },
-        {
             "type": "filters.assign",
             "assignment": "Classification[:]=0"
         },
         {
             "type": "filters.outlier",
             "method": "radius",
-            "radius": 0.75, # too low, we need to find good balance
+            "radius": 0.75,
             "min_k": 4
         },
         {
@@ -567,14 +567,49 @@ def run(process_dir):
     logger.info("Importing dense point cloud")
     pipeline = pdal.Pipeline(json.dumps(pipeline))
     pipeline.execute()
+    return True
+
+
+
+def create_mesh(process_dir, config):
+    """Create mesh from point cloud"""
+    cropped_dense_laz = os.path.join(process_dir, 'merged.laz')
+    if not os.path.exists(cropped_dense_laz):
+        logger.error(f"Point cloud file {cropped_dense_laz} does not exist. Please run process_point_cloud first.")
+        return False
+
+    pipeline =[
+        {
+            "type": "readers.las",
+            "filename": cropped_dense_laz
+        }
+    ]
+
+    pipeline = pdal.Pipeline(json.dumps(pipeline))
+    pipeline.execute()
     points = pipeline.arrays[0]
-
+    output_ply = os.path.join(process_dir, 'mesh.ply')
+    
+    if os.path.exists(output_ply) and config.get('force_delete', False):
+        os.remove(output_ply)
+        
     xyz_to_mesh(points, output_ply)
+    return True
 
-    logger.info("Create mesh texture")
 
+
+def create_texture(process_dir, config):
+    """Create textured mesh"""
     texture_image_downsample = True
     texture_image_resolution = 4096
+    
+    config_yaml = os.path.join(process_dir, 'config.yaml')
+    if os.path.exists(config_yaml):
+        with open(config_yaml, 'r') as f:
+            config_yaml_content = f.read()
+        if 'depthmap_resolution' in config_yaml_content:
+            texture_image_resolution = int(config_yaml_content.split('depthmap_resolution: ')[1].split('\n')[0])
+            logger.info(f"Texture image resolution set to {texture_image_resolution}")
 
     if texture_image_downsample:
         undistorted_images_dir = os.path.join(process_dir, 'undistorted', 'images')
@@ -585,16 +620,22 @@ def run(process_dir):
         output_nvm = os.path.join(process_dir, 'undistorted', 'reconstruction_downsample.nvm')
         process_nvm_file(input_nvm, output_nvm, undistorted_images_dir, texture_image_resolution)
 
-    if not texture_image_downsample:
-        reconstruction_nvm = os.path.join(process_dir, 'undistorted', 'reconstruction.nvm')
-    else:
-        reconstruction_nvm = os.path.join(process_dir, 'undistorted', 'reconstruction_downsample.nvm')
+    reconstruction_nvm = os.path.join(
+        process_dir, 
+        'undistorted', 
+        'reconstruction_downsample.nvm' if texture_image_downsample else 'reconstruction.nvm'
+    )
 
     output_textured_dir = os.path.join(process_dir, 'textured')
-    if os.path.exists(output_textured_dir):
+    if os.path.exists(output_textured_dir) and config.get('force_delete', False):
         shutil.rmtree(output_textured_dir)
-    os.mkdir(output_textured_dir)
+    
+    if not os.path.exists(output_textured_dir):
+        os.mkdir(output_textured_dir)
+        
     output_textured_mesh = os.path.join(output_textured_dir, 'mesh')
+    output_ply = os.path.join(process_dir, 'mesh.ply')
+    
     subprocess.run(get_tex_recon_bin() + [
         reconstruction_nvm,
         output_ply,
@@ -606,8 +647,45 @@ def run(process_dir):
         '--keep_unseen_faces',
         '--num_threads=1'
     ])
+    
     output_textured_dir_zip = os.path.join(process_dir, 'textured.zip')
-    if os.path.exists(output_textured_dir_zip):
+    if os.path.exists(output_textured_dir_zip) and config.get('force_delete', False):
         os.remove(output_textured_dir_zip)
-    shutil.make_archive(output_textured_dir, 'zip', output_textured_dir)
-    logger.info("Mesh conversion completed")
+        
+    print(f"Created textured ")
+    if not os.path.exists(output_textured_dir_zip):
+        shutil.make_archive(output_textured_dir, 'zip', output_textured_dir)
+        
+    return True
+
+def create_preview_mesh(process_dir, config):
+    try:   
+        output_tiles = os.path.join(process_dir, 'preview')
+        os.makedirs(output_tiles, exist_ok=True)
+        mesh_to_3dtile.run(process_dir,output_tiles,depth=0,tileset=False, tile_faces_target= 90000)
+        return True
+    except ImportError as e:
+        logger.error(f"Failed to import mesh_to_3dtile: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Error creating preview mesh: {e}")
+        return False
+
+def run(process_dir, config):
+    start = time.time()
+    logger.info("Starting mesh generation process")
+    
+    force_delete = config.get('force_delete', False)
+    if force_delete:
+        logger.info("Starting fresh run - will overwrite existing outputs")
+    else:
+        logger.info("Resuming from previous run based on existing outputs")
+    
+    run_step('process_pointcloud', process_point_cloud, process_dir, config, force_delete=force_delete)
+    run_step('create_mesh', create_mesh, process_dir, config, force_delete=force_delete)
+    run_step('create_texture', create_texture, process_dir, config, force_delete=force_delete)
+    run_step('create_preview', create_preview_mesh, process_dir, config, force_delete=force_delete)
+    
+    end = time.time()
+    elapsed_time = end - start
+    logger.info(f"Mesh conversion completed in {elapsed_time:.2f} seconds")
