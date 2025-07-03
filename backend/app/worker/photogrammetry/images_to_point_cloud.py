@@ -8,11 +8,10 @@ import shutil
 import sys
 import psutil
 import cv2 
-import math
 import numpy as np
-from PIL import Image
 from app.worker.photogrammetry.point_cloud_to_mesh import transform_extent_to_local
 import open3d as o3d
+import app.worker.photogrammetry.mask_images as mask_images
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -184,9 +183,6 @@ def run(process_dir, config):
     force_delete = config.get('force_delete', False)
     auto_resolutions_computation = config.get('auto_resolutions_computation', True)
 
-    print(force_delete, 'force_delete')
-    print(auto_resolutions_computation, 'auto_resolutions_computation')
-
     if  force_delete:
         logger.info("Starting fresh run - cleaning directory")
         for f in os.listdir(process_dir):
@@ -198,23 +194,21 @@ def run(process_dir, config):
                     shutil.rmtree(f_path)
     else:
         logger.info("Resuming from previous run based on profile.log")
-    
 
     images_dir = os.path.join(process_dir, 'images')
-    print(images_dir,'images_dir')
 
     resources = {
-        "processes": 8,
-        "read_processes": 8,
-        "depthmap_resolution": config.get('depthmap_resolution'),
-        "depthmap_processes": 4,
-        "feature_process_size": config.get('feature_process_size'),
+        "processes": int(config.get('processes')),
+        "read_processes": int(config.get('read_processes')),
+        "depthmap_resolution": int(config.get('depthmap_resolution')),
+        "depthmap_processes": int(config.get('depthmap_processes')),
+        "feature_process_size": int(config.get('feature_process_size')),
         "memory_mb": memory_available()
     }
 
     if auto_resolutions_computation:
         resources = calculate_resource_allocation(images_dir)
-    
+
     logger.info(f"Resource allocation: {resources['processes']} processes, "
                 f"{resources['feature_process_size']} feature process size, "
                 f"{resources['depthmap_resolution']} depthmap resolution")
@@ -247,7 +241,7 @@ def run(process_dir, config):
     }
 
     create_config_for_stage(process_dir, config_yaml)
-    
+
     original_camera_models_overrides = os.path.join(images_dir, 'camera_models_overrides.json')
     camera_models_overrides = os.path.join(process_dir, 'camera_models_overrides.json')
     original_exif_overrides = os.path.join(images_dir, 'exif_overrides.json')
@@ -262,11 +256,13 @@ def run(process_dir, config):
     if run_step('extract_metadata', cmd + ['extract_metadata', process_dir], process_dir):
         remove_if_exists(camera_models_overrides)
         remove_if_exists(exif_overrides)
-        
+
     run_step('detect_features', cmd + ['detect_features', process_dir], process_dir)
     run_step('match_features', cmd + ['match_features', process_dir], process_dir)
     run_step('create_tracks', cmd + ['create_tracks', process_dir], process_dir)
     run_step('reconstruct', cmd + ['reconstruct', '--algorithm', 'triangulation', process_dir], process_dir)
+
+    mask_images.run(process_dir)
 
     run_step('compute_statistics', cmd + ['compute_statistics', process_dir], process_dir)
     run_step('export_report', cmd + ['export_report', process_dir], process_dir)
@@ -308,6 +304,7 @@ def run(process_dir, config):
     run_step('compute_depthmaps', cmd + ['compute_depthmaps', process_dir], process_dir)
     run_step('export_visualsfm', cmd + ['export_visualsfm', process_dir], process_dir)
 
+    logger.info("Processing dense point cloud")
     dense_ply = os.path.join(process_dir, 'undistorted', 'depthmaps', 'merged.ply')
     cropped_dense_ply = os.path.join(process_dir, 'undistorted', 'depthmaps', 'merged_cropped.ply')
     pcd = o3d.io.read_point_cloud(dense_ply)
@@ -316,9 +313,8 @@ def run(process_dir, config):
     bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=min_bound, max_bound=max_bound)
     cropped_pcd = pcd.crop(bbox)
     sampled_pcd = cropped_pcd.voxel_down_sample(voxel_size=0.1)
-  
-    o3d.io.write_point_cloud(cropped_dense_ply, sampled_pcd , write_ascii=True, compressed=False, print_progress=True)
 
+    o3d.io.write_point_cloud(cropped_dense_ply, sampled_pcd , write_ascii=True, compressed=False, print_progress=True)
 
     original_point_count = len(cropped_pcd.points)
     target_point_count = 250000 
@@ -334,14 +330,13 @@ def run(process_dir, config):
             preview_pcd = cropped_pcd.random_down_sample(sampling_ratio)
     else:
         preview_pcd = cropped_pcd
-    
+
     preview_ply = os.path.join(process_dir, 'undistorted', 'depthmaps', 'merged_preview.ply')
     o3d.io.write_point_cloud(preview_ply, preview_pcd, write_ascii=True, compressed=False, print_progress=True)
 
     logger.info(f"Original point count: {original_point_count}")
     logger.info(f"Preview point count: {len(preview_pcd.points)}")
     logger.info(f"Reduction ratio: {len(preview_pcd.points) / original_point_count:.2f}")
-
 
     end = time.time()
     elapsed_time = end - start

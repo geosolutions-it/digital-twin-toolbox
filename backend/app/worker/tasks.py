@@ -587,7 +587,7 @@ def create_point_cloud_3dtiles(pipeline_extended):
     }
 
 def create_reconstructed_mesh(pipeline_extended):
-    print(pipeline_extended, 'pipeine extended')
+
     asset = pipeline_extended.get('asset')
     asset_id = asset.get('id')
     pipeline_id = pipeline_extended.get('id')
@@ -606,8 +606,6 @@ def create_reconstructed_mesh(pipeline_extended):
     pipeline_config = {}
     if pipeline_extended['data']:
         pipeline_config = pipeline_extended['data']
-    
-    print(pipeline_config, 'pipeline config')
 
     default_config = {
         "stage": 'all',
@@ -615,6 +613,9 @@ def create_reconstructed_mesh(pipeline_extended):
         "feature_process_size": 2048,
         "depthmap_resolution": 2048,
         "auto_resolutions_computation": False,
+        "processes": 1,
+        "read_processes": 4,
+        "depthmap_processes": 1,
     }
 
     config = {
