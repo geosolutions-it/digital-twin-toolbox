@@ -235,6 +235,7 @@ def run(process_dir, config):
         'bundle_use_gcp': 'no',
         'retriangulation_ratio': 2,
         'undistorted_image_format': 'jpg', # tif
+        'undistorted_image_max_size': resources['depthmap_resolution'],
         'depthmap_min_consistent_views': 3,
         'depthmap_resolution': resources['depthmap_resolution']
     }
