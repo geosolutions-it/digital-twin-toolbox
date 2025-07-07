@@ -587,6 +587,7 @@ def create_point_cloud_3dtiles(pipeline_extended):
     }
 
 def create_reconstructed_mesh(pipeline_extended):
+
     asset = pipeline_extended.get('asset')
     asset_id = asset.get('id')
     pipeline_id = pipeline_extended.get('id')
