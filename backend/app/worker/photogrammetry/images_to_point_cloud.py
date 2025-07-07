@@ -208,6 +208,7 @@ def run(process_dir, config):
 
     if auto_resolutions_computation:
         resources = calculate_resource_allocation(images_dir)
+
     logger.info(f"Resource allocation: {resources['processes']} processes, "
                 f"{resources['feature_process_size']} feature process size, "
                 f"{resources['depthmap_resolution']} depthmap resolution")
@@ -329,6 +330,7 @@ def run(process_dir, config):
             preview_pcd = cropped_pcd.random_down_sample(sampling_ratio)
     else:
         preview_pcd = cropped_pcd
+        
     preview_ply = os.path.join(process_dir, 'undistorted', 'depthmaps', 'merged_preview.ply')
     o3d.io.write_point_cloud(preview_ply, preview_pcd, write_ascii=True, compressed=False, print_progress=True)
 
