@@ -616,6 +616,7 @@ def create_reconstructed_mesh(pipeline_extended):
         "processes": 1,
         "read_processes": 4,
         "depthmap_processes": 1,
+        'texture_image_resolution': 4096
     }
 
     config = {
