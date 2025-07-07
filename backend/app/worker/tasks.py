@@ -615,12 +615,10 @@ def create_reconstructed_mesh(pipeline_extended):
         "feature_process_size": 2048,
         "depthmap_resolution": 2048,
         "auto_resolutions_computation": False,
-<<<<<<< HEAD
-=======
         "processes": 1,
         "read_processes": 4,
         "depthmap_processes": 1,
->>>>>>> d8cdc93bc95eb1fd997926c4789a9c190ba1cace
+        'texture_image_resolution': 4096
     }
 
     config = {

@@ -36,60 +36,61 @@ def run(process_dir):
     cameras = reconstruction[0].get('cameras')
     shots = reconstruction[0].get('shots')
 
-    local_extent = transform_extent_to_local(reference_lla, config)
-
-    if local_extent and len(local_extent) > 5:
-        zmin = local_extent[4]
-        zmax = local_extent[5]
-        points = np.array([
-            # bottom plane
-            [local_extent[0], local_extent[1], zmin],
-            [local_extent[0], local_extent[3], zmin],
-            [local_extent[2], local_extent[3], zmin],
-            [local_extent[2], local_extent[1], zmin],
-            # top plane
-            [local_extent[0], local_extent[1], zmax],
-            [local_extent[0], local_extent[3], zmax],
-            [local_extent[2], local_extent[3], zmax],
-            [local_extent[2], local_extent[1], zmax]
-        ], np.float32)
-        logger.info("Creating masks based on extent volume")
-        for key in shots:
-
-            shot = shots.get(key)
-            camera = cameras.get(shot.get('camera'))
-
-            camera_matrix = np.array([
-                [camera.get('focal_x'), 0, camera.get('c_x', 0)],
-                [0, camera.get('focal_y'), camera.get('c_y', 0)],
-                [0, 0, 1]], np.float32)
-            rvec = np.array(shot.get('rotation'), np.float32)
-            tvec = np.array(shot.get('translation'), np.float32)
-            dist_coeffs = np.array([
-                camera.get('k1', 0),
-                camera.get('k2', 0),
-                camera.get('p1', 0),
-                camera.get('p2', 0),
-                camera.get('k3', 0)
+    if config:
+        extent = config.get('extent')
+        if extent and len(extent) > 5:
+            local_extent = transform_extent_to_local(reference_lla, config)
+            zmin = extent[4]
+            zmax = extent[5]
+            points = np.array([
+                # bottom plane
+                [local_extent[0], local_extent[1], zmin],
+                [local_extent[0], local_extent[3], zmin],
+                [local_extent[2], local_extent[3], zmin],
+                [local_extent[2], local_extent[1], zmin],
+                # top plane
+                [local_extent[0], local_extent[1], zmax],
+                [local_extent[0], local_extent[3], zmax],
+                [local_extent[2], local_extent[3], zmax],
+                [local_extent[2], local_extent[1], zmax]
             ], np.float32)
+            logger.info("Creating masks based on extent volume")
+            for key in shots:
 
-            points_2d, _ = cv2.projectPoints(points,
-                rvec, tvec,
-                camera_matrix,
-                dist_coeffs)
-            hull = cv2.convexHull(points_2d)
+                shot = shots.get(key)
+                camera = cameras.get(shot.get('camera'))
 
-            img = cv2.imread(os.path.join(process_dir, 'images', key))
-            height, width = img.shape[:2]
-            resolution = max(height, width)
-            mask_img = np.zeros((height, width, 3), np.uint8)
-            poly = []
-            for point in hull:
-                poly.append([
-                    point[0][0] * resolution + width / 2,
-                    point[0][1] * resolution + height / 2
-                ])
-            cv2.fillPoly(mask_img, np.array([poly], dtype=np.int32), (255, 255, 255))
-            cv2.imwrite(os.path.join(masks_dir, f"{key}.png"), mask_img)
+                camera_matrix = np.array([
+                    [camera.get('focal_x'), 0, camera.get('c_x', 0)],
+                    [0, camera.get('focal_y'), camera.get('c_y', 0)],
+                    [0, 0, 1]], np.float32)
+                rvec = np.array(shot.get('rotation'), np.float32)
+                tvec = np.array(shot.get('translation'), np.float32)
+                dist_coeffs = np.array([
+                    camera.get('k1', 0),
+                    camera.get('k2', 0),
+                    camera.get('p1', 0),
+                    camera.get('p2', 0),
+                    camera.get('k3', 0)
+                ], np.float32)
+
+                points_2d, _ = cv2.projectPoints(points,
+                    rvec, tvec,
+                    camera_matrix,
+                    dist_coeffs)
+                hull = cv2.convexHull(points_2d)
+
+                img = cv2.imread(os.path.join(process_dir, 'images', key))
+                height, width = img.shape[:2]
+                resolution = max(height, width)
+                mask_img = np.zeros((height, width, 3), np.uint8)
+                poly = []
+                for point in hull:
+                    poly.append([
+                        point[0][0] * resolution + width / 2,
+                        point[0][1] * resolution + height / 2
+                    ])
+                cv2.fillPoly(mask_img, np.array([poly], dtype=np.int32), (255, 255, 255))
+                cv2.imwrite(os.path.join(masks_dir, f"{key}.png"), mask_img)
     else:
         logger.info("Extent volume not available skipping masks creation")

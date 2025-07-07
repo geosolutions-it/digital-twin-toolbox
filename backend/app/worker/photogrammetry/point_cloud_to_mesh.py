@@ -296,7 +296,7 @@ def get_tex_recon_bin():
 
 def xyz_to_mesh(points, output_ply):
 
-    depth = 10
+    depth = 11
     remove_vertices_threshold = 0.002
 
     logger.info("Start conversion of dense point cloud to mesh")
@@ -520,28 +520,6 @@ def process_point_cloud(process_dir, config, to_ellipsoidal_height=True):
         },
     ]
 
-    projection = config_data.get('projection') if config_data else None
-    if to_ellipsoidal_height and projection:
-        t, t_inv = get_transformation_matrix(reference_lla, projection)
-        vertical_epsg = 3855
-        geodetic_crs = CRS(projection).geodetic_crs.to_epsg()
-        pipeline += [
-            {
-                "type":"filters.transformation",
-                "matrix": transformation_to_string(t)
-            },
-            {
-                "type": 'filters.reprojection',
-                "in_srs": f"{projection}+{vertical_epsg}",
-                "out_srs": f"{projection}+{geodetic_crs}",
-                "error_on_failure": True
-            },
-            {
-                "type":"filters.transformation",
-                "matrix": transformation_to_string(t_inv)
-            },
-        ]
-
     pipeline += [
         {
             "type": "filters.assign",
@@ -601,15 +579,7 @@ def create_mesh(process_dir, config):
 def create_texture(process_dir, config):
     """Create textured mesh"""
     texture_image_downsample = True
-    texture_image_resolution = 4096
-    
-    config_yaml = os.path.join(process_dir, 'config.yaml')
-    if os.path.exists(config_yaml):
-        with open(config_yaml, 'r') as f:
-            config_yaml_content = f.read()
-        if 'depthmap_resolution' in config_yaml_content:
-            texture_image_resolution = int(config_yaml_content.split('depthmap_resolution: ')[1].split('\n')[0])
-            logger.info(f"Texture image resolution set to {texture_image_resolution}")
+    texture_image_resolution = config.get('texture_image_resolution', 4096)
 
     if texture_image_downsample:
         undistorted_images_dir = os.path.join(process_dir, 'undistorted', 'images')

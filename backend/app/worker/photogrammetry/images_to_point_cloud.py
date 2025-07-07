@@ -285,6 +285,8 @@ def run(process_dir, config):
         'read_processes': resources['depthmap_processes']
     })
 
+    create_config_for_stage(process_dir, config_yaml)
+
     reference_lla = None
     reference_lla_path = os.path.join(process_dir, 'reference_lla.json')
     with open(reference_lla_path, 'r') as f:
@@ -297,9 +299,6 @@ def run(process_dir, config):
             config = json.load(f)
     bbox= transform_extent_to_local(reference_lla, config)
     run_step('undistort', cmd + ['undistort', process_dir], process_dir)
-
-    create_config_for_stage(process_dir, config_yaml)
-
     run_step('compute_depthmaps', cmd + ['compute_depthmaps', process_dir], process_dir)
     run_step('export_visualsfm', cmd + ['export_visualsfm', process_dir], process_dir)
 
