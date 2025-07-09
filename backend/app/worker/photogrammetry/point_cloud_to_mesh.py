@@ -294,7 +294,7 @@ def to_2D_array(arr):
 def get_tex_recon_bin():
     return ['/mvs-texturing/build/apps/texrecon/texrecon']
 
-def xyz_to_mesh(points, output_ply):
+def xyz_to_mesh(input_ply, output_ply):
 
     depth = 11
     remove_vertices_threshold = 0.002
@@ -578,7 +578,7 @@ def create_mesh(process_dir, config):
 
 def create_texture(process_dir, config):
     """Create textured mesh"""
-    texture_image_downsample = True
+    texture_image_downsample = False
     texture_image_resolution = config.get('texture_image_resolution', 4096)
 
     if texture_image_downsample:
@@ -644,14 +644,14 @@ def create_preview_mesh(process_dir, config):
 def run(process_dir, config):
     start = time.time()
     logger.info("Starting mesh generation process")
-    
+
     force_delete = config.get('force_delete', False)
     if force_delete:
         logger.info("Starting fresh run - will overwrite existing outputs")
     else:
         logger.info("Resuming from previous run based on existing outputs")
     
-    run_step('process_pointcloud', process_point_cloud, process_dir, config, force_delete=force_delete)
+    run_step('process_point_cloud', process_point_cloud, process_dir, config, force_delete=force_delete)
     run_step('create_mesh', create_mesh, process_dir, config, force_delete=force_delete)
     run_step('create_texture', create_texture, process_dir, config, force_delete=force_delete)
     run_step('create_preview', create_preview_mesh, process_dir, config, force_delete=force_delete)
