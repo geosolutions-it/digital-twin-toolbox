@@ -651,7 +651,7 @@ def run(process_dir, config):
     else:
         logger.info("Resuming from previous run based on existing outputs")
     
-    run_step('process_point_cloud', process_point_cloud, process_dir, config, force_delete=force_delete)
+    run_step('process_pointcloud', process_point_cloud, process_dir, config, force_delete=force_delete)
     run_step('create_mesh', create_mesh, process_dir, config, force_delete=force_delete)
     run_step('create_texture', create_texture, process_dir, config, force_delete=force_delete)
     run_step('create_preview', create_preview_mesh, process_dir, config, force_delete=force_delete)
