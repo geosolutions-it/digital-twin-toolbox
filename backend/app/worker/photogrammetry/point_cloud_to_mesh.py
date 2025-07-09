@@ -294,7 +294,7 @@ def to_2D_array(arr):
 def get_tex_recon_bin():
     return ['/mvs-texturing/build/apps/texrecon/texrecon']
 
-def xyz_to_mesh(input_ply, output_ply):
+def xyz_to_mesh(points, output_ply):
 
     depth = 11
     remove_vertices_threshold = 0.002
