@@ -236,6 +236,7 @@ def run(process_dir, config):
         'bundle_use_gcp': 'no',
         'retriangulation_ratio': 2,
         'undistorted_image_format': 'jpg', # tif
+        'undistorted_image_max_size': int(config.get('texture_image_resolution')),
         'depthmap_min_consistent_views': 3,
         'depthmap_resolution': resources['depthmap_resolution']
     }
@@ -313,7 +314,7 @@ def run(process_dir, config):
     cropped_pcd = pcd.crop(bbox)
     sampled_pcd = cropped_pcd.voxel_down_sample(voxel_size=0.1)
 
-    o3d.io.write_point_cloud(cropped_dense_ply, sampled_pcd , write_ascii=True, compressed=False, print_progress=True)
+    o3d.io.write_point_cloud(cropped_dense_ply, sampled_pcd, write_ascii=True, compressed=False, print_progress=True)
 
     original_point_count = len(cropped_pcd.points)
     target_point_count = 250000 

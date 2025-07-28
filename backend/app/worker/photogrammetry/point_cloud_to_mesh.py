@@ -578,7 +578,7 @@ def create_mesh(process_dir, config):
 
 def create_texture(process_dir, config):
     """Create textured mesh"""
-    texture_image_downsample = True
+    texture_image_downsample = False
     texture_image_resolution = config.get('texture_image_resolution', 4096)
 
     if texture_image_downsample:
@@ -644,7 +644,7 @@ def create_preview_mesh(process_dir, config):
 def run(process_dir, config):
     start = time.time()
     logger.info("Starting mesh generation process")
-    
+
     force_delete = config.get('force_delete', False)
     if force_delete:
         logger.info("Starting fresh run - will overwrite existing outputs")
