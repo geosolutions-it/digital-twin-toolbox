@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - gha
+      - mesh
   pull_request:
     branches:
       - main
