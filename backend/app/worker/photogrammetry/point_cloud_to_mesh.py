@@ -8,13 +8,8 @@ import pdal
 import open3d as o3d
 import subprocess
 import shutil
-import cv2
-from PIL import Image
-from pyproj import CRS
 import time
-import app.worker.photogrammetry.mesh_to_3dtile as mesh_to_3dtile
-import bpy
-import laspy
+from concurrent.futures import ThreadPoolExecutor
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -287,27 +282,136 @@ def transform_extent_to_local(reference_lla, config):
 
     return transformed_extent
 
-def to_2D_array(arr):
-    t = arr.astype(object)
-    return np.array([*t])
-
 def get_tex_recon_bin():
     return ['/mvs-texturing/build/apps/texrecon/texrecon']
 
-def xyz_to_mesh(points, output_ply):
+def process_point_cloud_partition(point_cloud_partition_dir, file):
+    logger.info(f"Importing dense point cloud part: {file}")
+    pipeline = pdal.Pipeline(json.dumps([
+        {
+            "type": "readers.las",
+            "filename": os.path.join(point_cloud_partition_dir, file)
+        },
+        {
+            "type": "filters.sample",
+            "radius": 0.1
+        },
+        {
+            "type": "filters.assign",
+            "assignment": "Classification[:]=0"
+        },
+        {
+            "type": "filters.outlier",
+            "method": "statistical",
+            "mean_k": 32,
+            "multiplier": 2.2
+        },
+        {
+            "type": "filters.range",
+            "limits": "Classification![7:7]"
+        },
+        {
+            "type": "writers.las",
+            "filename": os.path.join(point_cloud_partition_dir, f"processed_{file}"),
+            "extra_dims": "all"
+        }
+    ]))
+    pipeline.execute()
 
+def process_point_cloud(params):
+    """Process point cloud to LAZ format"""
+
+    process_dir = params.get('process_dir')
+    dense_ply = params.get('dense_ply')
+    output_xyz = params.get('output_xyz')
+    max_workers = params.get('point_cloud_process_max_workers', 8)
+    
+    if os.path.exists(output_xyz):
+        os.remove(output_xyz)
+
+    point_cloud_partition_dir = os.path.join(process_dir, 'merged_parts')
+
+    if os.path.exists(point_cloud_partition_dir):
+        shutil.rmtree(point_cloud_partition_dir)
+    os.mkdir(point_cloud_partition_dir)
+
+    logger.info("Split dense point cloud")
+    pipeline = pdal.Pipeline(json.dumps([
+        {
+            "type": "readers.ply",
+            "filename": dense_ply
+        },
+        {
+            "type": "filters.divider",
+            "capacity": 5000000
+        },
+        {
+            "type": "writers.las",
+            "filename": os.path.join(point_cloud_partition_dir, 'out_#.laz'),
+            "extra_dims": "all"
+        }
+    ]))
+    pipeline.execute()
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        for file in os.listdir(point_cloud_partition_dir):
+            executor.submit(process_point_cloud_partition, point_cloud_partition_dir, file)
+
+    partitions = []
+
+    for file in os.listdir(point_cloud_partition_dir):
+        if 'processed_' in file:
+            partitions.append(os.path.join(point_cloud_partition_dir, file))
+
+    logger.info("Merge dense point cloud")
+
+    pipeline = pdal.Pipeline(json.dumps(partitions + [
+        {
+            "type": "filters.merge"
+        },
+        # {
+        #     "type": "writers.las",
+        #     "filename": output_laz,
+        #     "extra_dims": "all"
+        # },
+        {
+            "type": 'writers.text',
+            "format": 'csv',
+            "order": 'X,Y,Z,NormalX,NormalY,NormalZ',
+            "keep_unspecified": False,
+            "filename": output_xyz
+        }
+    ]))
+    pipeline.execute()
+
+    if os.path.exists(point_cloud_partition_dir):
+        shutil.rmtree(point_cloud_partition_dir)
+
+def create_mesh(params):
+    """Create mesh from point cloud"""
     depth = 11
     remove_vertices_threshold = 0.002
+    input_xyz = params.get('output_xyz')
+    output_ply = params.get('output_ply')
+
+    if os.path.exists(output_ply):
+        os.remove(output_ply)
 
     logger.info("Start conversion of dense point cloud to mesh")
     pcd = o3d.geometry.PointCloud()
 
-    pcd.points = o3d.utility.Vector3dVector(to_2D_array(points[['X', 'Y', 'Z']]))
-    pcd.colors = o3d.utility.Vector3dVector(to_2D_array(points[['Red', 'Green', 'Blue']]) / 255)
-    pcd.normals = o3d.utility.Vector3dVector(to_2D_array(points[['NormalX', 'NormalY', 'NormalZ']]))
+    point_cloud = np.loadtxt(input_xyz,skiprows=1,delimiter=',')
+
+    pcd.points = o3d.utility.Vector3dVector(point_cloud[:,:3])
+    pcd.normals = o3d.utility.Vector3dVector(point_cloud[:,3:6])
 
     logger.info("Initialize poisson reconstruction")
-    mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(pcd, depth=depth, n_threads=1, linear_fit=True)
+    mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
+        pcd,
+        depth=depth,
+        n_threads=1,
+        linear_fit=True
+    )
     vertices_to_remove = densities < np.quantile(densities, remove_vertices_threshold)
     mesh.remove_vertices_by_mask(vertices_to_remove)
     logger.info("Poisson reconstruction completed")
@@ -317,7 +421,7 @@ def xyz_to_mesh(points, output_ply):
     mesh = mesh.filter_smooth_taubin(number_of_iterations=number_of_iterations)
     mesh.compute_vertex_normals()
 
-    target_number_of_triangles = 2000000
+    target_number_of_triangles = 2560000 # 2^4 * 2^4 * 10000 -> 4 depth and 10000 faces tiles
     logger.info(f"Simplify mesh, target number of triangles {target_number_of_triangles}")
     mesh = mesh.simplify_quadric_decimation(target_number_of_triangles=target_number_of_triangles)
 
@@ -328,284 +432,27 @@ def xyz_to_mesh(points, output_ply):
     logger.info("Exporting mesh")
     o3d.io.write_triangle_mesh(output_ply, cropped_mesh)
 
-
-def downscale_images(source_dir, target_dir, target_resolution):
-    """
-    Downscale images from source directory to target directory.
-
-    Args:
-        source_dir (str): Directory containing source images
-        target_dir (str): Directory where downscaled images will be saved
-        target_resolution (int): Target resolution (max dimension) for downscaled images
-
-    Returns:
-        int: Number of images processed
-    """
-    logger.info(f"Downscaling images to max dimension of {target_resolution}px")
-
-    if os.path.exists(target_dir):
-        shutil.rmtree(target_dir)
-    os.makedirs(target_dir, exist_ok=True)
-
-    image_count = 0
-    supported_extensions = ('.jpg', '.png', '.tif', '.jpeg')
-
-    for fname in os.listdir(source_dir):
-        if fname.lower().endswith(supported_extensions):
-            image_path = os.path.join(source_dir, fname)
-            target_path = os.path.join(target_dir, fname)
-
-            img = cv2.imread(image_path)
-            if img is None:
-                logger.warning(f"Failed to read image: {image_path}")
-                continue
-
-            h, w = img.shape[:2]
-            scale = target_resolution / max(h, w)
-
-            if scale < 1.0:
-                img_resized = cv2.resize(img, (int(w * scale), int(h * scale)))
-                logger.debug(f"Downscaled {fname} from {w}x{h} to {int(w * scale)}x{int(h * scale)}")
-            else:
-                img_resized = img
-                logger.debug(f"Kept original size for {fname} ({w}x{h})")
-
-            cv2.imwrite(target_path, img_resized)
-            image_count += 1
-
-    logger.info(f"Downscaled {image_count} images to {target_dir}")
-    return image_count
-
-def process_nvm_file(input_nvm_path, output_nvm_path, images_dir, texture_image_resolution ):
-    """
-    Process NVM file to create a downscaled version.
-
-    Args:
-        input_nvm_path: Path to the input NVM file
-        output_nvm_path: Path to the output NVM file
-        images_dir: Directory containing the original images
-        texture_image_resolution: Resolution for the texture images (e.g., 2048)
-    """
-
-    with open(input_nvm_path, 'r') as f:
-        lines = f.readlines()
-
-    header_lines = []
-    i = 0
-    while i < len(lines) and not lines[i].strip().isdigit():
-        header_lines.append(lines[i])
-        i += 1
-
-    num_images = int(lines[i].strip())
-    i += 1
-
-    new_image_lines = []
-    for _ in range(num_images):
-        if i >= len(lines):
-            break
-
-        line = lines[i].strip()
-        if not line:
-            break
-
-        parts = line.split(' ')
-
-        img_path = parts[0]
-        img_filename = os.path.basename(img_path)
-        new_img_path = f"images_downsample/{img_filename}"
-
-        try:
-            full_img_path = os.path.join(images_dir, img_filename)
-            with Image.open(full_img_path) as img:
-                width, height = img.size
-
-            max_dimension = max(width, height)
-
-            original_focal = float(parts[1])
-
-            focal_ratio = original_focal / max_dimension
-            new_focal_length = texture_image_resolution * focal_ratio
-
-            parts[0] = new_img_path
-            parts[1] = f"{new_focal_length}"
-
-            new_image_lines.append(' '.join(parts))
-
-        except Exception as e:
-            print(f"Error processing {img_path}: {e}")
-            new_image_lines.append(line)
-
-        i += 1
-
-    footer_lines = lines[i:]
-    with open(output_nvm_path, 'w') as f:
-        for line in header_lines:
-            f.write(line)
-
-        f.write(f"{len(new_image_lines)}\n")
-
-        for line in new_image_lines:
-            f.write(f"{line}\n")
-
-        for line in footer_lines:
-            f.write(line)
-
-    print(f"Created {output_nvm_path} with {len(new_image_lines)} images")
-
-
-def get_completed_steps(process_dir: str):
-    """Read completion markers to determine completed steps"""
-    completed_steps = {}
-
-    output_laz = os.path.join(process_dir, 'merged.laz')
-    if os.path.exists(output_laz):
-        completed_steps['process_pointcloud'] = True
-    
-    output_ply = os.path.join(process_dir, 'mesh.ply')
-    if os.path.exists(output_ply):
-        completed_steps['create_mesh'] = True
-    
-    output_textured_dir_zip = os.path.join(process_dir, 'textured.zip')
-    if os.path.exists(output_textured_dir_zip):
-        completed_steps['create_texture'] = True
-    
-    preview_file = os.path.join(process_dir, 'preview','0_0_0.glb')
-    if os.path.exists(preview_file):
-        completed_steps['create_preview'] = True
-
-    logger.info(f"Found completed steps: {list(completed_steps.keys())}")
-    return completed_steps
-
-
-def run_step(step_name, func, *args, **kwargs):
-    """Run a processing step if it hasn't been completed yet"""
-    process_dir = args[0] if args else kwargs.get('process_dir', '')
-    force_delete = kwargs.pop('force_delete', False) if 'force_delete' in kwargs else False
-    completed_steps = get_completed_steps(process_dir)
-    
-    if step_name in completed_steps and not force_delete:
-        logger.info(f"Skipping already completed step: {step_name}")
-        return True
-    
-    logger.info(f"Running step: {step_name}")
-    try:
-        return func(*args, **kwargs)
-    except Exception as e:
-        logger.error(f"Step {step_name} failed: {e}")
-        return False
-
-def process_point_cloud(process_dir, config, to_ellipsoidal_height=True):
-    """Process point cloud to LAZ format"""
-    cropped_dense_ply = os.path.join(process_dir, 'undistorted', 'depthmaps', 'merged_cropped.ply')
-    output_laz = os.path.join(process_dir, 'merged.laz')
-    
-    if os.path.exists(output_laz) and config.get('force_delete', False):
-        os.remove(output_laz)
-    
-    reference_lla = None
-    reference_lla_path = os.path.join(process_dir, 'reference_lla.json')
-    with open(reference_lla_path, 'r') as f:
-        reference_lla = json.load(f)
-
-    config_data = None
-    config_path = os.path.join(process_dir, 'images', 'config.json')
-    if os.path.exists(config_path):
-        with open(config_path, 'r') as f:
-            config_data = json.load(f)
-
-    pipeline = [
-        {
-            "type": "readers.ply",
-            "filename": cropped_dense_ply
-        },
-    ]
-
-    pipeline += [
-        {
-            "type": "filters.assign",
-            "assignment": "Classification[:]=0"
-        },
-        {
-            "type": "filters.outlier",
-            "method": "radius",
-            "radius": 0.75,
-            "min_k": 4
-        },
-        {
-            "type": "filters.range",
-            "limits": "Classification![7:7]"
-        },
-        {
-            "type": "writers.las",
-            "filename": output_laz,
-            "extra_dims": "all"
-        }
-    ]
-
-    logger.info("Importing dense point cloud")
-    pipeline = pdal.Pipeline(json.dumps(pipeline))
-    pipeline.execute()
-    return True
-
-
-
-def create_mesh(process_dir, config):
-    """Create mesh from point cloud"""
-    cropped_dense_laz = os.path.join(process_dir, 'merged.laz')
-    if not os.path.exists(cropped_dense_laz):
-        logger.error(f"Point cloud file {cropped_dense_laz} does not exist. Please run process_point_cloud first.")
-        return False
-
-    pipeline =[
-        {
-            "type": "readers.las",
-            "filename": cropped_dense_laz
-        }
-    ]
-
-    pipeline = pdal.Pipeline(json.dumps(pipeline))
-    pipeline.execute()
-    points = pipeline.arrays[0]
-    output_ply = os.path.join(process_dir, 'mesh.ply')
-    
-    if os.path.exists(output_ply) and config.get('force_delete', False):
-        os.remove(output_ply)
-        
-    xyz_to_mesh(points, output_ply)
-    return True
-
-
-
-def create_texture(process_dir, config):
+def create_texture(params):
     """Create textured mesh"""
-    texture_image_downsample = False
-    texture_image_resolution = config.get('texture_image_resolution', 4096)
 
-    if texture_image_downsample:
-        undistorted_images_dir = os.path.join(process_dir, 'undistorted', 'images')
-        downsampled_images_dir = os.path.join(process_dir, 'undistorted', 'images_downsample')
-        downscale_images(undistorted_images_dir, downsampled_images_dir, texture_image_resolution)
+    process_dir = params.get('process_dir')
+    output_textured_dir = params.get('output_textured_dir')
+    output_textured_dir_zip = params.get('output_textured_dir_zip')
+    output_ply = params.get('output_ply')
 
-        input_nvm = os.path.join(process_dir, 'undistorted', 'reconstruction.nvm')
-        output_nvm = os.path.join(process_dir, 'undistorted', 'reconstruction_downsample.nvm')
-        process_nvm_file(input_nvm, output_nvm, undistorted_images_dir, texture_image_resolution)
+    reconstruction_nvm = os.path.join(process_dir, 'undistorted', 'reconstruction.nvm')
 
-    reconstruction_nvm = os.path.join(
-        process_dir, 
-        'undistorted', 
-        'reconstruction_downsample.nvm' if texture_image_downsample else 'reconstruction.nvm'
-    )
-
-    output_textured_dir = os.path.join(process_dir, 'textured')
-    if os.path.exists(output_textured_dir) and config.get('force_delete', False):
+    if os.path.exists(output_textured_dir):
         shutil.rmtree(output_textured_dir)
+
+    if os.path.exists(output_textured_dir_zip):
+        os.remove(output_textured_dir_zip)
     
     if not os.path.exists(output_textured_dir):
         os.mkdir(output_textured_dir)
         
     output_textured_mesh = os.path.join(output_textured_dir, 'mesh')
-    output_ply = os.path.join(process_dir, 'mesh.ply')
-    
+
     subprocess.run(get_tex_recon_bin() + [
         reconstruction_nvm,
         output_ply,
@@ -617,45 +464,50 @@ def create_texture(process_dir, config):
         '--keep_unseen_faces',
         '--num_threads=1'
     ])
-    
-    output_textured_dir_zip = os.path.join(process_dir, 'textured.zip')
-    if os.path.exists(output_textured_dir_zip) and config.get('force_delete', False):
+
+    if os.path.exists(output_textured_dir_zip):
         os.remove(output_textured_dir_zip)
-        
-    print(f"Created textured ")
+
     if not os.path.exists(output_textured_dir_zip):
         shutil.make_archive(output_textured_dir, 'zip', output_textured_dir)
-        
-    return True
-
-def create_preview_mesh(process_dir, config):
-    try:   
-        output_tiles = os.path.join(process_dir, 'preview')
-        os.makedirs(output_tiles, exist_ok=True)
-        mesh_to_3dtile.run(process_dir,output_tiles,depth=0,tileset=False, tile_faces_target= 90000)
-        return True
-    except ImportError as e:
-        logger.error(f"Failed to import mesh_to_3dtile: {e}")
-        return False
-    except Exception as e:
-        logger.error(f"Error creating preview mesh: {e}")
-        return False
+    
+    logger.info("Created textured")
 
 def run(process_dir, config):
     start = time.time()
     logger.info("Starting mesh generation process")
+
+    dense_ply = os.path.join(process_dir, 'undistorted', 'depthmaps', 'merged.ply')
+    output_xyz = os.path.join(process_dir, 'merged.xyz')
+    output_ply = os.path.join(process_dir, 'mesh.ply')
+    output_textured_dir = os.path.join(process_dir, 'textured')
+    output_textured_dir_zip = os.path.join(process_dir, 'textured.zip')
 
     force_delete = config.get('force_delete', False)
     if force_delete:
         logger.info("Starting fresh run - will overwrite existing outputs")
     else:
         logger.info("Resuming from previous run based on existing outputs")
-    
-    run_step('process_pointcloud', process_point_cloud, process_dir, config, force_delete=force_delete)
-    run_step('create_mesh', create_mesh, process_dir, config, force_delete=force_delete)
-    run_step('create_texture', create_texture, process_dir, config, force_delete=force_delete)
-    run_step('create_preview', create_preview_mesh, process_dir, config, force_delete=force_delete)
-    
+
+    point_cloud_process_max_workers = 16
+    params = {
+        **config,
+        'process_dir': process_dir,
+        'dense_ply': dense_ply,
+        'output_xyz': output_xyz,
+        'output_ply': output_ply,
+        'output_textured_dir': output_textured_dir,
+        'output_textured_dir_zip': output_textured_dir_zip,
+        'point_cloud_process_max_workers': point_cloud_process_max_workers
+    }
+
+    if force_delete or not os.path.exists(output_xyz):
+        process_point_cloud(params)
+    if force_delete or not os.path.exists(output_ply):
+        create_mesh(params)
+    if force_delete or not os.path.exists(output_textured_dir):
+        create_texture(params)
+
     end = time.time()
     elapsed_time = end - start
     logger.info(f"Mesh conversion completed in {elapsed_time:.2f} seconds")

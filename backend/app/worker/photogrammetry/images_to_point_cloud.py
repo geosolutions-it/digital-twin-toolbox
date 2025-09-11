@@ -177,11 +177,41 @@ def run_step(step_name, command, process_dir: str):
         logger.error(f"Step {step_name} failed: {e}")
         return False
 
+def crop_dense_point_cloud(params):
+
+    process_dir = params.get('process_dir')
+
+    reference_lla = None
+    reference_lla_path = os.path.join(process_dir, 'reference_lla.json')
+    with open(reference_lla_path, 'r') as f:
+        reference_lla = json.load(f)
+
+    config = None
+    config_path = os.path.join(process_dir, 'images', 'config.json')
+    if os.path.exists(config_path):
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+
+    bbox = transform_extent_to_local(reference_lla, config)
+
+    if bbox:
+        logger.info("Cropping dense point cloud")
+        dense_ply = os.path.join(process_dir, 'undistorted', 'depthmaps', 'merged.ply')
+        pcd = o3d.io.read_point_cloud(dense_ply)
+        min_bound = np.array([bbox[0], bbox[1], float('-inf')])
+        max_bound = np.array([bbox[2], bbox[3], float('inf')])
+        bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=min_bound, max_bound=max_bound)
+        cropped_pcd = pcd.crop(bbox)
+        o3d.io.write_point_cloud(dense_ply, cropped_pcd, write_ascii=True, compressed=False, print_progress=True)
+    else:
+        logger.info("Skip point cloud cropping")
+
 def run(process_dir, config):
     start = time.time()
     logger.info("Start OpenSfM process")
     force_delete = config.get('force_delete', False)
     auto_resolutions_computation = config.get('auto_resolutions_computation', True)
+    create_statisitcs = config.get('create_statisitcs', False)
 
     if  force_delete:
         logger.info("Starting fresh run - cleaning directory")
@@ -265,9 +295,12 @@ def run(process_dir, config):
 
     mask_images.run(process_dir)
 
-    run_step('compute_statistics', cmd + ['compute_statistics', process_dir], process_dir)
-    run_step('export_report', cmd + ['export_report', process_dir], process_dir)
-    run_step('export_ply', cmd + ['export_ply', process_dir], process_dir)
+    # optional
+    if create_statisitcs:
+        run_step('compute_statistics', cmd + ['compute_statistics', process_dir], process_dir)
+        run_step('export_report', cmd + ['export_report', process_dir], process_dir)
+        run_step('export_ply', cmd + ['export_ply', process_dir], process_dir)
+    # end -- optional
 
     reconstruction = None
     reconstruction_path = os.path.join(process_dir, 'reconstruction.json')
@@ -282,61 +315,19 @@ def run(process_dir, config):
         with open(cameras_path, 'w') as f:
             json.dump(cameras, f, indent=4)
 
-    config_yaml.update({
+    create_config_for_stage(process_dir, {
+        **config_yaml,
         'processes': resources['depthmap_processes'],
         'read_processes': resources['depthmap_processes']
     })
 
-    create_config_for_stage(process_dir, config_yaml)
-
-    reference_lla = None
-    reference_lla_path = os.path.join(process_dir, 'reference_lla.json')
-    with open(reference_lla_path, 'r') as f:
-        reference_lla = json.load(f)
-
-    config = None
-    config_path = os.path.join(process_dir, 'images', 'config.json')
-    if os.path.exists(config_path):
-        with open(config_path, 'r') as f:
-            config = json.load(f)
-    bbox= transform_extent_to_local(reference_lla, config)
     run_step('undistort', cmd + ['undistort', process_dir], process_dir)
     run_step('compute_depthmaps', cmd + ['compute_depthmaps', process_dir], process_dir)
     run_step('export_visualsfm', cmd + ['export_visualsfm', process_dir], process_dir)
 
-    logger.info("Processing dense point cloud")
-    dense_ply = os.path.join(process_dir, 'undistorted', 'depthmaps', 'merged.ply')
-    cropped_dense_ply = os.path.join(process_dir, 'undistorted', 'depthmaps', 'merged_cropped.ply')
-    pcd = o3d.io.read_point_cloud(dense_ply)
-    min_bound = np.array([bbox[0], bbox[1], float('-inf')])
-    max_bound = np.array([bbox[2], bbox[3], float('inf')])
-    bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=min_bound, max_bound=max_bound)
-    cropped_pcd = pcd.crop(bbox)
-    sampled_pcd = cropped_pcd.voxel_down_sample(voxel_size=0.1)
+    # --- end opensfm
 
-    o3d.io.write_point_cloud(cropped_dense_ply, sampled_pcd, write_ascii=True, compressed=False, print_progress=True)
-
-    original_point_count = len(cropped_pcd.points)
-    target_point_count = 250000 
-    if original_point_count > target_point_count:
-        if original_point_count > target_point_count * 10:
-            voxel_size = 0.5
-            preview_pcd = cropped_pcd.voxel_down_sample(voxel_size=voxel_size)
-            if len(preview_pcd.points) > target_point_count:
-                sampling_ratio = target_point_count / len(preview_pcd.points)
-                preview_pcd = preview_pcd.random_down_sample(sampling_ratio)
-        else:
-            sampling_ratio = target_point_count / original_point_count
-            preview_pcd = cropped_pcd.random_down_sample(sampling_ratio)
-    else:
-        preview_pcd = cropped_pcd
-
-    preview_ply = os.path.join(process_dir, 'undistorted', 'depthmaps', 'merged_preview.ply')
-    o3d.io.write_point_cloud(preview_ply, preview_pcd, write_ascii=True, compressed=False, print_progress=True)
-
-    logger.info(f"Original point count: {original_point_count}")
-    logger.info(f"Preview point count: {len(preview_pcd.points)}")
-    logger.info(f"Reduction ratio: {len(preview_pcd.points) / original_point_count:.2f}")
+    crop_dense_point_cloud({ 'process_dir': process_dir })
 
     end = time.time()
     elapsed_time = end - start

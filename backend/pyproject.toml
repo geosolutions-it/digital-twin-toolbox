@@ -34,7 +34,7 @@ py3dtiles = {extras = ["las", "ply", "postgres"], version = "^8.0.2"}
 laspy = {extras = ["laszip"], version = "^2.5.4"}
 mapbox-earcut = "^1.0.3"
 open3d = "^0.19.0"
-bpy = "4.3.0"
+bpy = "4.5.1"
 opencv-python = "^4.11.0.86"
 
 [tool.poetry.group.dev.dependencies]

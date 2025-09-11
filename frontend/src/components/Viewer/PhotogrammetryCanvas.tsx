@@ -13,80 +13,80 @@ import {
   Input,
   Select,
   Text,
-  Radio,
-  RadioGroup,
-  Stack,
-  Icon
+  // Radio,
+  // RadioGroup,
+  // Stack,
+  // Icon
 } from "@chakra-ui/react"
-import { useRef, useState, useCallback } from "react"
-import * as THREE from "three"
+import { useRef, useState /*, useCallback */ } from "react"
+// import * as THREE from "three"
 // @ts-ignore
-import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader"
-import { FiDownload, FiX } from "react-icons/fi"
+// import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader"
+import { FiDownload /*, FiX */ } from "react-icons/fi"
 import type { PipelinePublicExtended } from "../../client"
 import ThreeCanvas from "./ThreeCanvas"
 import { getPublicBasePath } from '../../utils'
-import { useQuery } from "@tanstack/react-query"
+// import { useQuery } from "@tanstack/react-query"
 
-const VITE_API_URL = import.meta.env.VITE_API_URL
+// const VITE_API_URL = import.meta.env.VITE_API_URL
 
-class PhotogrammetryResultService {
-  /**
-   * Get Photogrammetry Output
-   * Get photogrammetry output by pipeline ID.
-   * @returns Promise<string> Successful Response
-   * @throws Error
-   */
-  public static async getReconstruction(id: string): Promise<string> {
-    try {
-      const response = await fetch(`${VITE_API_URL}/api/v1/output/${id}/process/reconstruction.ply`, {
-        method: "GET",
-      });
+// class PhotogrammetryResultService {
+//   /**
+//    * Get Photogrammetry Output
+//    * Get photogrammetry output by pipeline ID.
+//    * @returns Promise<string> Successful Response
+//    * @throws Error
+//    */
+//   public static async getReconstruction(id: string): Promise<string> {
+//     try {
+//       const response = await fetch(`${VITE_API_URL}/api/v1/output/${id}/process/reconstruction.ply`, {
+//         method: "GET",
+//       });
       
-      if (!response.ok) {
-        throw new Error(`Error fetching reconstruction: ${response.status}`);
-      }
+//       if (!response.ok) {
+//         throw new Error(`Error fetching reconstruction: ${response.status}`);
+//       }
       
-      return await response.text();
-    } catch (error) {
-      console.error("Failed to get reconstruction:", error);
-      throw error;
-    }
-  }
+//       return await response.text();
+//     } catch (error) {
+//       console.error("Failed to get reconstruction:", error);
+//       throw error;
+//     }
+//   }
 
-  public static async getPointcloud(id: string): Promise<string> {
-    try {
-      const response = await fetch(`${VITE_API_URL}/api/v1/output/${id}/process/undistorted/depthmaps/merged_preview.ply`, {
-        method: "GET",
-      });
+//   public static async getPointcloud(id: string): Promise<string> {
+//     try {
+//       const response = await fetch(`${VITE_API_URL}/api/v1/output/${id}/process/undistorted/depthmaps/merged_preview.ply`, {
+//         method: "GET",
+//       });
       
-      if (!response.ok) {
-        throw new Error(`Error fetching pointcloud: ${response.status}`);
-      }
+//       if (!response.ok) {
+//         throw new Error(`Error fetching pointcloud: ${response.status}`);
+//       }
       
-      return await response.text();
-    } catch (error) {
-      console.error("Failed to get pointcloud:", error);
-      throw error;
-    }
-  }
+//       return await response.text();
+//     } catch (error) {
+//       console.error("Failed to get pointcloud:", error);
+//       throw error;
+//     }
+//   }
 
-  public static async getModel(id: string): Promise<any> {
-    try {
-      const response = await fetch(`${VITE_API_URL}/api/v1/output/${id}/process/preview/0_0_0.glb`, {
-        method: "GET",
-      });
+//   public static async getModel(id: string): Promise<any> {
+//     try {
+//       const response = await fetch(`${VITE_API_URL}/api/v1/output/${id}/process/preview/0_0_0.glb`, {
+//         method: "GET",
+//       });
       
-      if (!response.ok) {
-        throw new Error(`Error fetching model: ${response.status}`);
-      }
-      return await response.arrayBuffer();
-    } catch (error) {
-      console.error("Failed to get model:", error);
-      throw error;
-    }
-  }
-}
+//       if (!response.ok) {
+//         throw new Error(`Error fetching model: ${response.status}`);
+//       }
+//       return await response.arrayBuffer();
+//     } catch (error) {
+//       console.error("Failed to get model:", error);
+//       throw error;
+//     }
+//   }
+// }
 
 interface PhotogrammetryCanvasCanvasProps {
   pipeline: PipelinePublicExtended
@@ -103,16 +103,16 @@ function PhotogrammetryCanvas({
   onCancel,
 }: PhotogrammetryCanvasCanvasProps) {
 
-  const [activeLayer, setActiveLayer] = useState<string | null>(null);
-  const { data: text_sparse, isPending: isPendingSparse } = useQuery({
-    queryFn: () => PhotogrammetryResultService.getReconstruction(pipeline?.id),
-    queryKey: ["pipeline-photogrammetry-sparse", pipeline?.id],
-  })
+  // const [activeLayer, setActiveLayer] = useState<string | null>(null);
+  // const { data: text_sparse, isPending: isPendingSparse } = useQuery({
+  //   queryFn: () => PhotogrammetryResultService.getReconstruction(pipeline?.id),
+  //   queryKey: ["pipeline-photogrammetry-sparse", pipeline?.id],
+  // })
 
-  const { data: text_dense, isPending: isPendingDense } = useQuery({
-    queryFn: () => PhotogrammetryResultService.getPointcloud(pipeline?.id),
-    queryKey: ["pipeline-photogrammetry-dense", pipeline?.id],
-  })
+  // const { data: text_dense, isPending: isPendingDense } = useQuery({
+  //   queryFn: () => PhotogrammetryResultService.getPointcloud(pipeline?.id),
+  //   queryKey: ["pipeline-photogrammetry-dense", pipeline?.id],
+  // })
 
   const group = useRef()
   const material = useRef()
@@ -145,44 +145,44 @@ function PhotogrammetryCanvas({
     group.children = []
   }
 
-  const displayPLY = useCallback((text: string, point_size: number) => {
-    if (!text || !group.current) {
-      console.error("No PLY data or scene available");
-      return;
-    }
+  // const displayPLY = useCallback((text: string, point_size: number) => {
+  //   if (!text || !group.current) {
+  //     console.error("No PLY data or scene available");
+  //     return;
+  //   }
 
-    try {
-      const loader = new PLYLoader();
-      const geometry = loader.parse(text);
-      updateScene(group.current); // Clear previous scene
-      geometry.rotateX(-Math.PI / 2);
-      const pointMaterial = new THREE.PointsMaterial({
-        size: point_size,
-        vertexColors: true
-      });
-      const points = new THREE.Points(geometry, pointMaterial);
-      // @ts-ignore
-      group.current.add(points);
-      const box = new THREE.Box3().setFromObject(points);
-      const center = new THREE.Vector3();
-      box.getCenter(center);
-      points.position.sub(center);
-    } catch (error) {
-      console.error("Error displaying PLY data:", error);
-    }
-  }, [text_sparse, text_dense]);
+  //   try {
+  //     const loader = new PLYLoader();
+  //     const geometry = loader.parse(text);
+  //     updateScene(group.current); // Clear previous scene
+  //     geometry.rotateX(-Math.PI / 2);
+  //     const pointMaterial = new THREE.PointsMaterial({
+  //       size: point_size,
+  //       vertexColors: true
+  //     });
+  //     const points = new THREE.Points(geometry, pointMaterial);
+  //     // @ts-ignore
+  //     group.current.add(points);
+  //     const box = new THREE.Box3().setFromObject(points);
+  //     const center = new THREE.Vector3();
+  //     box.getCenter(center);
+  //     points.position.sub(center);
+  //   } catch (error) {
+  //     console.error("Error displaying PLY data:", error);
+  //   }
+  // }, [text_sparse, text_dense]);
 
-  const handleLayerChange = (value: string) => {
-    setActiveLayer(value);
+  // const handleLayerChange = (value: string) => {
+  //   setActiveLayer(value);
 
-    if (value === "sparse" && typeof text_sparse === "string") {
-      displayPLY(text_sparse, 4);
-    } else if (value === "dense" && typeof text_dense === "string") {
-      displayPLY(text_dense, 0.001);
-    } else if (value === "none") {
-      updateScene(group.current);
-    }
-  };
+  //   if (value === "sparse" && typeof text_sparse === "string") {
+  //     displayPLY(text_sparse, 4);
+  //   } else if (value === "dense" && typeof text_dense === "string") {
+  //     displayPLY(text_dense, 0.001);
+  //   } else if (value === "none") {
+  //     updateScene(group.current);
+  //   }
+  // };
 
   function handleOnChange(key: string, value: any) {
     const newData = { ...data, [key]: value }
@@ -424,7 +424,7 @@ function PhotogrammetryCanvas({
             </Checkbox>
           </Flex>
           <Divider />
-          <Box mt={4} mb={3}>
+          {/*<Box mt={4} mb={3}>
             <Text fontSize="sm" fontWeight="bold" mb={2}>
               Preview
             </Text>
@@ -464,7 +464,7 @@ function PhotogrammetryCanvas({
                 </Stack>
               </RadioGroup>
             </Box>
-          </Box>
+          </Box>*/}
         </Container>
       </Box>
       <Divider orientation="vertical" />

@@ -28,7 +28,7 @@ from concurrent.futures import ThreadPoolExecutor
 import zipfile
 import app.worker.photogrammetry.images_to_point_cloud as images_to_point_cloud
 import app.worker.photogrammetry.point_cloud_to_mesh as point_cloud_to_mesh
-import app.worker.photogrammetry.mesh_to_3dtile as mesh_to_3dtile
+import app.worker.photogrammetry.mesh_tiling as mesh_tiling
 
 def complete_upload_process(options):
     asset = options['asset']
@@ -640,7 +640,30 @@ def create_reconstructed_mesh(pipeline_extended):
 
     if stage == 'all' or stage == 'mesh_to_3dtile':
         os.makedirs(output_paths.get('output_path_3dtiles'), exist_ok=True)
-        mesh_to_3dtile.run(process_dir, output_paths.get('output_path_3dtiles'))
+
+        output_dir = output_paths.get('output_path_3dtiles')
+        input_file = os.path.join(process_dir, 'textured', 'mesh.obj')
+        reference_lla = None
+        reference_lla_path = os.path.join(process_dir, 'reference_lla.json')
+        with open(reference_lla_path, 'r') as f:
+            reference_lla = json.load(f)
+        mesh_tiling.run({
+            'input_file': input_file,
+            'texture_image_size': 512,
+            'tile_faces_target': 10000,
+            'depth': 4,
+            'output_dir': output_dir,
+            'latitude': reference_lla.get('latitude', 0),
+            'longitude': reference_lla.get('longitude', 0),
+            'altitude': reference_lla.get('altitude', 0),
+            'max_geometric_error': 256,
+            'apply_transform': True,
+            'decimate_last_depth_level': True,
+            'create_tileset_json': True,
+            'start_x': 0,
+            'start_y': 0,
+            'start_z': 0
+        })
         try:
             shutil.make_archive(output_paths['output_path_3dtiles_zip'], 'zip', output_paths['output_path_3dtiles'])
         except Exception as e:

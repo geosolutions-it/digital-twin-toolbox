@@ -3,9 +3,10 @@ import bpy
 import os
 import bmesh
 import time
-import json
-import app.worker.photogrammetry.create_tileset as create_tileset
 import pathlib
+from app.worker.photogrammetry.create_tileset import get_location_and_rotation, run as create_tileset_run, get_transform
+import json
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -82,6 +83,12 @@ def setup_bake_setting():
 
     bpy.context.scene.render.bake.margin = 2
 
+def merge_vertices(threshold=0.0001):
+    bpy.ops.object.editmode_toggle()
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.mesh.remove_doubles(threshold=threshold)
+    bpy.ops.mesh.select_all(action="DESELECT")
+    bpy.ops.object.editmode_toggle()
 
 # import mesh
 def import_mesh(filepath):
@@ -93,20 +100,21 @@ def import_mesh(filepath):
         bpy.ops.wm.obj_import(filepath=filepath , forward_axis='Y', up_axis='Z')
 
     obj = bpy.context.object
-    bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
-    loc = obj.location.copy()
 
-    x = loc[0]
-    y = loc[1]
-    z = loc[2]
+    merge_vertices()
 
-    obj.location.x = 0
-    obj.location.y = 0
-    obj.location.z = 0
+    top = float('-inf')
+    left = float('inf')
+    for vertex in obj.data.vertices:
+        x = vertex.co[0]
+        y = vertex.co[1]
+        left = x if x < left else left
+        top = y if y > top else top
 
     info = {
         'size': [obj.dimensions[0], obj.dimensions[1], obj.dimensions[2]],
-        'offset': [x, y, z]
+        'top': top,
+        'left': left
     }
 
     return [obj, info]
@@ -128,11 +136,12 @@ def apply_default_material(obj):
     obj.data.materials.append(mat)
     return mat
 
-def export_gltf(filepath, export_jpeg_quality):
+def export_gltf(filepath):
     bpy.ops.export_scene.gltf(
         filepath=filepath,
-        export_image_format='JPEG',
-        export_jpeg_quality=export_jpeg_quality,
+        export_image_format='WEBP',
+        # export_image_quality=export_image_quality,
+        # export_jpeg_quality=export_image_quality,
         
         use_selection=True,
         export_format="GLB",
@@ -152,7 +161,8 @@ def export_gltf(filepath, export_jpeg_quality):
         export_tangents=False,
         export_materials='EXPORT',
         export_original_specular=False,
-        # export_colors=True,
+        export_all_vertex_colors=False,
+        export_vertex_color='NONE',
         export_attributes=False,
         use_mesh_edges=False,
         use_mesh_vertices=False,
@@ -207,7 +217,24 @@ def decimate_obj(obj, _faces_target):
         decimate.use_collapse_triangulate = True
         bpy.ops.object.modifier_apply(modifier="decimate")
 
-def split_tile(target, bbox, margin, filepath, name, bake_img, remove_doubles_threshold, bake_mat, target_model, tile_faces_target,current_lod=None, max_lod=None):
+def split_tile(params):
+
+    target = params.get('target')
+    bbox = params.get('bbox')
+    margin = params.get('margin')
+    filepath = params.get('filepath')
+    name = params.get('name')
+    bake_img = params.get('bake_img')
+    bake_mat = params.get('bake_mat')
+    target_model = params.get('target_model')
+    tile_faces_target = params.get('tile_faces_target')
+    apply_transform = params.get('apply_transform')
+    cage_extrusion = params.get('cage_extrusion')
+    should_decimate = params.get('should_decimate')
+    center = params.get('center')
+    location_and_rotation = params.get('location_and_rotation')
+    transform = params.get('transform')
+    tile_size = params.get('tile_size')
 
     for obj in bpy.context.scene.objects:
         obj.select_set(False)
@@ -220,9 +247,12 @@ def split_tile(target, bbox, margin, filepath, name, bake_img, remove_doubles_th
     full.name = 'full'
 
     nothing_selected = True
+    min_z = float('inf')
+    max_z = float('-inf')
     for vertex in full.data.vertices:
         x = vertex.co[0]
         y = vertex.co[1]
+        z = vertex.co[2]
         minx = bbox[0] - margin
         miny = bbox[1] - margin
         maxx = bbox[2] + margin
@@ -230,6 +260,9 @@ def split_tile(target, bbox, margin, filepath, name, bake_img, remove_doubles_th
         if x >= minx and x <= maxx and y >= miny and y <= maxy:
             vertex.select = True
             nothing_selected = False
+            min_z = z if z < min_z else min_z
+            max_z = z if z > max_z else max_z
+    center_z = min_z + (max_z - min_z) / 2
 
     if nothing_selected:
         # if nothing is selected we skip and proceed with next tile
@@ -249,21 +282,38 @@ def split_tile(target, bbox, margin, filepath, name, bake_img, remove_doubles_th
     tile.select_set(True)
     bpy.context.view_layer.objects.active = tile
 
+    tile_info = {
+        'center': [
+            center[0],
+            center[1],
+            center_z
+        ],
+        'transform': transform,
+        'size': [tile_size[0], tile_size[1], tile.dimensions[2]]
+    }
+
+    merge_vertices()
+
+    if len(tile.data.polygons) == 0:
+        remove_obj(tile)
+        return
+
+    if should_decimate and tile_faces_target and tile_faces_target > 0:
+        decimate_obj(tile, tile_faces_target)
+
     # unwrap the uv
-    bpy.ops.object.editmode_toggle()
-    bpy.ops.mesh.select_all(action = 'SELECT')
-    bpy.ops.uv.smart_project()
-    bpy.ops.object.editmode_toggle()
+    try:
+        bpy.ops.object.editmode_toggle()
+        bpy.ops.mesh.select_all(action = 'SELECT')
+        bpy.ops.uv.smart_project()
+        bpy.ops.object.editmode_toggle()
+    except:
+        logger.error(f'Skip: bpy.ops.uv.smart_project failing for {name}')
+        return
 
     bake_img.select = True
     mat = tile.material_slots[0].material
     mat.node_tree.nodes.active = bake_img
-
-    # bake vertex color to texture
-    # bpy.context.scene.cycles.bake_type = 'EMIT'
-    # bpy.context.scene.render.bake.use_selected_to_active = False
-    # bpy.context.scene.render.bake.cage_extrusion = 0
-    # bpy.ops.object.bake(type='EMIT',use_clear=True)
 
     # bake texture to texture
     if target_model:
@@ -271,7 +321,7 @@ def split_tile(target, bbox, margin, filepath, name, bake_img, remove_doubles_th
         target_model.select_set(True)
         bpy.context.scene.cycles.bake_type = 'DIFFUSE'
         bpy.context.scene.render.bake.use_selected_to_active = True
-        bpy.context.scene.render.bake.cage_extrusion = 0.001 # (m) to avoid black pixels
+        bpy.context.scene.render.bake.cage_extrusion = cage_extrusion # (m) to avoid black pixels
         bpy.ops.object.bake(type='DIFFUSE',use_clear=False)
         target_model.select_set(False)
         target_model.hide_render = True
@@ -286,33 +336,63 @@ def split_tile(target, bbox, margin, filepath, name, bake_img, remove_doubles_th
 
     tile.name = name
 
-    bpy.ops.object.editmode_toggle()
-    bpy.ops.mesh.remove_doubles()
-    bpy.ops.object.editmode_toggle()
+    if apply_transform:
 
-    if current_lod is None or max_lod is None or current_lod < max_lod:
-        decimate_obj(tile, tile_faces_target)
-        bpy.ops.object.editmode_toggle()
-        bpy.ops.mesh.remove_doubles(threshold=remove_doubles_threshold)
-        bpy.ops.object.editmode_toggle()
+        with open(filepath.replace('.glb', '.json'), 'w') as f:
+            json.dump(tile_info, f)
 
-    bpy.ops.object.shade_smooth()
+        tile.data.transform(location_and_rotation.get('rotation'))
+        tile.data.update()
 
-    export_gltf(filepath, 60)
+        location = location_and_rotation.get('location')
+        tile.location.x = location[0]
+        tile.location.y = location[1]
+        tile.location.z = location[2]
+
+    export_gltf(filepath)
 
     remove_obj(tile)
     return
 
-def run(process_dir, output_dir ,depth=4,tileset=True, tile_faces_target = 40000):
+def cut_mesh(left, top, w_unit, h_unit, size):
+    bpy.ops.object.mode_set(mode='EDIT')
 
-    input_file = os.path.join(process_dir, 'textured', 'mesh.obj')
+    bm = bmesh.from_edit_mesh(bpy.context.object.data)
 
-    remove_doubles_factor = 0.025
-    texture_image_size = 1024
+    for x in range(0, size):
+        i = left + (x * w_unit)
+        ret = bmesh.ops.bisect_plane(bm, geom=bm.verts[:]+bm.edges[:]+bm.faces[:], plane_co=(i,0,0), plane_no=(-1,0,0))
+        bmesh.ops.split_edges(bm, edges=[e for e in ret['geom_cut'] if isinstance(e, bmesh.types.BMEdge)])
+
+    for y in range(0, size):
+        i = top - (y * h_unit)
+        ret = bmesh.ops.bisect_plane(bm, geom=bm.verts[:]+bm.edges[:]+bm.faces[:], plane_co=(0,i,0), plane_no=(0,1,0))
+        bmesh.ops.split_edges(bm, edges=[e for e in ret['geom_cut'] if isinstance(e, bmesh.types.BMEdge)])
+        
+    bmesh.update_edit_mesh(bpy.context.object.data)
+    bm.free()
+
+def run(params):
+
+    input_file = params.get('input_file', '')
+    texture_image_size = params.get('texture_image_size', 512)
+    tile_faces_target = params.get('tile_faces_target', 10000)
+    depth = params.get('depth', 4)
+    output_dir = params.get('output_dir', '')
+    latitude = params.get('latitude', 0)
+    longitude = params.get('longitude', 0)
+    altitude = params.get('altitude', 0)
+    apply_transform = params.get('apply_transform', True)
+    decimate_last_depth_level = params.get('decimate_last_depth_level', False)
+    create_tileset_json = params.get('create_tileset_json', True)
+    max_geometric_error = params.get('max_geometric_error', None)
+    start_x = params.get('start_x', 0)
+    start_y = params.get('start_y', 0)
+    start_z = params.get('start_z', 0)
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
     start_time = time.time()
-    logger.info(f"Start time: {start_time}")
+    logger.info(f"Starting from level {start_z} - x {start_x} - y {start_y}")
     clean_up()
 
     bake_mat = create_bake_material()
@@ -336,6 +416,7 @@ def run(process_dir, output_dir ,depth=4,tileset=True, tile_faces_target = 40000
     mat = apply_default_material(merged)
 
     setup_bake_setting()
+
     # setup bake material
     bake_img = create_image(mat, texture_image_size)
  
@@ -344,101 +425,117 @@ def run(process_dir, output_dir ,depth=4,tileset=True, tile_faces_target = 40000
     width = merged.dimensions[0]
     height = merged.dimensions[1]
 
-    for z in range(0, depth + 1):
+    transform = None
+    location_and_rotation = None
 
-        size = pow(2, z)
-        w_unit = width / size
-        h_unit = height / size
+    if apply_transform:
+        location_and_rotation = get_location_and_rotation({
+            'scale': 1,
+            'latitude':  latitude,
+            'longitude': longitude,
+            'altitude': altitude
+        })
 
-        remove_doubles_threshold = (width * remove_doubles_factor) / size
-        if z == depth:
-            remove_doubles_threshold = 0.0001
+        transform =  get_transform({
+            'scale': 1,
+            'latitude':  latitude,
+            'longitude': longitude,
+            'altitude': altitude
+        })
+
+    left = info.get('left')
+    top = info.get('top')
+
+    for z in range(start_z, depth + 1):
+        level_size = pow(2, z)
+        w_unit = width / level_size
+        h_unit = height / level_size
 
         merged.select_set(True)
         bpy.context.view_layer.objects.active = merged
         bpy.ops.object.duplicate()
-        clonded_merged = bpy.context.active_object
-        clonded_merged.name = 'clonded_merged'
-        clonded_merged.hide_render = True
-
-        bpy.ops.object.mode_set(mode='EDIT')
-
-        bm = bmesh.from_edit_mesh(bpy.context.object.data)
-
-        for x in range(0, size):
-            i = (x * w_unit) - width / 2
-            ret = bmesh.ops.bisect_plane(bm, geom=bm.verts[:]+bm.edges[:]+bm.faces[:], plane_co=(i,0,0), plane_no=(-1,0,0))
-            bmesh.ops.split_edges(bm, edges=[e for e in ret['geom_cut'] if isinstance(e, bmesh.types.BMEdge)])
-
-        for y in range(0, size):
-            i = (height / 2) - (y * h_unit)
-            ret = bmesh.ops.bisect_plane(bm, geom=bm.verts[:]+bm.edges[:]+bm.faces[:], plane_co=(0,i,0), plane_no=(0,1,0))
-            bmesh.ops.split_edges(bm, edges=[e for e in ret['geom_cut'] if isinstance(e, bmesh.types.BMEdge)])
-            
-        bmesh.update_edit_mesh(bpy.context.object.data)
-        bm.free()
+        cloned_merged = bpy.context.active_object
+        cloned_merged.name = 'cloned_merged'
+        cloned_merged.hide_render = True
+        
+        cut_mesh(left, top, w_unit, h_unit, level_size)
 
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.select_mode(type="VERT")
         bpy.ops.mesh.select_all(action = 'DESELECT')
         bpy.ops.object.mode_set(mode='OBJECT')
         
-        for y in range(0, size):
-            for x in range(0, size):
+        logger.info(f"Meshes: {len(bpy.data.meshes)}")
+        logger.info(f"Materials: {len(bpy.data.materials)}")
+        logger.info(f"Textures: {len(bpy.data.textures)}")
+        logger.info(f"Images: {len(bpy.data.images)}")
 
-                logger.info(f"Meshes: {len(bpy.data.meshes)}")
-                logger.info(f"Materials: {len(bpy.data.materials)}")
-                logger.info(f"Textures: {len(bpy.data.textures)}")
-                logger.info(f"Images: {len(bpy.data.images)}")
-
+        for y in range(start_y, level_size):
+            for x in range(start_x, level_size):
                 tile_start_time = time.time()
 
-                minx = x * w_unit - width / 2
-                miny = (height / 2) - (y + 1) * h_unit
-                maxx = (x + 1) * w_unit - width / 2
-                maxy = (height / 2) - y * h_unit
+                minx = left + x * w_unit
+                miny = top - ( (y + 1) * h_unit)
+                maxx = left + ((x + 1) * w_unit)
+                maxy = top - (y * h_unit)
                 tile_name = f"{z}_{y}_{x}"
                 logger.info(f"tile {tile_name} extent ({minx}, {miny}, {maxx}, {maxy})")
                 filepath = os.path.join(output_dir, f"{tile_name}.glb")
-                split_tile(clonded_merged, (minx, miny, maxx, maxy), 4, filepath, tile_name, bake_img, remove_doubles_threshold, bake_mat, target_model, tile_faces_target,current_lod=z, max_lod=depth)
+
+                cage_extrusion = 20 / pow(2, z)
+
+                should_decimate = True
+                if z == depth and not decimate_last_depth_level:
+                    cage_extrusion = 0.001
+                    should_decimate = False
+
+                center_x = left + (x * w_unit) + w_unit / 2
+                center_y = top - (y * h_unit) - h_unit / 2
+
+                split_tile({
+                    'target': cloned_merged,
+                    'bbox': (minx, miny, maxx, maxy),
+                    'margin': 4,
+                    'filepath': filepath,
+                    'name': tile_name,
+                    'bake_img': bake_img,
+                    'bake_mat': bake_mat,
+                    'target_model': target_model,
+                    'tile_faces_target': tile_faces_target,
+                    'should_decimate': should_decimate,
+                    'apply_transform': apply_transform,
+                    'cage_extrusion': cage_extrusion,
+                    'location_and_rotation': location_and_rotation,
+                    'transform': transform,
+                    'center': [center_x, center_y, 0],
+                    'tile_size': [w_unit, h_unit]
+                })
                 elapsed_time = (time.time() - tile_start_time)
                 logger.info(f"tile {tile_name} completed in {elapsed_time} seconds")
 
-        remove_obj(clonded_merged)
+        remove_obj(cloned_merged)
 
     remove_obj(merged)
     remove_obj(target_model)
 
-    elapsed_time = (time.time() - start_time) / 60
-    logger.info(f"tiling completed in {elapsed_time} minutes")
+    clean_up()
+    bpy.ops.wm.read_factory_settings(use_empty=True)
 
+    if create_tileset_json:
 
-    if tileset:
-        asset_config = None
-        asset_config_path = os.path.join(process_dir, 'images', 'config.json')
-        if os.path.exists(asset_config_path):
-            with open(asset_config_path, 'r') as f:
-                asset_config = json.load(f)
-
-        reference_lla = None
-        reference_lla_path = os.path.join(process_dir, 'reference_lla.json')
-        with open(reference_lla_path, 'r') as f:
-            reference_lla = json.load(f)
-
-        crs = asset_config.get('projection')
-        coordinates = create_tileset.reproject([ reference_lla.get('latitude', 0), reference_lla.get('longitude', 0), reference_lla.get('altitude', 0) ], 'WGS84', crs)
         config = {
             **info,
             "depth": depth,
-            "center": {
-                "coordinates": coordinates,
-                "crs": crs
-            }
+            'output_dir': output_dir,
+            'max_geometric_error': max_geometric_error
         }
 
-        tileset = create_tileset.run(config)
+        tileset = create_tileset_run(config)
 
         with open(os.path.join(output_dir, 'tileset.json'), 'w') as f:
             json.dump(tileset, f)
 
         return tileset
+
+    elapsed_time = (time.time() - start_time)
+    logger.info(f"tiling completed in {elapsed_time} seconds")

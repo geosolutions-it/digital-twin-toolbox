@@ -16,7 +16,7 @@ RUN cd / && \
     micromamba create -n $DDT_ENV python=3.11 -y && \
     micromamba install -n $DDT_ENV -c conda-forge pdal=2.8.4 -y
 
-# see https://github.com/mapillary/OpenSfM/blob/b761d315beff871c928518f6467ea2509b0855b1/Dockerfile
+# see https://github.com/mapillary/OpenSfM/blob/a5f7ec27482590913365e2c5ae42a3a8f517a395/Dockerfile
 RUN apt-get update \
     && apt-get install -y \
         git \
@@ -38,14 +38,15 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 RUN mkdir /source/ && \
-  cd /source/  && \
-  git clone --recursive https://github.com/mapillary/OpenSfM.git && \
-  cd /source/OpenSfM/ && \
-  git checkout b761d315beff871c928518f6467ea2509b0855b1
+    cd /source/ && \
+    git clone --recursive https://github.com/mapillary/OpenSfM.git && \
+    cd /source/OpenSfM/ && \
+    git checkout 8074f9fbc67ddcfc0f1726f69db288365a83ad95
+    # a5f7ec27482590913365e2c5ae42a3a8f517a395
 
 RUN cd /source/OpenSfM/ && \
-    micromamba create -n $OPENSFM_ENV python=3.8.2 -y && \
-    micromamba run -n $OPENSFM_ENV pip install -r requirements.txt && \
+    micromamba create -n $OPENSFM_ENV -y --file /source/OpenSfM/conda.yml && \
+    # micromamba run -n $OPENSFM_ENV pip install -r requirements.txt && \
     micromamba run -n $OPENSFM_ENV python setup.py build
 
 # use fix from here https://github.com/nmoehrle/mvs-texturing/pull/221
