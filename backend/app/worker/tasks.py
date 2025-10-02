@@ -26,7 +26,8 @@ from pyproj import CRS
 import time
 from concurrent.futures import ThreadPoolExecutor
 import zipfile
-import app.worker.photogrammetry.images_to_point_cloud as images_to_point_cloud
+import app.worker.photogrammetry.images_to_sparse_reconstruction as images_to_sparse_reconstruction
+import app.worker.photogrammetry.sparse_reconstruction_to_dense_point_cloud as sparse_reconstruction_to_dense_point_cloud
 import app.worker.photogrammetry.point_cloud_to_mesh as point_cloud_to_mesh
 import app.worker.photogrammetry.mesh_tiling as mesh_tiling
 
@@ -626,11 +627,17 @@ def create_reconstructed_mesh(pipeline_extended):
 
     stage = config.get('stage')
 
-    if stage == 'all' or stage == 'images_to_point_cloud':
+    if stage == 'all' or stage == 'images_to_sparse_reconstruction':
         config_overrides = {
             **config,
         }
-        images_to_point_cloud.run(process_dir, config_overrides)
+        images_to_sparse_reconstruction.run(process_dir, config_overrides)
+    
+    if stage == 'all' or stage == 'sparse_reconstruction_to_dense_point_cloud':
+        config_overrides = {
+            **config,
+        }
+        sparse_reconstruction_to_dense_point_cloud.run(process_dir, config_overrides)
 
     if stage == 'all' or stage == 'point_cloud_to_mesh':
         config_overrides = {

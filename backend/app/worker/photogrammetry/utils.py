@@ -1,25 +1,23 @@
-
 import logging
 import subprocess
 import os
 import json
-import time
-import shutil
 import sys
 import psutil
-import cv2 
 import numpy as np
-from app.worker.photogrammetry.point_cloud_to_mesh import transform_extent_to_local
 import open3d as o3d
-import app.worker.photogrammetry.mask_images as mask_images
+import cv2
+from app.worker.photogrammetry.point_cloud_to_mesh import transform_extent_to_local
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def get_OpenSfM_bin():
+    """Returns the command to run OpenSfM binaries"""
     return ['micromamba', 'run', '-n', 'opensfm', '/source/OpenSfM/bin/opensfm']
 
 def remove_if_exists(path):
+    """Remove file if it exists"""
     if os.path.exists(path):
         os.remove(path)
 
@@ -58,7 +56,7 @@ def memory_available() -> int:
 
 def get_cpu_count() -> int:
     """Returns the number of available CPU cores"""
-    return psutil.cpu_count(logical=False) or 1  
+    return psutil.cpu_count(logical=False) or 1
 
 def get_max_image_resolution(images_dir: str):
     """Get the maximum resolution of images in the directory"""
@@ -126,7 +124,30 @@ def calculate_resource_allocation(images_dir: str):
         "memory_mb": available_memory_mb
     }
 
-def create_config_for_stage(process_dir: str, config_yaml:dict):
+def calculate_depthmap_resources():
+    """Calculate optimal resource allocation for depth map computation"""
+    available_memory_mb = memory_available()
+    cpu_count = get_cpu_count()
+    
+    depthmap_processes = max(1, min(cpu_count // 2, 4))
+    depthmap_resolution = 2048  # Default resolution
+    
+    if available_memory_mb < 4000:
+        depthmap_processes = max(1, depthmap_processes - 1)
+        depthmap_resolution = 1536
+    elif available_memory_mb > 16000:
+        depthmap_resolution = 3072
+    
+    depthmap_resolution = (depthmap_resolution // 16) * 16
+    
+    logger.info(f"Depthmap resource allocation: {depthmap_processes} processes, {depthmap_resolution}px resolution")
+    
+    return {
+        "depthmap_processes": depthmap_processes,
+        "depthmap_resolution": depthmap_resolution
+    }
+
+def create_config_for_stage(process_dir: str, config_yaml: dict):
     """Update the config.yaml file for a specific pipeline stage"""
     config_path = os.path.join(process_dir, 'config.yaml')
     
@@ -140,8 +161,6 @@ def create_config_for_stage(process_dir: str, config_yaml:dict):
         f.write('\n'.join(config_updates))
     
     logger.info(f"Updated configuration for next stage: {config_updates}")
-
-
 
 def get_completed_steps(process_dir: str):
     """Read OpenSfM's profile.log to determine completed steps"""
@@ -163,6 +182,7 @@ def get_completed_steps(process_dir: str):
     return completed_steps
 
 def run_step(step_name, command, process_dir: str):
+    """Run a processing step if it hasn't been completed already"""
     completed_steps = get_completed_steps(process_dir)
     
     if step_name in completed_steps:
@@ -178,7 +198,7 @@ def run_step(step_name, command, process_dir: str):
         return False
 
 def crop_dense_point_cloud(params):
-
+    """Crop a dense point cloud using geographic bounds"""
     process_dir = params.get('process_dir')
 
     reference_lla = None
@@ -205,130 +225,3 @@ def crop_dense_point_cloud(params):
         o3d.io.write_point_cloud(dense_ply, cropped_pcd, write_ascii=True, compressed=False, print_progress=True)
     else:
         logger.info("Skip point cloud cropping")
-
-def run(process_dir, config):
-    start = time.time()
-    logger.info("Start OpenSfM process")
-    force_delete = config.get('force_delete', False)
-    auto_resolutions_computation = config.get('auto_resolutions_computation', True)
-    create_statisitcs = config.get('create_statisitcs', False)
-
-    if  force_delete:
-        logger.info("Starting fresh run - cleaning directory")
-        for f in os.listdir(process_dir):
-            if f != 'images':
-                f_path = os.path.join(process_dir, f)
-                if os.path.isfile(f_path):
-                    os.remove(f_path)
-                elif os.path.isdir(f_path):
-                    shutil.rmtree(f_path)
-    else:
-        logger.info("Resuming from previous run based on profile.log")
-
-    images_dir = os.path.join(process_dir, 'images')
-
-    resources = {
-        "processes": int(config.get('processes')),
-        "read_processes": int(config.get('read_processes')),
-        "depthmap_resolution": int(config.get('depthmap_resolution')),
-        "depthmap_processes": int(config.get('depthmap_processes')),
-        "feature_process_size": int(config.get('feature_process_size')),
-        "memory_mb": memory_available()
-    }
-
-    if auto_resolutions_computation:
-        resources = calculate_resource_allocation(images_dir)
-
-    logger.info(f"Resource allocation: {resources['processes']} processes, "
-                f"{resources['feature_process_size']} feature process size, "
-                f"{resources['depthmap_resolution']} depthmap resolution")
-
-    config_yaml = {
-        'processes': resources['processes'],
-        'read_processes': resources['read_processes'],
-        'feature_type': 'SIFT',
-        'feature_process_size': resources['feature_process_size'],
-        'feature_min_frames': 30000,
-        'sift_peak_threshold': 0.066,
-        'matcher_type': 'FLANN',
-        'flann_algorithm': 'KDTREE',
-        'matching_gps_neighbors': 0,
-        'matching_gps_distance': 0,
-        'matching_graph_rounds': 50,
-        'triangulation_type': 'ROBUST',
-        'use_exif_size': 'no',
-        'use_altitude_tag': 'yes',
-        'optimize_camera_parameters': 'yes',
-        'bundle_outlier_filtering_type': 'AUTO',
-        'align_method': 'auto',
-        'align_orientation_prior': 'vertical',
-        'local_bundle_radius': 0,
-        'bundle_use_gcp': 'no',
-        'retriangulation_ratio': 2,
-        'undistorted_image_format': 'jpg', # tif
-        'undistorted_image_max_size': int(config.get('texture_image_resolution')),
-        'depthmap_min_consistent_views': 3,
-        'depthmap_resolution': resources['depthmap_resolution']
-    }
-
-    create_config_for_stage(process_dir, config_yaml)
-
-    original_camera_models_overrides = os.path.join(images_dir, 'camera_models_overrides.json')
-    camera_models_overrides = os.path.join(process_dir, 'camera_models_overrides.json')
-    original_exif_overrides = os.path.join(images_dir, 'exif_overrides.json')
-    exif_overrides = os.path.join(process_dir, 'exif_overrides.json')
-    if os.path.exists(original_camera_models_overrides):
-        shutil.copyfile(original_camera_models_overrides, camera_models_overrides)
-    if os.path.exists(original_exif_overrides):
-        shutil.copyfile(original_exif_overrides, exif_overrides)
-
-    cmd = get_OpenSfM_bin()
-
-    if run_step('extract_metadata', cmd + ['extract_metadata', process_dir], process_dir):
-        remove_if_exists(camera_models_overrides)
-        remove_if_exists(exif_overrides)
-
-    run_step('detect_features', cmd + ['detect_features', process_dir], process_dir)
-    run_step('match_features', cmd + ['match_features', process_dir], process_dir)
-    run_step('create_tracks', cmd + ['create_tracks', process_dir], process_dir)
-    run_step('reconstruct', cmd + ['reconstruct', '--algorithm', 'triangulation', process_dir], process_dir)
-
-    mask_images.run(process_dir)
-
-    # optional
-    if create_statisitcs:
-        run_step('compute_statistics', cmd + ['compute_statistics', process_dir], process_dir)
-        run_step('export_report', cmd + ['export_report', process_dir], process_dir)
-        run_step('export_ply', cmd + ['export_ply', process_dir], process_dir)
-    # end -- optional
-
-    reconstruction = None
-    reconstruction_path = os.path.join(process_dir, 'reconstruction.json')
-    if os.path.exists(reconstruction_path):
-        with open(reconstruction_path, 'r') as f:
-            reconstruction = json.load(f)
-
-        cameras_path = os.path.join(process_dir, 'camera_models.json')
-        remove_if_exists(cameras_path)
-
-        cameras = reconstruction[0].get('cameras')
-        with open(cameras_path, 'w') as f:
-            json.dump(cameras, f, indent=4)
-
-    create_config_for_stage(process_dir, {
-        **config_yaml,
-        'processes': resources['depthmap_processes'],
-        'read_processes': resources['depthmap_processes']
-    })
-
-    run_step('undistort', cmd + ['undistort', process_dir], process_dir)
-    run_step('compute_depthmaps', cmd + ['compute_depthmaps', process_dir], process_dir)
-    run_step('export_visualsfm', cmd + ['export_visualsfm', process_dir], process_dir)
-
-    # --- end opensfm
-
-    crop_dense_point_cloud({ 'process_dir': process_dir })
-
-    end = time.time()
-    elapsed_time = end - start
-    logger.info(f"End of OpenSfM process in {elapsed_time} seconds")
