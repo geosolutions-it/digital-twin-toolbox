@@ -181,13 +181,15 @@ def get_completed_steps(process_dir: str):
     
     return completed_steps
 
-def run_step(step_name, command, process_dir: str):
+def run_step(step_name, command, process_dir: str, skip_check=False):
     """Run a processing step if it hasn't been completed already"""
-    completed_steps = get_completed_steps(process_dir)
     
-    if step_name in completed_steps:
-        logger.info(f"Skipping already completed step: {step_name}")
-        return True
+    if not skip_check:
+        completed_steps = get_completed_steps(process_dir)
+        
+        if step_name in completed_steps:
+            logger.info(f"Skipping already completed step: {step_name}")
+            return True
         
     logger.info(f"Running step: {step_name}")
     try:

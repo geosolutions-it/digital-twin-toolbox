@@ -10,7 +10,9 @@ import subprocess
 import shutil
 import time
 from concurrent.futures import ThreadPoolExecutor
-from app.worker.photogrammetry.images_to_point_cloud import run_step, create_config_for_stage, get_OpenSfM_bin
+from app.worker.photogrammetry.utils import (
+    get_OpenSfM_bin, run_step, create_config_for_stage
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -21,7 +23,7 @@ WGS84_a = 6378137.0
 WGS84_b = 6356752.314245
 
 # from opensfm
-def ecef_from_lla(lat, lon, alt):
+def ecef_from_lla(lat, lon, alt):                          
     """
     Compute ECEF XYZ from latitude, longitude and altitude.
 
@@ -440,15 +442,22 @@ def create_texture(params):
 
     depthmap_resolution = params.get('depthmap_resolution')
     texture_image_resolution = params.get('texture_image_resolution')
+    texture_image_processes = params.get('texture_image_processes', 1)
     if depthmap_resolution != texture_image_resolution:
         config_yaml = {
-            'undistorted_image_max_size': texture_image_resolution
+            'undistorted_image_max_size': texture_image_resolution,
+            'undistorted_image_format': 'jpg',
+            'processes': texture_image_processes,
+            'read_processes': texture_image_processes,
         }
         cmd = get_OpenSfM_bin()
         create_config_for_stage(process_dir, config_yaml)
-        run_step('undistort', cmd + ['undistort', process_dir], process_dir)
-        run_step('export_visualsfm', cmd + ['export_visualsfm', process_dir], process_dir)
+        undistorted_images_dir = os.path.join(process_dir, 'undistorted', 'images')
+        if os.path.exists(undistorted_images_dir):
+            shutil.rmtree(undistorted_images_dir)
+        run_step('undistort', cmd + ['undistort', process_dir], process_dir, skip_check=True)
     
+    run_step('export_visualsfm', cmd + ['export_visualsfm', process_dir], process_dir)
     output_textured_dir = params.get('output_textured_dir')
     output_textured_dir_zip = params.get('output_textured_dir_zip')
     output_ply = params.get('output_ply')
@@ -506,6 +515,7 @@ def run(process_dir, config):
 
     depthmap_resolution = config.get("depthmap_resolution", 1024)
     texture_image_resolution = config.get('texture_image_resolution', 4096)
+    texture_image_processes = config.get('texture_image_processes', 1)
     params = {
         **config,
         'process_dir': process_dir,
@@ -516,7 +526,8 @@ def run(process_dir, config):
         'output_textured_dir_zip': output_textured_dir_zip,
         'point_cloud_process_max_workers': point_cloud_process_max_workers,
         'depthmap_resolution': depthmap_resolution,
-        'texture_image_resolution': texture_image_resolution
+        'texture_image_resolution': texture_image_resolution,
+        'texture_image_processes': texture_image_processes
     }
 
     if force_delete or not os.path.exists(output_xyz):
