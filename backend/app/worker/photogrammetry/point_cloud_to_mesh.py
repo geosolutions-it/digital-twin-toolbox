@@ -10,6 +10,7 @@ import subprocess
 import shutil
 import time
 from concurrent.futures import ThreadPoolExecutor
+from app.worker.photogrammetry.images_to_point_cloud import run_step, create_config_for_stage, get_OpenSfM_bin
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -436,6 +437,18 @@ def create_texture(params):
     """Create textured mesh"""
 
     process_dir = params.get('process_dir')
+
+    depthmap_resolution = params.get('depthmap_resolution')
+    texture_image_resolution = params.get('texture_image_resolution')
+    if depthmap_resolution != texture_image_resolution:
+        config_yaml = {
+            'undistorted_image_max_size': texture_image_resolution
+        }
+        cmd = get_OpenSfM_bin()
+        create_config_for_stage(process_dir, config_yaml)
+        run_step('undistort', cmd + ['undistort', process_dir], process_dir)
+        run_step('export_visualsfm', cmd + ['export_visualsfm', process_dir], process_dir)
+    
     output_textured_dir = params.get('output_textured_dir')
     output_textured_dir_zip = params.get('output_textured_dir_zip')
     output_ply = params.get('output_ply')
@@ -490,6 +503,9 @@ def run(process_dir, config):
         logger.info("Resuming from previous run based on existing outputs")
 
     point_cloud_process_max_workers = 16
+
+    depthmap_resolution = config.get("depthmap_resolution", 1024)
+    texture_image_resolution = config.get('texture_image_resolution', 4096)
     params = {
         **config,
         'process_dir': process_dir,
@@ -498,7 +514,9 @@ def run(process_dir, config):
         'output_ply': output_ply,
         'output_textured_dir': output_textured_dir,
         'output_textured_dir_zip': output_textured_dir_zip,
-        'point_cloud_process_max_workers': point_cloud_process_max_workers
+        'point_cloud_process_max_workers': point_cloud_process_max_workers,
+        'depthmap_resolution': depthmap_resolution,
+        'texture_image_resolution': texture_image_resolution
     }
 
     if force_delete or not os.path.exists(output_xyz):
