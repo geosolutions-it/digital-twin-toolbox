@@ -299,8 +299,11 @@ function PhotogrammetryCanvas({
               <option value={'all'}>
                 All
               </option>
-              <option value={'images_to_point_cloud'}>
-                Images to point cloud
+              <option value={'images_to_sparse_reconstruction'}>
+                Images to sparse reconstruction
+              </option>
+              <option value={'sparse_reconstruction_to_dense_point_cloud'}>
+                Sparse reconstruction to dense point cloud
               </option>
               <option value={'point_cloud_to_mesh'}>
                 Point cloud to mesh

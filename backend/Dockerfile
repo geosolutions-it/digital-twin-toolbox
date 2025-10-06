@@ -84,7 +84,9 @@ COPY ./tests-start.sh /app/
 COPY ./app /app/app
 
 RUN mv /app/celery-reload.sh /celery-reload.sh && \
-    mv /app/celery.sh /celery.sh
+    mv /app/celery.sh /celery.sh && \
+    chmod +x /celery-reload.sh && \
+    chmod +x /celery.sh
 
 # Install node
 ARG NODE_VERSION=20.11.1
