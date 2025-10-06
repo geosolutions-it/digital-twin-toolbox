@@ -126,6 +126,7 @@ function PhotogrammetryCanvas({
     read_processes: 4,
     depthmap_processes: 1,
     texture_image_resolution: 4096,
+    texture_image_processes: 1,
     ...pipeline.data,
   })
 
@@ -399,6 +400,20 @@ function PhotogrammetryCanvas({
               defaultValue={data?.texture_image_resolution}
               onChange={(event) =>
                 handleOnChange("texture_image_resolution", parseInt(event.target.value))
+              }
+            />
+          </FormControl>
+          <FormControl mt={2} mb={2} >
+            <FormLabel fontSize="xs" htmlFor="texture_image_processes">
+              Texture image processes
+            </FormLabel>
+            <Input
+              id="texture_image_processes"
+              size="xs"
+              type="number"
+              defaultValue={data?.texture_image_processes}
+              onChange={(event) =>
+                handleOnChange("texture_image_processes", parseInt(event.target.value))
               }
             />
           </FormControl>
