@@ -140,8 +140,8 @@ def export_gltf(filepath):
     bpy.ops.export_scene.gltf(
         filepath=filepath,
         export_image_format='WEBP',
-        # export_image_quality=export_image_quality,
-        # export_jpeg_quality=export_image_quality,
+        export_image_quality=75,
+        export_jpeg_quality=75,
         
         use_selection=True,
         export_format="GLB",
