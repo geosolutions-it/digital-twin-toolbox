@@ -351,6 +351,13 @@ def split_tile(params):
 
     export_gltf(filepath)
 
+    logger.info(f"Re-importing and further decimating {filepath}")
+    bpy.ops.import_scene.gltf(filepath=filepath)
+    decimated_obj = bpy.context.selected_objects[0]
+    bpy.context.view_layer.objects.active = decimated_obj
+    decimate_obj(decimated_obj, tile_faces_target)
+    export_gltf(filepath)
+    remove_obj(decimated_obj)
     remove_obj(tile)
     return
 
