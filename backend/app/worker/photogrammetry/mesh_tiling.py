@@ -140,8 +140,8 @@ def export_gltf(filepath):
     bpy.ops.export_scene.gltf(
         filepath=filepath,
         export_image_format='WEBP',
-        # export_image_quality=export_image_quality,
-        # export_jpeg_quality=export_image_quality,
+        export_image_quality=75,
+        export_jpeg_quality=75,
         
         use_selection=True,
         export_format="GLB",
@@ -216,6 +216,7 @@ def decimate_obj(obj, _faces_target):
         decimate.ratio = ratio
         decimate.use_collapse_triangulate = True
         bpy.ops.object.modifier_apply(modifier="decimate")
+        logger.info(f"Updated object faces: {len(obj.data.polygons)}")
 
 def split_tile(params):
 
@@ -235,6 +236,7 @@ def split_tile(params):
     location_and_rotation = params.get('location_and_rotation')
     transform = params.get('transform')
     tile_size = params.get('tile_size')
+    default_mat = params.get('default_mat')
 
     for obj in bpy.context.scene.objects:
         obj.select_set(False)
@@ -300,6 +302,20 @@ def split_tile(params):
 
     if should_decimate and tile_faces_target and tile_faces_target > 0:
         decimate_obj(tile, tile_faces_target)
+        if len(tile.data.polygons) > tile_faces_target:
+            tile.data.materials.clear()
+            export_gltf(filepath)
+            remove_obj(tile)
+            bpy.ops.import_scene.gltf(filepath=filepath)
+            tile = bpy.context.object
+            tile.name = 'tile'
+            tile.hide_render = False
+            bpy.ops.object.select_all(action="DESELECT")
+            tile.select_set(True)
+            bpy.context.view_layer.objects.active = tile
+            decimate_obj(tile, tile_faces_target)
+            tile.data.materials.clear()
+            tile.data.materials.append(default_mat)
 
     # unwrap the uv
     try:
@@ -351,13 +367,6 @@ def split_tile(params):
 
     export_gltf(filepath)
 
-    logger.info(f"Re-importing and further decimating {filepath}")
-    bpy.ops.import_scene.gltf(filepath=filepath)
-    decimated_obj = bpy.context.selected_objects[0]
-    bpy.context.view_layer.objects.active = decimated_obj
-    decimate_obj(decimated_obj, tile_faces_target)
-    export_gltf(filepath)
-    remove_obj(decimated_obj)
     remove_obj(tile)
     return
 
@@ -507,6 +516,7 @@ def run(params):
                     'name': tile_name,
                     'bake_img': bake_img,
                     'bake_mat': bake_mat,
+                    'default_mat': mat,
                     'target_model': target_model,
                     'tile_faces_target': tile_faces_target,
                     'should_decimate': should_decimate,
