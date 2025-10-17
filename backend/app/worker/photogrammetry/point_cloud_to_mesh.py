@@ -13,6 +13,11 @@ from concurrent.futures import ThreadPoolExecutor
 from app.worker.photogrammetry.utils import (
     get_OpenSfM_bin, run_step, create_config_for_stage
 )
+from app.worker.photogrammetry.mesh_tiling import(
+    import_mesh, clean_up
+)
+import bpy
+import bmesh
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -253,12 +258,10 @@ def get_transformation_matrix(reference_lla, projection):
     t_inv = np.linalg.inv(t)
     return [t, t_inv]
 
-def transform_extent_to_local(reference_lla, config):
+def transform_extent_to_local(reference_lla, extent, projection):
 
-    if not config or not reference_lla:
+    if not extent or not reference_lla:
         return None
-    projection = config.get('projection')
-    extent = config.get('extent')
     if not projection or not extent:
         return None
     pyproj_projection = pyproj.Proj(projection)
@@ -495,6 +498,75 @@ def create_texture(params):
     
     logger.info("Created textured")
 
+def crop_textured_mesh(params):
+    """Crop textured mesh based on extent configuration"""
+
+    process_dir = params.get('process_dir')
+
+    reference_lla = None
+    reference_lla_path = os.path.join(process_dir, 'reference_lla.json')
+    with open(reference_lla_path, 'r') as f:
+        reference_lla = json.load(f)
+
+    config = None
+    config_path = os.path.join(process_dir, 'images', 'config.json')
+    if os.path.exists(config_path):
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+
+    extent = config.get('extent_mesh')
+
+    if extent:
+        projection = config.get('projection')
+        bbox = transform_extent_to_local(reference_lla, extent, projection)
+        output_textured_dir = params.get('output_textured_dir')
+        output_textured_dir_zip = params.get('output_textured_dir_zip')
+        input_file = os.path.join(output_textured_dir, 'mesh.obj')
+
+        if not os.path.exists(input_file):
+            logger.warning(f"Mesh file not found at {obj_path}")
+            return
+
+        # Blender part
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+        clean_up()
+        merged, info = import_mesh(input_file)
+        bpy.ops.object.mode_set(mode='EDIT')
+        bm = bmesh.from_edit_mesh(merged.data)
+        verts_to_remove = []
+        for vert in bm.verts:
+            # Get world coordinates
+            world_co = merged.matrix_world @ vert.co
+            
+            # Check if vertex is outside bounding box (X and Y only, ignore Z)
+            if (world_co.x < bbox[0] or world_co.x > bbox[2] or 
+                world_co.y < bbox[1] or world_co.y > bbox[3]):
+                verts_to_remove.append(vert)
+        
+        if verts_to_remove:
+            bmesh.ops.delete(bm, geom=verts_to_remove, context='VERTS')
+        
+        bmesh.update_edit_mesh(merged.data)
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.select_all(action='DESELECT')
+        merged.select_set(True)
+        bpy.context.view_layer.objects.active = merged
+        bpy.ops.wm.obj_export(
+            filepath=input_file,
+            export_selected_objects=True,
+            export_uv=True,
+            export_normals=True,
+            export_colors=True,
+            export_materials=True,
+            forward_axis='Y', 
+            up_axis='Z'
+        )
+        if os.path.exists(output_textured_dir_zip):
+            os.remove(output_textured_dir_zip)
+        shutil.make_archive(output_textured_dir.rstrip('/'), 'zip', output_textured_dir)
+        logger.info("Created new textured mesh archive")
+
+
 def run(process_dir, config):
     start = time.time()
     logger.info("Starting mesh generation process")
@@ -529,13 +601,14 @@ def run(process_dir, config):
         'texture_image_resolution': texture_image_resolution,
         'texture_image_processes': texture_image_processes
     }
-
+    logger.info(params)
     if force_delete or not os.path.exists(output_xyz):
         process_point_cloud(params)
     if force_delete or not os.path.exists(output_ply):
         create_mesh(params)
     if force_delete or not os.path.exists(output_textured_dir):
         create_texture(params)
+        crop_textured_mesh(params)
 
     end = time.time()
     elapsed_time = end - start

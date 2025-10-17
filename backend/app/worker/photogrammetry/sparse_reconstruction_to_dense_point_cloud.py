@@ -29,8 +29,9 @@ def crop_dense_point_cloud(params):
     if os.path.exists(config_path):
         with open(config_path, 'r') as f:
             config = json.load(f)
-
-    bbox = transform_extent_to_local(reference_lla, config)
+    extent = config.get('extent')
+    projection = config.get('projection')
+    bbox = transform_extent_to_local(reference_lla, extent, projection)
 
     if bbox:
         logger.info("Cropping dense point cloud")
