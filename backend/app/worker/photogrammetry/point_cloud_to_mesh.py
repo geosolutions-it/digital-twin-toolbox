@@ -524,7 +524,7 @@ def crop_textured_mesh(params):
         input_file = os.path.join(output_textured_dir, 'mesh.obj')
 
         if not os.path.exists(input_file):
-            logger.warning(f"Mesh file not found at {obj_path}")
+            logger.warning(f"Mesh file not found at {input_file}")
             return
 
         # Blender part
