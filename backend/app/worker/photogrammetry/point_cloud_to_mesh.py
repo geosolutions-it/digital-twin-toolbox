@@ -14,10 +14,8 @@ from app.worker.photogrammetry.utils import (
     get_OpenSfM_bin, run_step, create_config_for_stage
 )
 from app.worker.photogrammetry.mesh_tiling import(
-    import_mesh, clean_up
+    crop_mesh
 )
-import bpy
-import bmesh
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -460,7 +458,10 @@ def create_texture(params):
             shutil.rmtree(undistorted_images_dir)
         run_step('undistort', cmd + ['undistort', process_dir], process_dir, skip_check=True)
     
-    run_step('export_visualsfm', cmd + ['export_visualsfm', process_dir], process_dir)
+    visual_sfm_path = os.path.join(process_dir, 'undistorted', 'reconstruction.nvm')
+    if os.path.exists(visual_sfm_path):
+        os.remove(visual_sfm_path)
+    run_step('export_visualsfm', cmd + ['export_visualsfm', process_dir], process_dir, skip_check=True)
     output_textured_dir = params.get('output_textured_dir')
     output_textured_dir_zip = params.get('output_textured_dir_zip')
     output_ply = params.get('output_ply')
@@ -497,75 +498,6 @@ def create_texture(params):
         shutil.make_archive(output_textured_dir, 'zip', output_textured_dir)
     
     logger.info("Created textured")
-
-def crop_textured_mesh(params):
-    """Crop textured mesh based on extent configuration"""
-
-    process_dir = params.get('process_dir')
-
-    reference_lla = None
-    reference_lla_path = os.path.join(process_dir, 'reference_lla.json')
-    with open(reference_lla_path, 'r') as f:
-        reference_lla = json.load(f)
-
-    config = None
-    config_path = os.path.join(process_dir, 'images', 'config.json')
-    if os.path.exists(config_path):
-        with open(config_path, 'r') as f:
-            config = json.load(f)
-
-    extent = config.get('extent_mesh')
-
-    if extent:
-        projection = config.get('projection')
-        bbox = transform_extent_to_local(reference_lla, extent, projection)
-        output_textured_dir = params.get('output_textured_dir')
-        output_textured_dir_zip = params.get('output_textured_dir_zip')
-        input_file = os.path.join(output_textured_dir, 'mesh.obj')
-
-        if not os.path.exists(input_file):
-            logger.warning(f"Mesh file not found at {input_file}")
-            return
-
-        # Blender part
-        bpy.ops.wm.read_factory_settings(use_empty=True)
-        clean_up()
-        merged, info = import_mesh(input_file)
-        bpy.ops.object.mode_set(mode='EDIT')
-        bm = bmesh.from_edit_mesh(merged.data)
-        verts_to_remove = []
-        for vert in bm.verts:
-            # Get world coordinates
-            world_co = merged.matrix_world @ vert.co
-            
-            # Check if vertex is outside bounding box (X and Y only, ignore Z)
-            if (world_co.x < bbox[0] or world_co.x > bbox[2] or 
-                world_co.y < bbox[1] or world_co.y > bbox[3]):
-                verts_to_remove.append(vert)
-        
-        if verts_to_remove:
-            bmesh.ops.delete(bm, geom=verts_to_remove, context='VERTS')
-        
-        bmesh.update_edit_mesh(merged.data)
-        bpy.ops.object.mode_set(mode='OBJECT')
-        bpy.ops.object.select_all(action='DESELECT')
-        merged.select_set(True)
-        bpy.context.view_layer.objects.active = merged
-        bpy.ops.wm.obj_export(
-            filepath=input_file,
-            export_selected_objects=True,
-            export_uv=True,
-            export_normals=True,
-            export_colors=True,
-            export_materials=True,
-            forward_axis='Y', 
-            up_axis='Z'
-        )
-        if os.path.exists(output_textured_dir_zip):
-            os.remove(output_textured_dir_zip)
-        shutil.make_archive(output_textured_dir.rstrip('/'), 'zip', output_textured_dir)
-        logger.info("Created new textured mesh archive")
-
 
 def run(process_dir, config):
     start = time.time()
@@ -608,7 +540,32 @@ def run(process_dir, config):
         create_mesh(params)
     if force_delete or not os.path.exists(output_textured_dir):
         create_texture(params)
-        crop_textured_mesh(params)
+    
+        config = None
+    config_path = os.path.join(process_dir, 'images', 'config.json')
+    if os.path.exists(config_path):
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+    
+    if config.get('extent_mesh'):
+        logger.info("Cropping mesh based on extent configuration")
+        reference_lla = None
+        reference_lla_path = os.path.join(process_dir, 'reference_lla.json')
+        with open(reference_lla_path, 'r') as f:
+            reference_lla = json.load(f)
+        extent = config.get('extent_mesh')
+        projection = config.get('projection')
+        bbox = transform_extent_to_local(reference_lla, extent, projection)
+        input_file = os.path.join(output_textured_dir, 'mesh.obj')
+
+        if os.path.exists(input_file):
+
+            crop_mesh(input_file, bbox)
+
+            if os.path.exists(output_textured_dir_zip):
+                os.remove(output_textured_dir_zip)
+            shutil.make_archive(output_textured_dir.rstrip('/'), 'zip', output_textured_dir)
+            logger.info("Created new textured mesh archive")
 
     end = time.time()
     elapsed_time = end - start
