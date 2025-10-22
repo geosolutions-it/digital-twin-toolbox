@@ -541,7 +541,7 @@ def run(process_dir, config):
     if force_delete or not os.path.exists(output_textured_dir):
         create_texture(params)
     
-        config = None
+    config = None
     config_path = os.path.join(process_dir, 'images', 'config.json')
     if os.path.exists(config_path):
         with open(config_path, 'r') as f:
