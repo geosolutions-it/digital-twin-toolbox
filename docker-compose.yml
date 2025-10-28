@@ -103,7 +103,7 @@ services:
       - traefik.http.routers.${STACK_NAME?Variable not set}-backend-https.middlewares=${STACK_NAME?Variable not set}-www-redirect
 
   redis:
-    image: redis:7
+    image: redis:7.2.11
 
   worker:
     restart: always
