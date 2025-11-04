@@ -13,6 +13,9 @@ from concurrent.futures import ThreadPoolExecutor
 from app.worker.photogrammetry.utils import (
     get_OpenSfM_bin, run_step, create_config_for_stage
 )
+from app.worker.photogrammetry.mesh_tiling import(
+    crop_mesh
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -253,12 +256,10 @@ def get_transformation_matrix(reference_lla, projection):
     t_inv = np.linalg.inv(t)
     return [t, t_inv]
 
-def transform_extent_to_local(reference_lla, config):
+def transform_extent_to_local(reference_lla, extent, projection):
 
-    if not config or not reference_lla:
+    if not extent or not reference_lla:
         return None
-    projection = config.get('projection')
-    extent = config.get('extent')
     if not projection or not extent:
         return None
     pyproj_projection = pyproj.Proj(projection)
@@ -457,7 +458,10 @@ def create_texture(params):
             shutil.rmtree(undistorted_images_dir)
         run_step('undistort', cmd + ['undistort', process_dir], process_dir, skip_check=True)
     
-    run_step('export_visualsfm', cmd + ['export_visualsfm', process_dir], process_dir)
+    visual_sfm_path = os.path.join(process_dir, 'undistorted', 'reconstruction.nvm')
+    if os.path.exists(visual_sfm_path):
+        os.remove(visual_sfm_path)
+    run_step('export_visualsfm', cmd + ['export_visualsfm', process_dir], process_dir, skip_check=True)
     output_textured_dir = params.get('output_textured_dir')
     output_textured_dir_zip = params.get('output_textured_dir_zip')
     output_ply = params.get('output_ply')
@@ -529,13 +533,39 @@ def run(process_dir, config):
         'texture_image_resolution': texture_image_resolution,
         'texture_image_processes': texture_image_processes
     }
-
+    logger.info(params)
     if force_delete or not os.path.exists(output_xyz):
         process_point_cloud(params)
     if force_delete or not os.path.exists(output_ply):
         create_mesh(params)
     if force_delete or not os.path.exists(output_textured_dir):
         create_texture(params)
+    
+    config = None
+    config_path = os.path.join(process_dir, 'images', 'config.json')
+    if os.path.exists(config_path):
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+    
+    if config.get('extent_mesh'):
+        logger.info("Cropping mesh based on extent configuration")
+        reference_lla = None
+        reference_lla_path = os.path.join(process_dir, 'reference_lla.json')
+        with open(reference_lla_path, 'r') as f:
+            reference_lla = json.load(f)
+        extent = config.get('extent_mesh')
+        projection = config.get('projection')
+        bbox = transform_extent_to_local(reference_lla, extent, projection)
+        input_file = os.path.join(output_textured_dir, 'mesh.obj')
+
+        if os.path.exists(input_file):
+
+            crop_mesh(input_file, bbox)
+
+            if os.path.exists(output_textured_dir_zip):
+                os.remove(output_textured_dir_zip)
+            shutil.make_archive(output_textured_dir.rstrip('/'), 'zip', output_textured_dir)
+            logger.info("Created new textured mesh archive")
 
     end = time.time()
     elapsed_time = end - start
