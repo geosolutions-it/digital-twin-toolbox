@@ -205,6 +205,18 @@ def export_gltf(filepath):
         export_nla_strips=False
     )
 
+def export_obj(filepath):
+    bpy.ops.wm.obj_export(
+        filepath=filepath,
+        export_selected_objects=True,
+        export_uv=True,
+        export_normals=True,
+        export_colors=True,
+        export_materials=True,
+        forward_axis='Y', 
+        up_axis='Z'
+    )
+
 def decimate_obj(obj, _faces_target):
     ratio = _faces_target / len(obj.data.polygons)
     logger.info(f"Object faces: {len(obj.data.polygons)}")
@@ -237,6 +249,8 @@ def split_tile(params):
     transform = params.get('transform')
     tile_size = params.get('tile_size')
     default_mat = params.get('default_mat')
+    export_asset = params.get('export_asset')
+    unwrap_uv = params.get('unwrap_uv')
 
     for obj in bpy.context.scene.objects:
         obj.select_set(False)
@@ -284,16 +298,6 @@ def split_tile(params):
     tile.select_set(True)
     bpy.context.view_layer.objects.active = tile
 
-    tile_info = {
-        'center': [
-            center[0],
-            center[1],
-            center_z
-        ],
-        'transform': transform,
-        'size': [tile_size[0], tile_size[1], tile.dimensions[2]]
-    }
-
     merge_vertices()
 
     if len(tile.data.polygons) == 0:
@@ -318,42 +322,53 @@ def split_tile(params):
             tile.data.materials.append(default_mat)
 
     # unwrap the uv
-    try:
-        bpy.ops.object.editmode_toggle()
-        bpy.ops.mesh.select_all(action = 'SELECT')
-        bpy.ops.uv.smart_project()
-        bpy.ops.object.editmode_toggle()
-    except:
-        logger.error(f'Skip: bpy.ops.uv.smart_project failing for {name}')
-        return
+    if unwrap_uv:
+        try:
+            bpy.ops.object.editmode_toggle()
+            bpy.ops.mesh.select_all(action = 'SELECT')
+            bpy.ops.uv.smart_project()
+            bpy.ops.object.editmode_toggle()
+        except:
+            logger.error(f'Skip: bpy.ops.uv.smart_project failing for {name}')
+            return
 
-    bake_img.select = True
-    mat = tile.material_slots[0].material
-    mat.node_tree.nodes.active = bake_img
+    if bake_img and bake_mat:
+        logger.info(f"Baking texture for tile {name}")
+        bake_img.select = True
+        mat = tile.material_slots[0].material
+        mat.node_tree.nodes.active = bake_img
 
-    # bake texture to texture
-    if target_model:
-        target_model.hide_render = False
-        target_model.select_set(True)
-        bpy.context.scene.cycles.bake_type = 'DIFFUSE'
-        bpy.context.scene.render.bake.use_selected_to_active = True
-        bpy.context.scene.render.bake.cage_extrusion = cage_extrusion # (m) to avoid black pixels
-        bpy.ops.object.bake(type='DIFFUSE',use_clear=False)
-        target_model.select_set(False)
-        target_model.hide_render = True
+        # bake texture to texture
+        if target_model:
+            target_model.hide_render = False
+            target_model.select_set(True)
+            bpy.context.scene.cycles.bake_type = 'DIFFUSE'
+            bpy.context.scene.render.bake.use_selected_to_active = True
+            bpy.context.scene.render.bake.cage_extrusion = cage_extrusion # (m) to avoid black pixels
+            bpy.ops.object.bake(type='DIFFUSE',use_clear=False)
+            target_model.select_set(False)
+            target_model.hide_render = True
 
-    # remove all material from tile copy
-    tile.data.materials.clear()
+        # remove all material from tile copy
+        tile.data.materials.clear()
 
-    texture_node = bake_mat.node_tree.nodes.get('TileImageNode')
-    texture_node.image = bake_img.image
-    # apply the bake material
-    tile.data.materials.append(bake_mat)
+        texture_node = bake_mat.node_tree.nodes.get('TileImageNode')
+        texture_node.image = bake_img.image
+        # apply the bake material
+        tile.data.materials.append(bake_mat)
 
     tile.name = name
 
     if apply_transform:
-
+        tile_info = {
+            'center': [
+                center[0],
+                center[1],
+                center_z
+            ],
+            'transform': transform,
+            'size': [tile_size[0], tile_size[1], tile.dimensions[2]]
+        }
         with open(filepath.replace('.glb', '.json'), 'w') as f:
             json.dump(tile_info, f)
 
@@ -365,7 +380,7 @@ def split_tile(params):
         tile.location.y = location[1]
         tile.location.z = location[2]
 
-    export_gltf(filepath)
+    export_asset(filepath)
 
     remove_obj(tile)
     return
@@ -387,6 +402,46 @@ def cut_mesh(left, top, w_unit, h_unit, size):
         
     bmesh.update_edit_mesh(bpy.context.object.data)
     bm.free()
+
+def crop_mesh(input_file,bbox):
+    if not bbox:
+        logger.info("Skip mesh cropping")
+        return
+    
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    clean_up()
+    merged, info = import_mesh(input_file)
+    left = bbox[0] 
+    top = bbox[3] 
+    width = bbox[2] - bbox[0]  # maxx - minx
+    height = bbox[3] - bbox[1]  # maxy - miny
+
+    cut_mesh(left, top, width, height, 1)
+
+    # Back to select mode
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_mode(type="VERT")
+    bpy.ops.mesh.select_all(action = 'DESELECT')
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    split_params = {
+        'bbox': (bbox[0], bbox[1], bbox[2], bbox[3]), 
+        'margin': 0,  
+        'filepath': input_file, 
+        'name': 'clipped_mesh',
+        'target':merged,
+        'should_decimate':False,
+        'apply_transform': False,
+        'export_asset': export_obj,
+        'bake_img': None,
+        'target_model': None,
+        'bake_mat': None,
+        'unwrap_uv': False
+    }
+    split_tile(split_params)
+    remove_obj(merged)
+    clean_up()
+    bpy.ops.wm.read_factory_settings(use_empty=True)
 
 def run(params):
 
@@ -517,6 +572,7 @@ def run(params):
                     'bake_img': bake_img,
                     'bake_mat': bake_mat,
                     'default_mat': mat,
+                    'unwrap_uv': True,
                     'target_model': target_model,
                     'tile_faces_target': tile_faces_target,
                     'should_decimate': should_decimate,
@@ -525,7 +581,8 @@ def run(params):
                     'location_and_rotation': location_and_rotation,
                     'transform': transform,
                     'center': [center_x, center_y, 0],
-                    'tile_size': [w_unit, h_unit]
+                    'tile_size': [w_unit, h_unit],
+                    'export_asset': export_gltf
                 })
                 elapsed_time = (time.time() - tile_start_time)
                 logger.info(f"tile {tile_name} completed in {elapsed_time} seconds")

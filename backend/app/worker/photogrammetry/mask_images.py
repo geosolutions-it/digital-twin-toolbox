@@ -38,8 +38,9 @@ def run(process_dir):
 
     if config:
         extent = config.get('extent')
+        projection = config.get('projection')
         if extent and len(extent) > 5:
-            local_extent = transform_extent_to_local(reference_lla, config)
+            local_extent = transform_extent_to_local(reference_lla, extent, projection)
             zmin = extent[4]
             zmax = extent[5]
             points = np.array([
