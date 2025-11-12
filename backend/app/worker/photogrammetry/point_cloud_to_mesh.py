@@ -444,6 +444,7 @@ def create_texture(params):
     depthmap_resolution = params.get('depthmap_resolution')
     texture_image_resolution = params.get('texture_image_resolution')
     texture_image_processes = params.get('texture_image_processes', 1)
+    cmd = get_OpenSfM_bin()
     if depthmap_resolution != texture_image_resolution:
         config_yaml = {
             'undistorted_image_max_size': texture_image_resolution,
@@ -451,7 +452,6 @@ def create_texture(params):
             'processes': texture_image_processes,
             'read_processes': texture_image_processes,
         }
-        cmd = get_OpenSfM_bin()
         create_config_for_stage(process_dir, config_yaml)
         undistorted_images_dir = os.path.join(process_dir, 'undistorted', 'images')
         if os.path.exists(undistorted_images_dir):

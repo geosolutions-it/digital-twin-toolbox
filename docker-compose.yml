@@ -137,6 +137,7 @@ services:
       - SENTRY_DSN=${SENTRY_DSN}
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - CELERY_WORKER_CONCURRENCY=${CELERY_WORKER_CONCURRENCY?Variable not set}
       - ASSETS_DATA=/mnt/assets
       - PGPASSWORD=${POSTGRES_PASSWORD?Variable not set}
     depends_on:

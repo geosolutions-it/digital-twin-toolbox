@@ -80,6 +80,13 @@ def run(process_dir, config):
     camera_models_overrides = os.path.join(process_dir, 'camera_models_overrides.json')
     original_exif_overrides = os.path.join(images_dir, 'exif_overrides.json')
     exif_overrides = os.path.join(process_dir, 'exif_overrides.json')
+
+    original_masks_directory = os.path.join(images_dir, 'masks')
+    masks_directory = os.path.join(process_dir, 'masks')
+
+    if os.path.exists(original_masks_directory):
+        shutil.copytree(original_masks_directory, masks_directory, dirs_exist_ok=True)
+
     if os.path.exists(original_camera_models_overrides):
         shutil.copyfile(original_camera_models_overrides, camera_models_overrides)
     if os.path.exists(original_exif_overrides):
