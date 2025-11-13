@@ -218,7 +218,7 @@ def create_asset(session, file_info, current_user, to_ellipsoidal_height):
                 filename = filename.replace('.zip', '.shp.zip')
                 extension = "".join(Path(filename).suffixes)
             else:
-                if not all(ext in ['.jpg', '.json'] for ext in zip_file_extensions):
+                if not all(ext in ['.jpg', '.json', '.jpg.png', '.png', ''] for ext in zip_file_extensions):
                     raise HTTPException(status_code=500, detail=f"Not supported file, empty zip file")
                 else:
                     filename = filename.replace('.zip', '.phg.zip')

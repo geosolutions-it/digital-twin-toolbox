@@ -603,6 +603,8 @@ def create_reconstructed_mesh(pipeline_extended):
         os.makedirs(images_dir, exist_ok=True)
         with zipfile.ZipFile(asset_file_path, 'r') as zip_ref:
             zip_ref.extractall(images_dir)
+        with open(os.path.join(images_dir, "asset_info.txt"), "w") as f:
+            f.write(f"{asset.get('filename')}")
 
     pipeline_config = {}
     if pipeline_extended['data']:
