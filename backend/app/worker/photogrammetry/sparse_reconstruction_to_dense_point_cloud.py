@@ -55,8 +55,6 @@ def run(process_dir, config):
     if not os.path.exists(reconstruction_path):
         logger.error("Sparse reconstruction not found. Run images_to_sparse_reconstruction first.")
         return False
-    
-    mask_images.run(process_dir)
 
     depthmap_resolution = config.get("depthmap_resolution", 1024)
     depthmap_processes = config.get("depthmap_processes", 1)
@@ -65,7 +63,7 @@ def run(process_dir, config):
         resources = calculate_depthmap_resources()
         depthmap_processes = resources["depthmap_processes"]
         depthmap_resolution = resources["depthmap_resolution"]
-    
+
     config_yaml = {
         'processes': depthmap_processes,
         'read_processes': depthmap_processes,
@@ -78,9 +76,9 @@ def run(process_dir, config):
     create_config_for_stage(process_dir, config_yaml)
     
     cmd = get_OpenSfM_bin()
-    
 
     run_step('undistort', cmd + ['undistort', process_dir], process_dir)
+    mask_images.run(process_dir)
     run_step('compute_depthmaps', cmd + ['compute_depthmaps', process_dir], process_dir)
     
     crop_dense_point_cloud({'process_dir': process_dir})

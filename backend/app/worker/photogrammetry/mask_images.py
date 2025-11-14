@@ -82,7 +82,7 @@ def run(process_dir):
                         dist_coeffs)
                     hull = cv2.convexHull(points_2d)
 
-                    img = cv2.imread(os.path.join(process_dir, 'images', key))
+                    img = cv2.imread(os.path.join(process_dir, 'undistorted', 'images', key))
                     height, width = img.shape[:2]
                     resolution = max(height, width)
                     mask_img = np.zeros((height, width, 3), np.uint8)
