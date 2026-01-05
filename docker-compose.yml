@@ -185,11 +185,6 @@ services:
 volumes:
   app-db-data:
   app-assets-data:
-    driver: local
-    driver_opts:
-      o: bind
-      type: none
-      device: /mnt/processing/workspace/assets # /mnt/comunefi_data_output
 
 networks:
   traefik-public:
