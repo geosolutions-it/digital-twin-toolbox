@@ -108,6 +108,13 @@ services:
 
   worker:
     restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: 10m
+        max-file: "3"
+        labels: "worker_status"
+        env: "os"
     volumes:
       - app-assets-data:/mnt/assets
     image: '${DOCKER_IMAGE_BACKEND?Variable not set}:${TAG-latest}'
@@ -178,6 +185,11 @@ services:
 volumes:
   app-db-data:
   app-assets-data:
+    driver: local
+    driver_opts:
+      o: bind
+      type: none
+      device: /mnt/processing/workspace/assets # /mnt/comunefi_data_output
 
 networks:
   traefik-public:
