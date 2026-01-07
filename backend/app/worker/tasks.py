@@ -597,15 +597,6 @@ def create_reconstructed_mesh(pipeline_extended):
 
     output_paths = setup_output_directory(pipeline_id)
 
-    process_dir = f"{output_paths['output_path']}/process"
-    if not os.path.exists(process_dir):
-        images_dir = f"{process_dir}/images"
-        os.makedirs(images_dir, exist_ok=True)
-        with zipfile.ZipFile(asset_file_path, 'r') as zip_ref:
-            zip_ref.extractall(images_dir)
-        with open(os.path.join(images_dir, "asset_info.txt"), "w") as f:
-            f.write(f"{asset.get('filename')}")
-
     pipeline_config = {}
     if pipeline_extended['data']:
         pipeline_config = pipeline_extended['data']
@@ -629,6 +620,19 @@ def create_reconstructed_mesh(pipeline_extended):
     }
 
     stage = config.get('stage')
+
+    process_dir = f"{output_paths['output_path']}/process"
+
+    if stage == 'all' and config.get('force_delete'):
+        shutil.rmtree(process_dir)
+
+    if not os.path.exists(process_dir):
+        images_dir = f"{process_dir}/images"
+        os.makedirs(images_dir, exist_ok=True)
+        with zipfile.ZipFile(asset_file_path, 'r') as zip_ref:
+            zip_ref.extractall(images_dir)
+        with open(os.path.join(images_dir, "asset_info.txt"), "w") as f:
+            f.write(f"{asset.get('filename')}")
 
     if stage == 'all' or stage == 'images_to_sparse_reconstruction':
         config_overrides = {

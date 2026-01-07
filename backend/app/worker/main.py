@@ -7,10 +7,18 @@ from celery import Celery, Task
 from app.models import Pipeline, Asset
 from celery.states import SUCCESS
 import app.worker.tasks as tasks
+import errno
+from celery.exceptions import Reject
 
 celery = Celery(__name__)
 celery.conf.broker_url = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379")
 celery.conf.result_backend = os.environ.get("CELERY_RESULT_BACKEND", "redis://localhost:6379")
+
+CELERY_VISIBILITY_TIMOUT = int(os.environ.get("CELERY_VISIBILITY_TIMOUT", 3600))
+
+celery.conf.broker_transport_options = {'visibility_timeout': CELERY_VISIBILITY_TIMOUT }
+celery.conf.result_backend_transport_options = {'visibility_timeout': CELERY_VISIBILITY_TIMOUT }
+celery.conf.visibility_timeout = CELERY_VISIBILITY_TIMOUT
 
 class PipelineDatabaseTask(Task):
     abstract = True
@@ -63,9 +71,17 @@ def create_mesh_3dtiles(pipeline_extended):
 def create_point_cloud_3dtiles(pipeline_extended):
     return tasks.create_point_cloud_3dtiles(pipeline_extended)
 
-@celery.task(name="create_reconstructed_mesh", base=PipelineDatabaseTask)
-def create_reconstructed_mesh(pipeline_extended):
-    return tasks.create_reconstructed_mesh(pipeline_extended)
+@celery.task(name="create_reconstructed_mesh", bind=True, base=PipelineDatabaseTask, acks_late=True, max_retries=1)
+def create_reconstructed_mesh(self, pipeline_extended):
+    try:
+        return tasks.create_reconstructed_mesh(pipeline_extended)
+    except MemoryError as exc:
+        raise Reject(exc, requeue=False)
+    except OSError as exc:
+        if exc.errno == errno.ENOMEM:
+            raise Reject(exc, requeue=False)
+    except Exception as exc:
+        raise self.retry(exc, countdown=10)
 
 @celery.task(name="complete_upload_process", base=AssetDatabaseTask)
 def complete_upload_process(options):

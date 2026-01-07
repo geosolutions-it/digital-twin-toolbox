@@ -108,6 +108,13 @@ services:
 
   worker:
     restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: 10m
+        max-file: "3"
+        labels: "worker_status"
+        env: "os"
     volumes:
       - app-assets-data:/mnt/assets
     image: '${DOCKER_IMAGE_BACKEND?Variable not set}:${TAG-latest}'

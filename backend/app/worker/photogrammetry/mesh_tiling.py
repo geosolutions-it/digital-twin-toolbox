@@ -251,6 +251,7 @@ def split_tile(params):
     default_mat = params.get('default_mat')
     export_asset = params.get('export_asset')
     unwrap_uv = params.get('unwrap_uv')
+    factor_force_decimation = params.get('factor_force_decimation', 1)
 
     for obj in bpy.context.scene.objects:
         obj.select_set(False)
@@ -307,19 +308,10 @@ def split_tile(params):
     if should_decimate and tile_faces_target and tile_faces_target > 0:
         decimate_obj(tile, tile_faces_target)
         if len(tile.data.polygons) > tile_faces_target:
-            tile.data.materials.clear()
-            export_gltf(filepath)
-            remove_obj(tile)
-            bpy.ops.import_scene.gltf(filepath=filepath)
-            tile = bpy.context.object
-            tile.name = 'tile'
-            tile.hide_render = False
-            bpy.ops.object.select_all(action="DESELECT")
-            tile.select_set(True)
-            bpy.context.view_layer.objects.active = tile
-            decimate_obj(tile, tile_faces_target)
-            tile.data.materials.clear()
-            tile.data.materials.append(default_mat)
+            merge_vertices(factor_force_decimation)
+            if len(tile.data.polygons) > tile_faces_target:
+                decimate_obj(tile, tile_faces_target)
+        merge_vertices()
 
     # unwrap the uv
     if unwrap_uv:
@@ -582,7 +574,8 @@ def run(params):
                     'transform': transform,
                     'center': [center_x, center_y, 0],
                     'tile_size': [w_unit, h_unit],
-                    'export_asset': export_gltf
+                    'export_asset': export_gltf,
+                    'factor_force_decimation': 5 / (2 ** z)
                 })
                 elapsed_time = (time.time() - tile_start_time)
                 logger.info(f"tile {tile_name} completed in {elapsed_time} seconds")
