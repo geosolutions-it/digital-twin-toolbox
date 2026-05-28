@@ -4,15 +4,15 @@ from sqlmodel import select
 
 from typing import Any
 from app.api.deps import get_current_active_superuser, CurrentUser, SessionDep
-from app.models import Message, Pipeline, Asset
+from app.models.task import Message, Pipeline, Asset
 from app.utils import generate_test_email, send_email
 from celery.states import SUCCESS
 from app.core.config import settings
 import shutil
 import os
 from pathlib import Path
-from app.worker.utils import get_asset_upload_path
-from app.worker.main import complete_upload_process
+from app.worker.common.utils import get_asset_upload_path
+from app.worker.pipelines import dispatch_upload_inspection
 import zipfile
 
 router = APIRouter()
@@ -236,7 +236,8 @@ def create_asset(session, file_info, current_user, to_ellipsoidal_height):
     point_cloud_data_extensions = [".laz", ".las"]
     raster_formats = [".tiff", ".tif"]
     photogrammetry_formats = [".phg.zip"]
-    supported_extensions = [".glb"] + vector_data_extensions + point_cloud_data_extensions + raster_formats + photogrammetry_formats
+    mesh_formats = [".obj", ".ply"]
+    supported_extensions = [".glb"] + vector_data_extensions + point_cloud_data_extensions + raster_formats + photogrammetry_formats + mesh_formats
 
     if not extension in supported_extensions:
         supported_extensions_list = ", ".join(supported_extensions)
@@ -271,12 +272,13 @@ def create_asset(session, file_info, current_user, to_ellipsoidal_height):
     session.commit()
     session.refresh(asset)
 
-    task = complete_upload_process.delay(options={
+    task = dispatch_upload_inspection({
         'asset': asset.model_dump(),
         'vector_data_extensions': vector_data_extensions,
         'point_cloud_data_extensions': point_cloud_data_extensions,
         'raster_formats': raster_formats,
         'photogrammetry_formats': photogrammetry_formats,
+        'mesh_formats': mesh_formats,
         'to_ellipsoidal_height': to_ellipsoidal_height
     })
     asset.sqlmodel_update({

@@ -4,12 +4,13 @@ from fastapi import UploadFile, APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from typing import Any
 import os
-from app.models import Asset, AssetPublic, AssetsPublic, Message, Pipeline
+from app.models.task import Asset, AssetPublic, AssetsPublic, Message, Pipeline
 from sqlmodel import func, select, col
 from pathlib import Path
 import uuid
-from app.worker.utils import get_asset_upload_path
-from app.worker.main import complete_upload_process, complete_asset_remove_process
+from app.worker.common.utils import get_asset_upload_path
+from app.worker.pipelines import dispatch_upload_inspection
+from app.worker.main import celery
 import zipfile
 import app.api.routes.utils as routes_utils
 
@@ -158,8 +159,6 @@ def delete_asset(
     session.delete(asset)
     session.commit()
 
-    complete_asset_remove_process.delay({
-        'asset': asset.model_dump()
-    })
+    celery.send_task('complete_asset_remove_process', args=[{'asset': asset.model_dump()}])
 
     return Message(message="Asset deleted successfully")

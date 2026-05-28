@@ -1,0 +1,40 @@
+services:
+  worker-point-cloud:
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: 10m
+        max-file: "3"
+    volumes:
+      - app-assets-data:/mnt/assets
+    image: '${DOCKER_IMAGE_WORKER_POINT_CLOUD?Variable not set}:${TAG-latest}'
+    platform: linux/amd64
+    command:
+      - "celery -A app.worker.main.celery worker --queues=point-cloud --include=app.worker.tasks.py3dtiles.task --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}"
+    env_file:
+      - .env
+    networks:
+      - default
+    environment:
+      - POSTGRES_SERVER=db
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER?Variable not set}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD?Variable not set}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - CELERY_WORKER_CONCURRENCY=${CELERY_WORKER_CONCURRENCY}
+      - ASSETS_DATA=/mnt/assets
+      - PGPASSWORD=${POSTGRES_PASSWORD?Variable not set}
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker-point-cloud
+      args:
+        INSTALL_DEV: ${INSTALL_DEV-false}
+    depends_on:
+      - redis
+      - db
+
+volumes:
+  app-assets-data:

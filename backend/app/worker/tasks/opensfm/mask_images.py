@@ -3,7 +3,7 @@ import os
 import json
 import cv2
 import numpy as np
-from app.worker.photogrammetry.point_cloud_to_mesh import transform_extent_to_local
+from app.worker.tasks.opensfm.point_cloud_to_mesh import transform_extent_to_local
 import shutil
 
 logging.basicConfig(level=logging.INFO)

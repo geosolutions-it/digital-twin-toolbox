@@ -3,26 +3,14 @@ from fastapi import APIRouter, HTTPException
 from typing import Any
 from sqlmodel import func, select
 import uuid
-from app.models import Pipeline, PipelinePublic, PipelinesPublic, PipelinePublicExtended, PipelineCreate, Message, Asset, PipelinesActionTypes, PipelineUpdate
+from app.models.task import Pipeline, PipelinePublic, PipelinesPublic, PipelinePublicExtended, PipelineCreate, Message, Asset, PipelinesActionTypes, PipelineUpdate
 
-from app.worker.main import create_point_instance_3dtiles, create_mesh_3dtiles, create_point_cloud_3dtiles, create_reconstructed_mesh, complete_pipeline_remove_process
-# from app.tasks import create_point_instance_3dtiles, create_mesh_3dtiles
+from app.worker.pipelines import run as run_pipeline
+from app.worker.main import celery
 from celery.result import AsyncResult
 from celery.states import REVOKED, PENDING
 
 router = APIRouter()
-
-def get_pipeline_task(pipeline_extended):
-    asset = pipeline_extended['asset']
-    if asset['geometry_type'] == "Point":
-        return create_point_instance_3dtiles
-    if asset['geometry_type'] == "Polygon":
-        return create_mesh_3dtiles
-    if asset['geometry_type'] == "PointCloud":
-        return create_point_cloud_3dtiles
-    if asset['asset_type'] == 'Photogrammetry':
-        return create_reconstructed_mesh
-    return None
 
 @router.get("/", response_model=PipelinesPublic)
 def read_pipelines(
@@ -90,11 +78,7 @@ async def process_pipeline_task(
     try:
         if action_type == 'run' and pipeline_extended.task_status != PENDING:
             pipeline_extended_dict = pipeline_extended.model_dump()
-            task_method = get_pipeline_task(pipeline_extended_dict)
-            if not task_method:
-                raise HTTPException(status_code=500, detail="Asset geometry type not recognized")
-
-            task = task_method.delay(pipeline_extended=pipeline_extended_dict)
+            task = run_pipeline(pipeline_extended_dict)
             # task = task_method(pipeline_extended=pipeline_extended_dict)
             pipeline_out = {
                 "task_id": task.id,
@@ -183,8 +167,6 @@ def delete_pipeline(
     session.delete(pipeline)
     session.commit()
 
-    complete_pipeline_remove_process.delay({
-        'pipeline': pipeline.model_dump()
-    })
+    celery.send_task('complete_pipeline_remove_process', args=[{'pipeline': pipeline.model_dump()}])
 
     return Message(message="Pipeline deleted successfully")

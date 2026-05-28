@@ -1,0 +1,15 @@
+TASK_QUEUES = {
+    'inspect_vector': 'pg2b3dm',
+    'inspect_pointcloud': 'point-cloud',
+    'inspect_raster': 'pg2b3dm',
+    'inspect_photogrammetry': 'opensfm',
+    'inspect_glb': 'blender',
+    'inspect_mesh': 'blender',
+    'create_mesh_3dtiles': 'pg2b3dm',
+    'create_point_instance_3dtiles': 'i3dm',
+    'create_point_cloud_3dtiles': 'point-cloud',
+    'tile_mesh': 'blender',
+    'create_reconstructed_mesh': 'opensfm',
+    'complete_asset_remove_process': 'pg2b3dm',
+    'complete_pipeline_remove_process': 'pg2b3dm',
+}

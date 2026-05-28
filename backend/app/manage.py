@@ -1,9 +1,10 @@
 import os
 from app.core.config import settings
-from app.worker.utils import get_asset_upload_path
+from app.worker.common.utils import get_asset_upload_path
 from uuid import UUID
 from sqlmodel import Session, select
-from app.models import User, Pipeline
+from app.models.task import Pipeline
+from app.models.user import User
 from app.core.db import engine
 from app.api.routes.utils import create_asset
 
