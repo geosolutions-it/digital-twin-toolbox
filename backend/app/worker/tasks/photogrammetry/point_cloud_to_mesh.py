@@ -10,10 +10,10 @@ import subprocess
 import shutil
 import time
 from concurrent.futures import ThreadPoolExecutor
-from app.worker.tasks.opensfm.utils import (
+from app.worker.tasks.photogrammetry.utils import (
     get_OpenSfM_bin, run_step, create_config_for_stage
 )
-from app.worker.tasks.blender.mesh_tiling import(
+from app.worker.tasks.mesh.mesh_tiling import(
     crop_mesh
 )
 

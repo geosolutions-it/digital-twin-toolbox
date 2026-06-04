@@ -6,11 +6,11 @@ from app.core.db import engine
 from app.models.task import Asset
 from app.worker.main import celery, PipelineDatabaseTask, AssetDatabaseTask
 from app.worker.common.utils import get_asset_upload_path, setup_output_directory
-from app.worker.common.processes import identify_projection
-from app.worker.tasks.pdal.processes import (
-    pdal_metadata, pdal_stats, point_cloud_preview, process_las
+from app.worker.tasks.pointcloud.crs import resolve_epsg_codes_from_pdal_metadata
+from app.worker.tasks.pointcloud.pdal.processes import (
+    pdal_metadata, pdal_stats, point_cloud_preview, process_las, resolve_asset_crs
 )
-from app.worker.tasks.py3dtiles.processes import py3dtiles_convert
+from app.worker.tasks.pointcloud.py3dtiles.processes import py3dtiles_convert
 
 
 @celery.task(name="inspect_pointcloud", base=AssetDatabaseTask)
@@ -29,9 +29,10 @@ def inspect_pointcloud(options):
     with open(get_asset_upload_path(f"{asset_id}/stats.json"), 'w') as f:
         json.dump(stats_json, f)
 
-    epsg = identify_projection(metadata_json['metadata']['comp_spatialreference'])
-    horizontal_epsg = identify_projection(metadata_json['metadata']['srs']['horizontal'])
-    vertical_epsg = identify_projection(metadata_json['metadata']['srs']['vertical'])
+    crs_codes = resolve_epsg_codes_from_pdal_metadata(metadata_json['metadata'])
+    epsg = crs_codes['epsg']
+    horizontal_epsg = crs_codes['horizontal_epsg']
+    vertical_epsg = crs_codes['vertical_epsg']
 
     point_cloud_preview(asset_file_path, get_asset_upload_path(f"{asset_id}/sample.xyz"), metadata_json, stats_json)
 
@@ -62,6 +63,8 @@ def create_point_cloud_3dtiles(pipeline_extended):
     }
 
     config = {**default_config, **pipeline_config}
+    if config.get('geometric_error_scale_factor') is not None:
+        config['geometric_error_scale_factor'] = float(config['geometric_error_scale_factor'])
 
     asset = pipeline_extended['asset']
     pipeline_id = pipeline_extended['id']
@@ -84,9 +87,8 @@ def create_point_cloud_3dtiles(pipeline_extended):
         ground_classification=config['ground_classification']
     )
 
-    crs_in = None
-    if asset.get('upload_result'):
-        crs_in = asset['upload_result'].get('horizontal_epsg') or asset['upload_result'].get('epsg')
+    horizontal_epsg, _vertical_epsg = resolve_asset_crs(asset)
+    crs_in = horizontal_epsg
 
     if not crs_in:
         raise Exception('Not recognized Point Cloud CRS')

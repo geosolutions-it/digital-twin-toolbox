@@ -1,5 +1,5 @@
 from app.worker.main import celery
-from app.worker.pipelines import mesh, instance, pointcloud, obj, photogrammetry
+from app.worker.pipelines import polygon, point, pointcloud, obj, photogrammetry
 
 
 def run(pipeline_extended):
@@ -10,9 +10,9 @@ def run(pipeline_extended):
     if asset_type == 'Mesh':
         return obj.run(pipeline_extended)
     if geometry_type == 'Polygon':
-        return mesh.run(pipeline_extended)
+        return polygon.run(pipeline_extended)
     if geometry_type == 'Point':
-        return instance.run(pipeline_extended)
+        return point.run(pipeline_extended)
     if geometry_type == 'PointCloud':
         return pointcloud.run(pipeline_extended)
     if asset_type == 'Photogrammetry':

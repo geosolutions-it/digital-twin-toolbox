@@ -5,13 +5,13 @@
 # Options:
 #   --prod              Exclude docker-compose.override.yml (production mode)
 #   --workers LIST      Comma-separated list of workers to include:
-#                         vector, point-cloud, blender, opensfm
+#                         vector, point-cloud, mesh, photogrammetry
 #
 # Examples:
 #   ./scripts/up.sh -- up -d
 #   ./scripts/up.sh --prod -- up -d
 #   ./scripts/up.sh --workers vector,point-cloud -- up -d
-#   ./scripts/up.sh --prod --workers vector,point-cloud,blender -- up -d
+#   ./scripts/up.sh --prod --workers vector,point-cloud,mesh -- up -d
 #   ./scripts/up.sh -- down
 
 set -e

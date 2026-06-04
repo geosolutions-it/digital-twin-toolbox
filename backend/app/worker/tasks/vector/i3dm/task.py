@@ -11,7 +11,7 @@ from app.worker.common.utils import (
 )
 from app.worker.common.expression import parse_expression
 from app.worker.common.types import JSONEncoder
-from app.worker.tasks.i3dm.processes import i3dm_export
+from app.worker.tasks.vector.i3dm.processes import i3dm_export
 
 
 @celery.task(name="create_point_instance_3dtiles", base=PipelineDatabaseTask)

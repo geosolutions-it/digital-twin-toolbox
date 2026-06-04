@@ -39,10 +39,10 @@ pointcloud = [
     "py3dtiles[las,ply,postgres]>=8.0.2,<9.0.0",
     "laspy[laszip]>=2.5.4,<3.0.0",
 ]
-blender = [
+mesh = [
     "bpy==4.5.1",
 ]
-opensfm = [
+photogrammetry = [
     "open3d>=0.19.0,<1.0.0",
     "opencv-python>=4.11.0.86,<5.0.0",
 ]

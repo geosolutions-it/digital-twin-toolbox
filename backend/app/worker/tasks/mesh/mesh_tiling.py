@@ -4,7 +4,7 @@ import os
 import bmesh
 import time
 import pathlib
-from app.worker.tasks.blender.create_tileset import get_location_and_rotation, run as create_tileset_run, get_transform
+from app.worker.tasks.mesh.create_tileset import get_location_and_rotation, run as create_tileset_run, get_transform
 import json
 
 logging.basicConfig(level=logging.INFO)

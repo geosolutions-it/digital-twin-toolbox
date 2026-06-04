@@ -3,7 +3,7 @@ import shutil
 
 from app.worker.main import celery, PipelineDatabaseTask, AssetDatabaseTask
 from app.worker.common.utils import get_asset_upload_path, setup_output_directory
-import app.worker.tasks.blender.mesh_tiling as mesh_tiling
+import app.worker.tasks.mesh.mesh_tiling as mesh_tiling
 
 
 @celery.task(name="inspect_glb", base=AssetDatabaseTask)
@@ -31,8 +31,8 @@ def inspect_mesh(options):
     }
 
 
-@celery.task(name="tile_mesh", base=PipelineDatabaseTask)
-def tile_mesh(pipeline_extended):
+@celery.task(name="create_mesh_3dtiles", base=PipelineDatabaseTask)
+def create_mesh_3dtiles(pipeline_extended):
     asset = pipeline_extended['asset']
     asset_id = asset['id']
     pipeline_id = pipeline_extended['id']

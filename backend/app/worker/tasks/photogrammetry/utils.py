@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 def get_OpenSfM_bin():
     """Returns the command to run OpenSfM binaries"""
-    return ['micromamba', 'run', '-n', 'opensfm', '/source/OpenSfM/bin/opensfm']
+    return ['/bin/micromamba', 'run', '-n', 'opensfm', '/source/OpenSfM/bin/opensfm']
 
 def remove_if_exists(path):
     """Remove file if it exists"""

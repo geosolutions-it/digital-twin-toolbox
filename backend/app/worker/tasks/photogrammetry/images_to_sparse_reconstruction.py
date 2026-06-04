@@ -5,8 +5,8 @@ import json
 import time
 import shutil
 import numpy as np
-import app.worker.tasks.opensfm.mask_images as mask_images
-from app.worker.tasks.opensfm.utils import (
+import app.worker.tasks.photogrammetry.mask_images as mask_images
+from app.worker.tasks.photogrammetry.utils import (
     get_OpenSfM_bin, remove_if_exists, memory_available,
     create_config_for_stage, run_step, calculate_resource_allocation
 )

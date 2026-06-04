@@ -1,4 +1,4 @@
-from app.worker.tasks.pg2b3dm.processes import earcut
+from app.worker.tasks.vector.pg2b3dm.processes import earcut
 
 
 def parse_coords(coords, z, translate_z):

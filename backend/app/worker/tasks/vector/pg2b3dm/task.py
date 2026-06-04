@@ -16,8 +16,8 @@ from app.worker.common.processes import (
 )
 from app.worker.common.expression import parse_expression
 from app.worker.common.types import GeometryType, JSONEncoder
-from app.worker.tasks.pg2b3dm.processes import pg2b3dm
-from app.worker.tasks.pg2b3dm.polyhedron import geometry_to_polyhedral_surface, polyhedral_to_wkt
+from app.worker.tasks.vector.pg2b3dm.processes import pg2b3dm
+from app.worker.tasks.vector.pg2b3dm.polyhedron import geometry_to_polyhedral_surface, polyhedral_to_wkt
 from osgeo import gdal, ogr
 from pyproj import CRS
 
@@ -203,8 +203,8 @@ def _polygons_to_polyhedrons(table, table_tasks, offset, chunk_size, geometry_co
             raise Exception
 
 
-@celery.task(name="create_mesh_3dtiles", base=PipelineDatabaseTask)
-def create_mesh_3dtiles(pipeline_extended):
+@celery.task(name="create_polygon_3dtiles", base=PipelineDatabaseTask)
+def create_polygon_3dtiles(pipeline_extended):
     asset = pipeline_extended['asset']
     asset_id = asset['id']
     pipeline_id = pipeline_extended['id']

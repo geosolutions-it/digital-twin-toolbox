@@ -1,4 +1,5 @@
 import os
+import uuid
 from sqlmodel import Session
 from celery import Celery, Task
 from app.core.db import engine
@@ -42,7 +43,12 @@ class AssetDatabaseTask(Task):
         with Session(engine) as session:
             options = kwargs.get('options')
             asset_obj = options['asset']
-            asset = session.get(Asset, asset_obj['id'])
+            asset_id = asset_obj['id']
+            if isinstance(asset_id, str):
+                asset_id = uuid.UUID(asset_id)
+            asset = session.get(Asset, asset_id)
+            if asset is None:
+                return
             asset_in = {"upload_id": task_id, "upload_status": status}
             if status == SUCCESS:
                 asset_in['asset_type'] = retval['asset_type']

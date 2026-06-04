@@ -4,9 +4,9 @@ import json
 import time
 import numpy as np
 import open3d as o3d
-import app.worker.tasks.opensfm.mask_images as mask_images
-from app.worker.tasks.opensfm.point_cloud_to_mesh import transform_extent_to_local
-from app.worker.tasks.opensfm.utils import (
+import app.worker.tasks.photogrammetry.mask_images as mask_images
+from app.worker.tasks.photogrammetry.point_cloud_to_mesh import transform_extent_to_local
+from app.worker.tasks.photogrammetry.utils import (
     get_OpenSfM_bin, run_step, create_config_for_stage,
     calculate_depthmap_resources
 )

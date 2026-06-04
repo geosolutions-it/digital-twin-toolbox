@@ -11,7 +11,7 @@ services:
     image: '${DOCKER_IMAGE_WORKER_VECTOR?Variable not set}:${TAG-latest}'
     platform: linux/amd64
     command:
-      - "celery -A app.worker.main.celery worker --queues=pg2b3dm,i3dm --include=app.worker.tasks.pg2b3dm.task,app.worker.tasks.i3dm.task --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}"
+      - "celery -A app.worker.main.celery worker --queues=vector --include=app.worker.tasks.vector.task --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}"
     env_file:
       - .env
     networks:

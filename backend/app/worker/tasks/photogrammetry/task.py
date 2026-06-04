@@ -6,10 +6,10 @@ import errno
 from celery.exceptions import Reject
 from app.worker.main import celery, PipelineDatabaseTask, AssetDatabaseTask
 from app.worker.common.utils import get_asset_upload_path, setup_output_directory
-import app.worker.tasks.opensfm.images_to_sparse_reconstruction as images_to_sparse_reconstruction
-import app.worker.tasks.opensfm.sparse_reconstruction_to_dense_point_cloud as sparse_reconstruction_to_dense_point_cloud
-import app.worker.tasks.opensfm.point_cloud_to_mesh as point_cloud_to_mesh
-import app.worker.tasks.blender.mesh_tiling as mesh_tiling
+import app.worker.tasks.photogrammetry.images_to_sparse_reconstruction as images_to_sparse_reconstruction
+import app.worker.tasks.photogrammetry.sparse_reconstruction_to_dense_point_cloud as sparse_reconstruction_to_dense_point_cloud
+import app.worker.tasks.photogrammetry.point_cloud_to_mesh as point_cloud_to_mesh
+import app.worker.tasks.mesh.mesh_tiling as mesh_tiling
 import zipfile
 
 
@@ -22,10 +22,10 @@ def inspect_photogrammetry(options):
     }
 
 
-@celery.task(name="create_reconstructed_mesh", bind=True, base=PipelineDatabaseTask, acks_late=True, max_retries=1)
-def create_reconstructed_mesh(self, pipeline_extended):
+@celery.task(name="create_photogrammetry_3dtiles", bind=True, base=PipelineDatabaseTask, acks_late=True, max_retries=1)
+def create_photogrammetry_3dtiles(self, pipeline_extended):
     try:
-        return _run_reconstructed_mesh(pipeline_extended)
+        return _run_photogrammetry_3dtiles(pipeline_extended)
     except MemoryError as exc:
         raise Reject(exc, requeue=False)
     except OSError as exc:
@@ -35,7 +35,7 @@ def create_reconstructed_mesh(self, pipeline_extended):
         raise self.retry(exc, countdown=10)
 
 
-def _run_reconstructed_mesh(pipeline_extended):
+def _run_photogrammetry_3dtiles(pipeline_extended):
     asset = pipeline_extended.get('asset')
     asset_id = asset.get('id')
     pipeline_id = pipeline_extended.get('id')

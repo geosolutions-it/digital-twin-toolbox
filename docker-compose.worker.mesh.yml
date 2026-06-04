@@ -1,5 +1,5 @@
 services:
-  worker-blender:
+  worker-mesh:
     restart: always
     logging:
       driver: "json-file"
@@ -8,10 +8,10 @@ services:
         max-file: "3"
     volumes:
       - app-assets-data:/mnt/assets
-    image: '${DOCKER_IMAGE_WORKER_BLENDER?Variable not set}:${TAG-latest}'
+    image: '${DOCKER_IMAGE_WORKER_MESH?Variable not set}:${TAG-latest}'
     platform: linux/amd64
     command:
-      - "celery -A app.worker.main.celery worker --queues=blender --include=app.worker.tasks.blender.task --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}"
+      - "celery -A app.worker.main.celery worker --queues=mesh --include=app.worker.tasks.mesh.task --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}"
     env_file:
       - .env
     networks:
@@ -29,7 +29,7 @@ services:
       - PGPASSWORD=${POSTGRES_PASSWORD?Variable not set}
     build:
       context: ./backend
-      dockerfile: Dockerfile.worker-blender
+      dockerfile: Dockerfile.worker-mesh
       args:
         INSTALL_DEV: ${INSTALL_DEV-false}
     depends_on:

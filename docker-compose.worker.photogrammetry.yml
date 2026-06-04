@@ -1,5 +1,5 @@
 services:
-  worker-opensfm:
+  worker-photogrammetry:
     restart: always
     logging:
       driver: "json-file"
@@ -8,10 +8,10 @@ services:
         max-file: "3"
     volumes:
       - app-assets-data:/mnt/assets
-    image: '${DOCKER_IMAGE_WORKER_OPENSFM?Variable not set}:${TAG-latest}'
+    image: '${DOCKER_IMAGE_WORKER_PHOTOGRAMMETRY?Variable not set}:${TAG-latest}'
     platform: linux/amd64
     command:
-      - "celery -A app.worker.main.celery worker --queues=opensfm --include=app.worker.tasks.opensfm.task --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}"
+      - "celery -A app.worker.main.celery worker --queues=photogrammetry --include=app.worker.tasks.photogrammetry.task --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}"
     env_file:
       - .env
     networks:
@@ -29,7 +29,7 @@ services:
       - PGPASSWORD=${POSTGRES_PASSWORD?Variable not set}
     build:
       context: ./backend
-      dockerfile: Dockerfile.worker-opensfm
+      dockerfile: Dockerfile.worker-photogrammetry
       args:
         INSTALL_DEV: ${INSTALL_DEV-false}
     depends_on:

@@ -3,6 +3,7 @@ import json
 import os
 import math
 from pyproj import CRS
+from app.worker.tasks.pointcloud.crs import resolve_epsg_codes_from_pdal_metadata
 from app.worker.common.utils import get_asset_upload_path
 
 
@@ -63,6 +64,26 @@ def point_cloud_preview(input_file_path, output_file_path, metadata, stats):
         raise Exception("Sample not created")
 
 
+def resolve_asset_crs(asset):
+    upload_result = asset.get('upload_result') or {}
+    horizontal_epsg = upload_result.get('horizontal_epsg') or upload_result.get('epsg')
+    vertical_epsg = upload_result.get('vertical_epsg')
+
+    if horizontal_epsg is None or vertical_epsg is None:
+        metadata_path = get_asset_upload_path(f"{asset['id']}/metadata.json")
+        if os.path.isfile(metadata_path):
+            with open(metadata_path) as f:
+                metadata_json = json.load(f)
+            metadata = metadata_json.get('metadata', metadata_json)
+            crs_codes = resolve_epsg_codes_from_pdal_metadata(metadata)
+            if horizontal_epsg is None:
+                horizontal_epsg = crs_codes['horizontal_epsg'] or crs_codes['epsg']
+            if vertical_epsg is None:
+                vertical_epsg = crs_codes['vertical_epsg']
+
+    return horizontal_epsg, vertical_epsg
+
+
 def process_las(pipeline_id, asset, sample_radius=None, to_ellipsoidal_height=False, colorization_image='', ground_classification=False):
     asset_upload_path = get_asset_upload_path(f"{asset['id']}/index{asset['extension']}")
     pipeline = []
@@ -71,12 +92,12 @@ def process_las(pipeline_id, asset, sample_radius=None, to_ellipsoidal_height=Fa
         pipeline += [{"type": 'filters.sample', "radius": sample_radius}]
 
     if to_ellipsoidal_height:
-        if 'upload_result' in asset:
-            upload_result = asset['upload_result']
-            horizontal_epsg = upload_result.get('horizontal_epsg')
-            vertical_epsg = upload_result.get('vertical_epsg') or 3855
-            geodetic_crs = CRS(horizontal_epsg).geodetic_crs.to_epsg()
-            pipeline += [{"type": 'filters.reprojection', "in_srs": f"EPSG:{horizontal_epsg}+{vertical_epsg}", "out_srs": f"EPSG:{horizontal_epsg}+{geodetic_crs}", "error_on_failure": True}]
+        horizontal_epsg, vertical_epsg = resolve_asset_crs(asset)
+        if not horizontal_epsg:
+            raise Exception('Not recognized Point Cloud horizontal CRS (required for ellipsoidal height conversion)')
+        vertical_epsg = vertical_epsg or 3855
+        geodetic_crs = CRS(horizontal_epsg).geodetic_crs.to_epsg()
+        pipeline += [{"type": 'filters.reprojection', "in_srs": f"EPSG:{horizontal_epsg}+{vertical_epsg}", "out_srs": f"EPSG:{horizontal_epsg}+{geodetic_crs}", "error_on_failure": True}]
 
     if colorization_image:
         pipeline += [{"type": 'filters.colorization', "raster": colorization_image}]

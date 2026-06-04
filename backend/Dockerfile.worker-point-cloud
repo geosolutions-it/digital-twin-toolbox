@@ -1,10 +1,11 @@
-FROM pdal/pdal:2.8.4
+FROM python:3.11-slim
 
 COPY --from=ghcr.io/astral-sh/uv:0.9.26 /uv /uvx /bin/
 
-ENV UV_COMPILE_BYTECODE=1
-ENV UV_LINK_MODE=copy
-ENV PYTHONPATH=/app
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    PYTHONPATH=/app \
+    MAMBA_ROOT_PREFIX=/opt/micromamba
 
 WORKDIR /app/
 
@@ -13,17 +14,28 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --frozen --no-install-workspace --no-dev --group worker --group pointcloud
 
-ENV PATH="/app/.venv/bin:$PATH"
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends bzip2 ca-certificates curl && \
+    curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | \
+        tar -xvj -C /usr/local/bin --strip-components=1 bin/micromamba && \
+    micromamba create -y -p /opt/pdal -c conda-forge "pdal=2.8.*" && \
+    micromamba clean --all --yes && \
+    apt-get purge -y --auto-remove bzip2 curl && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /opt/micromamba/pkgs
+
+ENV PATH="/app/.venv/bin:/opt/pdal/bin:$PATH" \
+    LD_LIBRARY_PATH="/opt/pdal/lib" \
+    PROJ_DATA="/opt/pdal/share/proj" \
+    PROJ_LIB="/opt/pdal/share/proj" \
+    GDAL_DATA="/opt/pdal/share/gdal"
 
 COPY ./scripts/ /app/
-COPY ./alembic.ini /app/
-COPY ./prestart.sh /app/
-COPY ./tests-start.sh /app/
+COPY ./alembic.ini ./prestart.sh ./tests-start.sh /app/
 COPY ./app /app/app
 
 RUN mv /app/celery-reload.sh /celery-reload.sh && \
     mv /app/celery.sh /celery.sh && \
-    chmod +x /celery-reload.sh && \
-    chmod +x /celery.sh
+    chmod +x /celery-reload.sh /celery.sh
 
 ENTRYPOINT ["bash", "-c"]
