@@ -13,7 +13,7 @@ import {
   Input,
   Select,
   Spinner,
-  Text,
+  Text
 } from "@chakra-ui/react"
 import { useQuery } from "@tanstack/react-query"
 import React from "react"
@@ -91,6 +91,8 @@ function PointCloudCanvas({
     queryFn: () => AssetsService.readAssetSample({ id: assetId }),
     queryKey: ["pipeline-asset-sample", assetId],
   })
+
+  const [pointSize, setPointSize] = React.useState(4)
 
   const updateScene = (group: any, material: any) => {
     if (!text || !group) {
@@ -180,6 +182,8 @@ function PointCloudCanvas({
   function handleInitializeScene(config: any) {
     group.current = config.group
     material.current = config.pointMaterial
+    // @ts-ignore
+    setPointSize(parseFloat(material.current.size))
     updateScene(group.current, material.current)
   }
 
@@ -341,6 +345,28 @@ function PointCloudCanvas({
             />
           </FormControl>
           <Divider />
+          <Text fontSize="sm" fontWeight="bold" mb={2} mt={2}>
+            Preview
+          </Text>
+          <FormControl mt={2} mb={2}>
+            <FormLabel fontSize="xs">
+              Point size
+            </FormLabel>
+            <Input
+              id="point_size"
+              size="xs"
+              type="number"
+              value={pointSize}
+              onChange={(event) => {
+                if (material.current) {
+                  const newPointSize = parseFloat(event.target.value)
+                  setPointSize(newPointSize)
+                  // @ts-ignore
+                  material.current.size = newPointSize
+                }
+              }}
+            />
+          </FormControl>
         </Container>
       </Box>
       <Divider orientation="vertical" />
