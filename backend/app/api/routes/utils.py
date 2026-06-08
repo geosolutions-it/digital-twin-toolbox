@@ -6,7 +6,7 @@ from typing import Any
 from app.api.deps import get_current_active_superuser, CurrentUser, SessionDep
 from app.models.task import Message, Pipeline, Asset
 from app.utils import generate_test_email, send_email
-from celery.states import SUCCESS
+from celery.states import PENDING, SUCCESS
 from app.core.config import settings
 import shutil
 import os
@@ -283,8 +283,8 @@ def create_asset(session, file_info, current_user, to_ellipsoidal_height):
     })
     asset.sqlmodel_update({
         "upload_id": task.id,
-        "upload_status": task.status,
-        "upload_result": task.result
+        "upload_status": PENDING,
+        "upload_result": None,
     })
     session.add(asset)
     session.commit()

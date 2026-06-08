@@ -42,31 +42,29 @@ RUN apt-get update \
         libpng-dev \
         libtbb-dev \
         libtiff-dev \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-RUN mkdir /source/ && \
-    cd /source/ && \
-    git clone --recursive https://github.com/mapillary/OpenSfM.git && \
-    cd /source/OpenSfM/ && \
-    git checkout 8074f9fbc67ddcfc0f1726f69db288365a83ad95
-
-# setup.py imports Sphinx at load time (breaks with setuptools>=81); build C extensions via cmake directly.
-RUN cd /source/OpenSfM/ && \
-    /bin/micromamba create -n "${OPENSFM_ENV}" -y --file /source/OpenSfM/conda.yml && \
-    /bin/micromamba run -n "${OPENSFM_ENV}" bash -ec '\
+    && mkdir /source/ \
+    && cd /source/ \
+    && git clone --recursive https://github.com/mapillary/OpenSfM.git \
+    && cd /source/OpenSfM/ \
+    && git checkout 8074f9fbc67ddcfc0f1726f69db288365a83ad95 \
+    && /bin/micromamba create -n "${OPENSFM_ENV}" -y --file /source/OpenSfM/conda.yml \
+    && /bin/micromamba run -n "${OPENSFM_ENV}" bash -ec '\
         cmake -S opensfm/src -B cmake_build \
           -DPYTHON_EXECUTABLE="$(which python)" \
           -DOPENSFM_BUILD_TESTS=OFF && \
         cmake --build cmake_build -j"$(nproc)" \
-    '
-
-RUN cd / && git clone https://github.com/santerioksanen/mvs-texturing.git \
+    ' \
+    && cd / \
+    && git clone https://github.com/santerioksanen/mvs-texturing.git \
     && cd mvs-texturing \
     && git checkout "feature/tbb-depend" \
     && mkdir build && cd build \
     && cmake .. \
-    && make
+    && make \
+    && apt-get purge -y --auto-remove build-essential cmake git \
+    && apt-get autoremove -y \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /source/OpenSfM/cmake_build
 
 COPY ./scripts/ /app/
 COPY ./alembic.ini /app/
@@ -79,4 +77,4 @@ RUN mv /app/celery-reload.sh /celery-reload.sh && \
     chmod +x /celery-reload.sh && \
     chmod +x /celery.sh
 
-ENTRYPOINT ["bash", "-l", "-c"]
+ENTRYPOINT ["bash", "-c"]

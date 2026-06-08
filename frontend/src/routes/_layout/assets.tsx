@@ -1,4 +1,9 @@
 import {
+  celeryTaskStatusColor,
+  celeryTaskStatusLabel,
+  isCeleryTaskInProgress,
+} from "../../utils/celeryStatus"
+import {
   AlertDialog,
   AlertDialogBody,
   AlertDialogContent,
@@ -193,7 +198,9 @@ function AssetsTable() {
     placeholderData: (prevData) => prevData,
     refetchInterval: (options) => {
       const newAssets = options?.state?.data || { data: [] }
-      return newAssets.data.find((asset) => asset.upload_status === "PENDING")
+      return newAssets.data.find((asset) =>
+        isCeleryTaskInProgress(asset.upload_status),
+      )
         ? 1000
         : false
     },
@@ -239,15 +246,9 @@ function AssetsTable() {
                   <Td>
                     <Flex gap={2}>
                       <Badge
-                        colorScheme={
-                          asset.upload_status === "PENDING"
-                            ? "yellow"
-                            : asset.upload_status === "SUCCESS"
-                              ? "green"
-                              : "red"
-                        }
+                        colorScheme={celeryTaskStatusColor(asset.upload_status)}
                       >
-                        {asset.upload_status}
+                        {celeryTaskStatusLabel(asset.upload_status)}
                       </Badge>
                     </Flex>
                   </Td>

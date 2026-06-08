@@ -27,6 +27,11 @@ import {
 } from "three"
 import { AssetsService } from "../../client"
 import type { PipelinePublicExtended } from "../../client"
+import {
+  celeryTaskStatusColor,
+  celeryTaskStatusLabel,
+  isCeleryTaskInProgress,
+} from "../../utils/celeryStatus"
 import ThreeCanvas from "./ThreeCanvas"
 import { getPublicBasePath } from '../../utils'
 
@@ -219,16 +224,8 @@ function PointCloudCanvas({
             alignItems="center"
           >
             <Flex gap={2}>
-              <Badge
-                colorScheme={
-                  pipeline.task_status === "PENDING"
-                    ? "yellow"
-                    : pipeline.task_status === "SUCCESS"
-                      ? "green"
-                      : "red"
-                }
-              >
-                {pipeline.task_status}
+              <Badge colorScheme={celeryTaskStatusColor(pipeline.task_status)}>
+                {celeryTaskStatusLabel(pipeline.task_status)}
               </Badge>
               {pipeline.task_result && (
                 <a href={download} download={`${pipeline.title}.zip`}>
@@ -238,7 +235,7 @@ function PointCloudCanvas({
             </Flex>
 
             <ButtonGroup size="xs">
-              {pipeline.task_status !== "PENDING" && (
+              {!isCeleryTaskInProgress(pipeline.task_status) && (
                 <Button
                   colorScheme={"yellow"}
                   variant="outline"
@@ -247,7 +244,7 @@ function PointCloudCanvas({
                   Save
                 </Button>
               )}
-              {pipeline.task_status === "PENDING" && (
+              {isCeleryTaskInProgress(pipeline.task_status) && (
                 <Button
                   colorScheme="red"
                   variant="outline"
@@ -257,7 +254,7 @@ function PointCloudCanvas({
                 </Button>
               )}
               <Button
-                isLoading={pipeline.task_status === "PENDING"}
+                isLoading={isCeleryTaskInProgress(pipeline.task_status)}
                 variant="outline"
                 onClick={() => onRun(data)}
               >

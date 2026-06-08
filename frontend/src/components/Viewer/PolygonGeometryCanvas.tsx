@@ -22,6 +22,11 @@ import { BufferAttribute, BufferGeometry, Mesh } from "three"
 import { AssetsService } from "../../client"
 import type { PipelinePublicExtended } from "../../client"
 import {
+  celeryTaskStatusColor,
+  celeryTaskStatusLabel,
+  isCeleryTaskInProgress,
+} from "../../utils/celeryStatus"
+import {
   convertToCartesian,
   translateAndRotate,
 } from "../../utils/cartesian.js"
@@ -179,16 +184,8 @@ function PolygonGeometryCanvas({
             alignItems="center"
           >
             <Flex gap={2}>
-              <Badge
-                colorScheme={
-                  pipeline.task_status === "PENDING"
-                    ? "yellow"
-                    : pipeline.task_status === "SUCCESS"
-                      ? "green"
-                      : "red"
-                }
-              >
-                {pipeline.task_status}
+              <Badge colorScheme={celeryTaskStatusColor(pipeline.task_status)}>
+                {celeryTaskStatusLabel(pipeline.task_status)}
               </Badge>
               {pipeline.task_result && (
                 <a href={download} download={`${pipeline.title}.zip`}>
@@ -197,7 +194,7 @@ function PolygonGeometryCanvas({
               )}
             </Flex>
             <ButtonGroup size="xs">
-              {pipeline.task_status !== "PENDING" && (
+              {!isCeleryTaskInProgress(pipeline.task_status) && (
                 <Button
                   colorScheme={"yellow"}
                   variant="outline"
@@ -206,7 +203,7 @@ function PolygonGeometryCanvas({
                   Save
                 </Button>
               )}
-              {pipeline.task_status === "PENDING" && (
+              {isCeleryTaskInProgress(pipeline.task_status) && (
                 <Button
                   colorScheme="red"
                   variant="outline"
@@ -216,7 +213,7 @@ function PolygonGeometryCanvas({
                 </Button>
               )}
               <Button
-                isLoading={pipeline.task_status === "PENDING"}
+                isLoading={isCeleryTaskInProgress(pipeline.task_status)}
                 variant="outline"
                 onClick={() => onRun(data)}
               >

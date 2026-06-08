@@ -1,5 +1,6 @@
 from app.worker.main import celery
 from app.worker.pipelines import polygon, point, pointcloud, obj, photogrammetry
+from app.worker.tasks import inspection_task_for_extension
 
 
 def run(pipeline_extended):
@@ -20,22 +21,9 @@ def run(pipeline_extended):
     raise ValueError(f"No pipeline for asset_type={asset_type!r}, geometry_type={geometry_type!r}")
 
 
-_EXTENSION_TO_INSPECTION_TASK = {
-    '.shp.zip': 'inspect_vector',
-    '.laz': 'inspect_pointcloud',
-    '.las': 'inspect_pointcloud',
-    '.tiff': 'inspect_raster',
-    '.tif': 'inspect_raster',
-    '.phg.zip': 'inspect_photogrammetry',
-    '.glb': 'inspect_glb',
-    '.obj': 'inspect_mesh',
-    '.ply': 'inspect_mesh',
-}
-
-
 def dispatch_upload_inspection(options):
     extension = options['asset']['extension']
-    task_name = _EXTENSION_TO_INSPECTION_TASK.get(extension)
+    task_name = inspection_task_for_extension(extension)
     if not task_name:
         raise ValueError(f"No inspection task for extension {extension!r}")
     return celery.send_task(task_name, kwargs={'options': options})

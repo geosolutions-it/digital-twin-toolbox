@@ -8,7 +8,7 @@ from app.models.task import Pipeline, PipelinePublic, PipelinesPublic, PipelineP
 from app.worker.pipelines import run as run_pipeline
 from app.worker.main import celery
 from celery.result import AsyncResult
-from celery.states import REVOKED, PENDING
+from celery.states import PENDING, REVOKED, STARTED
 
 router = APIRouter()
 
@@ -76,21 +76,20 @@ async def process_pipeline_task(
 
     pipeline_out = {}
     try:
-        if action_type == 'run' and pipeline_extended.task_status != PENDING:
+        if action_type == 'run' and pipeline_extended.task_status not in (PENDING, STARTED):
             pipeline_extended_dict = pipeline_extended.model_dump()
             task = run_pipeline(pipeline_extended_dict)
-            # task = task_method(pipeline_extended=pipeline_extended_dict)
             pipeline_out = {
                 "task_id": task.id,
-                "task_status": task.status,
-                "task_result": task.result
+                "task_status": PENDING,
+                "task_result": None,
             }
             pipeline.sqlmodel_update(pipeline_out)
             session.add(pipeline)
             session.commit()
             session.refresh(pipeline)
 
-        if action_type == 'cancel' and pipeline.task_id and pipeline_extended.task_status == PENDING:
+        if action_type == 'cancel' and pipeline.task_id and pipeline_extended.task_status in (PENDING, STARTED):
             task = AsyncResult(pipeline.task_id)
             task.revoke(terminate=True)
             pipeline_out = {
