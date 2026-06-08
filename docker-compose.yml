@@ -13,7 +13,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD?Variable not set}
       - POSTGRES_USER=${POSTGRES_USER?Variable not set}
       - POSTGRES_DB=${POSTGRES_DB?Variable not set}
-      - POSTGRES_TASKS_DB${POSTGRES_TASKS_DB?Variable not set}
+      - POSTGRES_TASKS_DB=${POSTGRES_TASKS_DB?Variable not set}
 
 
   backend:

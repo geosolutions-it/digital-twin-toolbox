@@ -9,10 +9,16 @@ ENV PYTHONPATH=/app
 
 WORKDIR /app/
 
+ARG INSTALL_DEV=false
+
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --no-install-workspace --no-dev --group api
+    if [ "$INSTALL_DEV" = "true" ]; then \
+      uv sync --frozen --no-install-workspace --group api --group dev; \
+    else \
+      uv sync --frozen --no-install-workspace --no-dev --group api; \
+    fi
 
 COPY ./scripts/ /app/
 COPY ./alembic.ini /app/
