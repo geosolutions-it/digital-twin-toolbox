@@ -27,8 +27,6 @@ COPY ./tests-start.sh /app/
 COPY ./app /app/app
 
 RUN mv /app/start.sh /start.sh && \
-    mv /app/celery-reload.sh /celery-reload.sh && \
-    mv /app/celery.sh /celery.sh && \
+    mv /app/start-reload.sh /start-reload.sh && \
     chmod +x /start.sh && \
-    chmod +x /celery-reload.sh && \
-    chmod +x /celery.sh
+    chmod +x /start-reload.sh

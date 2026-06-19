@@ -11,7 +11,7 @@ services:
     image: '${DOCKER_IMAGE_WORKER_POINT_CLOUD?Variable not set}:${TAG-latest}'
     platform: linux/amd64
     command:
-      - "celery -A app.worker.main.celery worker --queues=point-cloud --include=app.worker.tasks.pointcloud.task --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}"
+      - "celery -A app.worker.main.celery worker --queues=point-cloud,common --include=app.worker.tasks.pointcloud.task,app.worker.tasks.common.task --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}"
     env_file:
       - .env
     networks:
@@ -27,6 +27,8 @@ services:
       - CELERY_WORKER_CONCURRENCY=${CELERY_WORKER_CONCURRENCY}
       - ASSETS_DATA=/mnt/assets
       - PGPASSWORD=${POSTGRES_PASSWORD?Variable not set}
+      # Let PROJ fetch geoid/datum grids on demand from cdn.proj.org
+      - PROJ_NETWORK=ON
     build:
       context: ./backend
       dockerfile: Dockerfile.worker-point-cloud

@@ -11,7 +11,7 @@ services:
     image: '${DOCKER_IMAGE_WORKER_MESH?Variable not set}:${TAG-latest}'
     platform: linux/amd64
     command:
-      - "celery -A app.worker.main.celery worker --queues=mesh --include=app.worker.tasks.mesh.task --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}"
+      - "celery -A app.worker.main.celery worker --queues=mesh,common --include=app.worker.tasks.mesh.task,app.worker.tasks.common.task --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}"
     env_file:
       - .env
     networks:

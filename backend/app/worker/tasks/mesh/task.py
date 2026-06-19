@@ -6,15 +6,6 @@ from app.worker.common.utils import get_asset_upload_path, setup_output_director
 import app.worker.tasks.mesh.mesh_tiling as mesh_tiling
 
 
-@celery.task(name="inspect_glb", base=AssetDatabaseTask)
-def inspect_glb(options):
-    return {
-        'asset_type': None,
-        'geometry_type': None,
-        'payload': {'metadata': False, 'stats': False, 'sample': False, 'epsg': None, 'horizontal_epsg': None, 'vertical_epsg': None}
-    }
-
-
 @celery.task(name="inspect_mesh", base=AssetDatabaseTask)
 def inspect_mesh(options):
     return {
@@ -31,8 +22,8 @@ def inspect_mesh(options):
     }
 
 
-@celery.task(name="create_mesh_3dtiles", base=PipelineDatabaseTask)
-def create_mesh_3dtiles(pipeline_extended):
+@celery.task(name="create_obj_mesh_3dtiles", base=PipelineDatabaseTask)
+def create_obj_mesh_3dtiles(pipeline_extended):
     asset = pipeline_extended['asset']
     asset_id = asset['id']
     pipeline_id = pipeline_extended['id']

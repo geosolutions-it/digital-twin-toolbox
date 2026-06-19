@@ -14,5 +14,6 @@ export function celeryTaskStatusLabel(status?: string | null): string {
 export function celeryTaskStatusColor(status?: string | null): string {
   if (isCeleryTaskInProgress(status)) return "yellow"
   if (status === "SUCCESS") return "green"
-  return "red"
+  if (!status) return "blue" // READY / never run → neutral
+  return "red" // FAILURE, REVOKED, etc.
 }

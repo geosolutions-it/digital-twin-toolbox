@@ -271,11 +271,7 @@ function PipelinesTable() {
                     <Td>
                       <Flex gap={2} alignItems="center">
                         <Badge
-                          colorScheme={
-                            !pipeline.task_status
-                              ? "blue"
-                              : celeryTaskStatusColor(pipeline.task_status)
-                          }
+                          colorScheme={celeryTaskStatusColor(pipeline.task_status)}
                         >
                           {celeryTaskStatusLabel(pipeline.task_status)}
                         </Badge>

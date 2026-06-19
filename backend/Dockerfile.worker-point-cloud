@@ -34,8 +34,4 @@ COPY ./scripts/ /app/
 COPY ./alembic.ini ./prestart.sh ./tests-start.sh /app/
 COPY ./app /app/app
 
-RUN mv /app/celery-reload.sh /celery-reload.sh && \
-    mv /app/celery.sh /celery.sh && \
-    chmod +x /celery-reload.sh /celery.sh
-
 ENTRYPOINT ["bash", "-c"]

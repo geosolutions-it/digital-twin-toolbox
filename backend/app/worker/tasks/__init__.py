@@ -23,7 +23,6 @@ CAPABILITIES = {
     },
     'mesh': {
         'extensions': {
-            '.glb': 'inspect_glb',
             '.obj': 'inspect_mesh',
             '.ply': 'inspect_mesh',
             '.obj.zip': 'inspect_mesh',
@@ -40,8 +39,14 @@ CAPABILITIES = {
             {'asset_type': 'Photogrammetry'},
         ],
     },
-    'cleanup': {
-        'extensions': {},
+    # Shared queue drained by every worker: lightweight, dependency-free tasks
+    # (GLB inspection + asset/pipeline cleanup) that must run regardless of which
+    # component workers are deployed. GLB lives here (not under 'mesh') so it can be
+    # imported without the heavy mesh worker.
+    'common': {
+        'extensions': {
+            '.glb': 'inspect_glb',
+        },
         'pipeline_matchers': [],
     },
 }
@@ -51,15 +56,15 @@ TASK_QUEUES = {
     'inspect_pointcloud': 'point-cloud',
     'inspect_raster': 'vector',
     'inspect_photogrammetry': 'photogrammetry',
-    'inspect_glb': 'mesh',
+    'inspect_glb': 'common',
     'inspect_mesh': 'mesh',
     'create_polygon_3dtiles': 'vector',
     'create_point_instance_3dtiles': 'vector',
     'create_point_cloud_3dtiles': 'point-cloud',
-    'create_mesh_3dtiles': 'mesh',
+    'create_obj_mesh_3dtiles': 'mesh',
     'create_photogrammetry_3dtiles': 'photogrammetry',
-    'complete_asset_remove_process': 'cleanup',
-    'complete_pipeline_remove_process': 'cleanup',
+    'complete_asset_remove_process': 'common',
+    'complete_pipeline_remove_process': 'common',
 }
 
 

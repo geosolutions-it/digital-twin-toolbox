@@ -32,9 +32,13 @@ jobs:
 
       - name: Build the docker images
         run: |
-          DOCKER_BUILDKIT=1 docker compose -f docker-compose.yml -f docker-compose.build.yml build \
+          DOCKER_BUILDKIT=1 docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.worker.vector.yml \
+            -f docker-compose.worker.point-cloud.yml \
+            -f docker-compose.build.yml build \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
-            backend frontend
+            backend frontend worker-vector worker-point-cloud
 
       - name: Update the buildx cache with new one
         run: |
@@ -66,4 +70,7 @@ jobs:
           source .env
           docker push $DOCKER_IMAGE_BACKEND:$TAG
           docker push $DOCKER_IMAGE_FRONTEND:$TAG
+          docker push $DOCKER_IMAGE_WORKER_VECTOR:$TAG
+          docker push $DOCKER_IMAGE_WORKER_POINT_CLOUD:$TAG
+
 

@@ -18,3 +18,17 @@ services:
       args:
         - NODE_ENV=production
       <<: *common-cache
+
+  worker-vector:
+    build:
+      context: ./backend
+      args:
+        INSTALL_DEV: ${INSTALL_DEV-false}
+      <<: *common-cache
+
+  worker-point-cloud:
+    build:
+      context: ./backend
+      args:
+        INSTALL_DEV: ${INSTALL_DEV-false}
+      <<: *common-cache

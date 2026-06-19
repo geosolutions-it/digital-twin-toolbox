@@ -72,9 +72,4 @@ COPY ./prestart.sh /app/
 COPY ./tests-start.sh /app/
 COPY ./app /app/app
 
-RUN mv /app/celery-reload.sh /celery-reload.sh && \
-    mv /app/celery.sh /celery.sh && \
-    chmod +x /celery-reload.sh && \
-    chmod +x /celery.sh
-
-ENTRYPOINT ["bash", "-c"]
+ENTRYPOINT ["bash", "-l", "-c"]

@@ -101,6 +101,8 @@ async def process_pipeline_task(
             session.add(pipeline)
             session.commit()
             session.refresh(pipeline)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=f"Unsupported asset for this pipeline: {e}")
     except Exception as e:
         raise HTTPException(status_code=500, detail="It was not possible to initialize the requested task")
     return {

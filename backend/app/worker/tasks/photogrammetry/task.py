@@ -64,7 +64,7 @@ def _run_photogrammetry_3dtiles(pipeline_extended):
     process_dir = f"{output_paths['output_path']}/process"
 
     if stage == 'all' and config.get('force_delete'):
-        shutil.rmtree(process_dir)
+        shutil.rmtree(process_dir, ignore_errors=True)
 
     if not os.path.exists(process_dir):
         images_dir = f"{process_dir}/images"

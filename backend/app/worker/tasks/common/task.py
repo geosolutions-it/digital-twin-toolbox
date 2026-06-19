@@ -2,15 +2,20 @@ import os
 import shutil
 
 from sqlmodel import Session, text
-
 from app.core.db import engine_tasks
-from app.worker.main import celery
+from app.worker.main import celery, AssetDatabaseTask
 from app.worker.common.utils import (
-    get_asset_upload_path,
-    get_asset_table_name,
-    get_pipeline_table_name,
-    setup_output_directory,
+    get_asset_upload_path, get_asset_table_name, get_pipeline_table_name, setup_output_directory
 )
+
+
+@celery.task(name="inspect_glb", base=AssetDatabaseTask)
+def inspect_glb(options):
+    return {
+        'asset_type': None,
+        'geometry_type': None,
+        'payload': {'metadata': False, 'stats': False, 'sample': False, 'epsg': None, 'horizontal_epsg': None, 'vertical_epsg': None}
+    }
 
 
 @celery.task(name="complete_asset_remove_process")
