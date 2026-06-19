@@ -3,24 +3,14 @@ from fastapi import APIRouter, HTTPException
 from typing import Any
 from sqlmodel import func, select
 import uuid
-from app.models import Pipeline, PipelinePublic, PipelinesPublic, PipelinePublicExtended, PipelineCreate, Message, Asset, PipelinesActionTypes, PipelineUpdate
+from app.models.task import Pipeline, PipelinePublic, PipelinesPublic, PipelinePublicExtended, PipelineCreate, Message, Asset, PipelinesActionTypes, PipelineUpdate
 
-from app.worker.main import create_point_instance_3dtiles, create_mesh_3dtiles, create_point_cloud_3dtiles, complete_pipeline_remove_process
-# from app.tasks import create_point_instance_3dtiles, create_mesh_3dtiles
+from app.worker.pipelines import run as run_pipeline
+from app.worker.main import celery
 from celery.result import AsyncResult
-from celery.states import REVOKED, PENDING
+from celery.states import PENDING, REVOKED, STARTED
 
 router = APIRouter()
-
-def get_pipeline_task(pipeline_extended):
-    asset = pipeline_extended['asset']
-    if asset['geometry_type'] == "Point":
-        return create_point_instance_3dtiles
-    if asset['geometry_type'] == "Polygon":
-        return create_mesh_3dtiles
-    if asset['geometry_type'] == "PointCloud":
-        return create_point_cloud_3dtiles
-    return None
 
 @router.get("/", response_model=PipelinesPublic)
 def read_pipelines(
@@ -86,25 +76,20 @@ async def process_pipeline_task(
 
     pipeline_out = {}
     try:
-        if action_type == 'run' and pipeline_extended.task_status != PENDING:
+        if action_type == 'run' and pipeline_extended.task_status not in (PENDING, STARTED):
             pipeline_extended_dict = pipeline_extended.model_dump()
-            task_method = get_pipeline_task(pipeline_extended_dict)
-            if not task_method:
-                raise HTTPException(status_code=500, detail="Asset geometry type not recognized")
-
-            task = task_method.delay(pipeline_extended=pipeline_extended_dict)
-            # task = task_method(pipeline_extended=pipeline_extended_dict)
+            task = run_pipeline(pipeline_extended_dict)
             pipeline_out = {
                 "task_id": task.id,
-                "task_status": task.status,
-                "task_result": task.result
+                "task_status": PENDING,
+                "task_result": None,
             }
             pipeline.sqlmodel_update(pipeline_out)
             session.add(pipeline)
             session.commit()
             session.refresh(pipeline)
 
-        if action_type == 'cancel' and pipeline.task_id and pipeline_extended.task_status == PENDING:
+        if action_type == 'cancel' and pipeline.task_id and pipeline_extended.task_status in (PENDING, STARTED):
             task = AsyncResult(pipeline.task_id)
             task.revoke(terminate=True)
             pipeline_out = {
@@ -116,6 +101,8 @@ async def process_pipeline_task(
             session.add(pipeline)
             session.commit()
             session.refresh(pipeline)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=f"Unsupported asset for this pipeline: {e}")
     except Exception as e:
         raise HTTPException(status_code=500, detail="It was not possible to initialize the requested task")
     return {
@@ -181,8 +168,6 @@ def delete_pipeline(
     session.delete(pipeline)
     session.commit()
 
-    complete_pipeline_remove_process.delay({
-        'pipeline': pipeline.model_dump()
-    })
+    celery.send_task('complete_pipeline_remove_process', args=[{'pipeline': pipeline.model_dump()}])
 
     return Message(message="Pipeline deleted successfully")

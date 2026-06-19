@@ -3,3 +3,8 @@ node_modules/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+*.patch
+.env
+.vscode/
+.DS_Store
+backend/.DS_Store

@@ -1,15 +1,17 @@
-
 import math
+
 
 def get_geometry(feature):
     if 'geometry' in feature:
         return feature['geometry']
-    return { 'type': '' }
+    return {'type': ''}
+
 
 def get_z(coordinates):
     if len(coordinates) == 3:
         return coordinates[2]
     return 0
+
 
 def get_func(name, feature):
     if name in ['$maxZ', '$minZ']:
@@ -31,10 +33,11 @@ def get_func(name, feature):
             return min_z
     return None
 
-def parse_expression(type, value, feature, default_value = None):
+
+def parse_expression(type, value, feature, default_value=None):
     try:
         if not isinstance(value, list):
-            if value == None:
+            if value is None:
                 return None
             if type == 'string':
                 return f"{value}"
@@ -51,13 +54,11 @@ def parse_expression(type, value, feature, default_value = None):
 
         a = None
         if value_length > 1:
-            value_a = value[1]
-            a = parse_expression(_type, value_a, feature)
+            a = parse_expression(_type, value[1], feature)
 
         b = None
         if value_length > 2:
-            value_b = value[2]
-            b = parse_expression(_type, value_b, feature)
+            b = parse_expression(_type, value[2], feature)
 
         if operator == '+':
             return float(a) + float(b)
@@ -79,5 +80,5 @@ def parse_expression(type, value, feature, default_value = None):
         if operator == "func":
             return get_func(a, feature)
         return None
-    except Exception as e:
+    except Exception:
         return default_value

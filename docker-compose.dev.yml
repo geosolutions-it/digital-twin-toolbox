@@ -1,11 +1,7 @@
 services:
   backend:
     volumes:
-      - ./backend/:/app
+      # Mount only the source package so the in-image virtualenv at /app/.venv
+      # (and alembic.ini, prestart.sh, …) are not shadowed by the bind mount.
+      - ./backend/app:/app/app
     command: /start-reload.sh
-
-  worker:
-    restart: "no"
-    volumes:
-      - ./backend/:/app
-    command: /celery-reload.sh

@@ -1,4 +1,9 @@
 import {
+  celeryTaskStatusColor,
+  celeryTaskStatusLabel,
+  isCeleryTaskInProgress,
+} from "../../utils/celeryStatus"
+import {
   AlertDialog,
   AlertDialogBody,
   AlertDialogContent,
@@ -193,8 +198,8 @@ function PipelinesTable() {
     placeholderData: (prevData) => prevData,
     refetchInterval: (options) => {
       const newPipelines = options?.state?.data || { data: [] }
-      return newPipelines.data.find(
-        (pipeline) => pipeline.task_status === "PENDING",
+      return newPipelines.data.find((pipeline) =>
+        isCeleryTaskInProgress(pipeline.task_status),
       )
         ? 1000
         : false
@@ -266,17 +271,9 @@ function PipelinesTable() {
                     <Td>
                       <Flex gap={2} alignItems="center">
                         <Badge
-                          colorScheme={
-                            pipeline.task_status === "PENDING"
-                              ? "yellow"
-                              : pipeline.task_status === "SUCCESS"
-                                ? "green"
-                                : !pipeline.task_status
-                                  ? "blue"
-                                  : "red"
-                          }
+                          colorScheme={celeryTaskStatusColor(pipeline.task_status)}
                         >
-                          {pipeline.task_status || "READY"}
+                          {celeryTaskStatusLabel(pipeline.task_status)}
                         </Badge>
                         {pipeline.task_result && (
                           <Tooltip label="Download 3D Tiles">
@@ -325,7 +322,7 @@ const SelectAssets = React.forwardRef((props: any, ref) => {
       AssetsService.readAssets({
         skip: 0,
         limit: 9999,
-        extension: ".shp.zip,.las,.laz",
+        extension: ".shp.zip,.las,.laz,.phg.zip",
         uploadStatus: "SUCCESS",
       }),
     queryKey: ["assets-select"],

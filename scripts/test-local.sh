@@ -3,6 +3,8 @@
 # Exit in case of error
 set -e
 
+docker network create traefik-public 2>/dev/null || true
+
 docker compose down -v --remove-orphans # Remove possibly previous broken stacks left hanging after an error
 
 if [ $(uname -s) = "Linux" ]; then
@@ -11,5 +13,5 @@ if [ $(uname -s) = "Linux" ]; then
 fi
 
 INSTALL_DEV=true docker compose -f docker-compose.yml -f docker-compose.build.yml build backend
-docker compose up backend -d
+docker compose up -d db backend
 docker compose exec -T backend bash /app/tests-start.sh "$@"

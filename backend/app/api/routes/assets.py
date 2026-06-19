@@ -4,12 +4,15 @@ from fastapi import UploadFile, APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from typing import Any
 import os
-from app.models import Asset, AssetPublic, AssetsPublic, Message, Pipeline
+from app.models.task import Asset, AssetPublic, AssetsPublic, Message, Pipeline
 from sqlmodel import func, select, col
 from pathlib import Path
 import uuid
-from app.worker.utils import get_asset_upload_path
-from app.worker.main import complete_upload_process, complete_asset_remove_process
+from app.worker.common.utils import get_asset_upload_path
+from app.worker.pipelines import dispatch_upload_inspection
+from app.worker.main import celery
+import zipfile
+import app.api.routes.utils as routes_utils
 
 router = APIRouter()
 
@@ -62,69 +65,18 @@ async def create_asset(
     Create new asset.
     """
 
-    filename = file.filename
-
-    check_statement = select(Asset).where(Asset.owner_id == current_user.id).where(Asset.filename == filename).limit(1)
-    results = session.exec(check_statement)
-    check_asset = results.first()
-
-    if check_asset:
-        raise HTTPException(status_code=400, detail="Asset with this filename already exists")
-
     if not current_user.id:
         raise HTTPException(status_code=400, detail="Not enough permissions")
 
-    vector_data_extensions = [".shp.zip"]
-    point_cloud_data_extensions = [".laz", ".las"]
-    raster_formats = [".tiff", ".tif"]
-    supported_extensions = [".glb"] + vector_data_extensions + point_cloud_data_extensions + raster_formats
-    extension = "".join(Path(filename).suffixes)
-
-    if not extension in supported_extensions:
-        supported_extensions_list = ", ".join(supported_extensions)
-        raise HTTPException(status_code=500, detail=f"Not supported file, supported extensions {supported_extensions_list}")
-
-    asset_in = {
-        'filename': filename,
+    filename = file.filename
+    file_info = {
+        'filename': file.filename,
         'content_type': file.content_type,
         'content_size': file.size,
-        'extension': extension,
-        'upload_result': {}
+        'file': file.file
     }
 
-    asset = Asset.model_validate(asset_in, update={"owner_id": current_user.id})
-    output_file_path = get_asset_upload_path(asset.id, extension)
-
-    try:
-        os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
-        with open(output_file_path, 'wb') as f:
-            while contents := file.file.read(1024 * 1024):
-                f.write(contents)
-    except Exception:
-        raise HTTPException(status_code=500, detail="There was an error uploading the file")
-    finally:
-        file.file.close()
-
-    session.add(asset)
-    session.commit()
-    session.refresh(asset)
-
-    task = complete_upload_process.delay(options={
-        'asset': asset.model_dump(),
-        'vector_data_extensions': vector_data_extensions,
-        'point_cloud_data_extensions': point_cloud_data_extensions,
-        'raster_formats': raster_formats,
-        'to_ellipsoidal_height': to_ellipsoidal_height
-    })
-    asset.sqlmodel_update({
-        "upload_id": task.id,
-        "upload_status": task.status,
-        "upload_result": task.result
-    })
-    session.add(asset)
-    session.commit()
-    session.refresh(asset)
-
+    asset = routes_utils.create_asset(session=session, file_info=file_info, current_user=current_user, to_ellipsoidal_height=to_ellipsoidal_height)
     return asset
 
 @router.get("/files/{filename}", response_model=None)
@@ -140,7 +92,7 @@ async def get_asset_file(session: SessionDep, current_user: CurrentUser, filenam
     if not current_user.is_superuser and (asset.owner_id != current_user.id):
         raise HTTPException(status_code=400, detail="Not enough permissions")
 
-    output_path = get_asset_upload_path(asset.id, asset.extension)
+    output_path = get_asset_upload_path(f"{asset.id}/index{asset.extension}")
     return FileResponse(output_path)
 
 @router.get("/{id}/download", response_model=None)
@@ -154,7 +106,7 @@ async def download_asset(session: SessionDep, current_user: CurrentUser, id: uui
     if not current_user.is_superuser and (asset.owner_id != current_user.id):
         raise HTTPException(status_code=400, detail="Not enough permissions")
 
-    output_path = get_asset_upload_path(asset.id, asset.extension)
+    output_path = get_asset_upload_path(f"{asset.id}/index{asset.extension}")
     return FileResponse(output_path)
 
 @router.get("/{id}/sample", response_model=None)
@@ -175,7 +127,7 @@ async def read_asset_sample(session: SessionDep, current_user: CurrentUser, id: 
     if asset.geometry_type == 'PointCloud':
         sample_extension = '.xyz'
 
-    sample_file_path = get_asset_upload_path(asset.id, sample_extension, 'sample')
+    sample_file_path = get_asset_upload_path(f"{asset.id}/sample{sample_extension}")
     if not os.path.isfile(sample_file_path):
         raise HTTPException(status_code=500, detail="Sample file not available")
 
@@ -207,8 +159,6 @@ def delete_asset(
     session.delete(asset)
     session.commit()
 
-    complete_asset_remove_process.delay({
-        'asset': asset.model_dump()
-    })
+    celery.send_task('complete_asset_remove_process', args=[{'asset': asset.model_dump()}])
 
     return Message(message="Asset deleted successfully")

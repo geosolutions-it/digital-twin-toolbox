@@ -12,9 +12,8 @@ from app.api.deps import (
 )
 from app.core.config import settings
 from app.core.security import get_password_hash, verify_password
-from app.models import (
-    Asset,
-    Message,
+from app.models.task import Asset, Message
+from app.models.user import (
     UpdatePassword,
     User,
     UserCreate,

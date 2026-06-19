@@ -5,6 +5,8 @@ import { PipelinesService } from "../../../client"
 import PointCloudCanvas from "../../../components/Viewer/PointCloudCanvas"
 import PointGeometryCanvas from "../../../components/Viewer/PointGeometryCanvas"
 import PolygonGeometryCanvas from "../../../components/Viewer/PolygonGeometryCanvas"
+import PhotogrammetryCanvas from "../../../components/Viewer/PhotogrammetryCanvas"
+import { isCeleryTaskInProgress } from "../../../utils/celeryStatus"
 
 export const Route = createFileRoute("/_layout/pipeline/$pipelineId")({
   component: Pipeline,
@@ -17,7 +19,9 @@ function Pipeline() {
     queryFn: () => PipelinesService.readPipeline({ id: pipelineId }),
     queryKey: ["pipeline", pipelineId],
     refetchInterval: (options) => {
-      return options?.state?.data?.task_status === "PENDING" ? 1000 : false
+      return isCeleryTaskInProgress(options?.state?.data?.task_status)
+        ? 1000
+        : false
     },
   })
 
@@ -81,6 +85,15 @@ function Pipeline() {
         ) : null}
         {data?.asset?.geometry_type === "Polygon" ? (
           <PolygonGeometryCanvas
+            assetId={assetId}
+            pipeline={data}
+            onUpdate={handleOnUpdate}
+            onRun={handleOnRun}
+            onCancel={handleOnCancel}
+          />
+        ) : null}
+        {data?.asset?.asset_type === "Photogrammetry" ? (
+          <PhotogrammetryCanvas
             assetId={assetId}
             pipeline={data}
             onUpdate={handleOnUpdate}
