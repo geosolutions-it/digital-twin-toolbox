@@ -1,21 +1,15 @@
 import math
 import numpy as np
-from pyproj import Transformer
-from mathutils import Matrix
 import os
 import json
-
-def reproject(coords, from_proj, to_proj):
-    transformer = Transformer.from_proj(from_proj, to_proj)
-    x, y, z = transformer.transform(
-        coords[0], coords[1], coords[2] if len(coords) > 2 else 0.0
-    )
-    return [x, y, z]
 
 def multiply_matrix(m1, m2):
     return np.array(m1).reshape(4, 4).dot(np.array(m2).reshape(4, 4)).flatten().tolist()
 
-def get_location_and_rotation(params):
+def _ecef_location_and_basis(params):
+    """ECEF anchor location + ENU basis vectors (east, north, up) for a
+    lat/lon/alt origin at the given scale. Shared by get_location_and_rotation
+    and get_transform."""
     s = params['scale']
     lat = params['latitude'] * math.pi / 180
     lon = params['longitude'] * math.pi / 180
@@ -34,82 +28,39 @@ def get_location_and_rotation(params):
 
     nu = a / math.sqrt(1 - e_sq * sin_lat * sin_lat)
 
-    x = (nu + alt) * cos_lat * cos_lon
-    y = (nu + alt) * cos_lat * sin_lon
-    z = (nu * (1 - e_sq) + alt) * sin_lat
+    location = [
+        (nu + alt) * cos_lat * cos_lon,
+        (nu + alt) * cos_lat * sin_lon,
+        (nu * (1 - e_sq) + alt) * sin_lat,
+    ]
+    east = [-sin_lon, cos_lon, 0]
+    north = [-cos_lon * sin_lat, -sin_lon * sin_lat, cos_lat]
+    up = [cos_lat * cos_lon, cos_lat * sin_lon, sin_lat]
 
-    xr = -sin_lon
-    yr = cos_lon
-    zr = 0
+    return location, east, north, up
 
-    xe = -cos_lon * sin_lat
-    ye = -sin_lon * sin_lat
-    ze = cos_lat
-
-    xs = cos_lat * cos_lon
-    ys = cos_lat * sin_lon
-    zs = sin_lat
-
+def get_location_and_rotation(params):
+    location, east, north, up = _ecef_location_and_basis(params)
     return {
-        'location': [x, y, z],
-        'rotation': Matrix((
-            (xr, xe, xs, 0),
-            (yr, ye, ys, 0),
-            (zr, ze, zs, 0),
-            (0, 0, 0, 1)
-        ))
+        'location': location,
+        'rotation': [
+            [east[0], north[0], up[0], 0],
+            [east[1], north[1], up[1], 0],
+            [east[2], north[2], up[2], 0],
+            [0, 0, 0, 1],
+        ],
     }
 
 def get_transform(params):
     s = params['scale']
-    lat = params['latitude'] * math.pi / 180
-    lon = params['longitude'] * math.pi / 180
-    alt = params['altitude']
-
-    a = 6378137.0 / s
-    b = 6356752.3142 / s
-    f = (a - b) / a
-
-    e_sq = 2 * f - f * f
-
-    sin_lat = math.sin(lat)
-    cos_lat = math.cos(lat)
-    sin_lon = math.sin(lon)
-    cos_lon = math.cos(lon)
-
-    nu = a / math.sqrt(1 - e_sq * sin_lat * sin_lat)
-
-    x = (nu + alt) * cos_lat * cos_lon
-    y = (nu + alt) * cos_lat * sin_lon
-    z = (nu * (1 - e_sq) + alt) * sin_lat
-
-    xr = -sin_lon
-    yr = cos_lon
-    zr = 0
-
-    xe = -cos_lon * sin_lat
-    ye = -sin_lon * sin_lat
-    ze = cos_lat
-
-    xs = cos_lat * cos_lon
-    ys = cos_lat * sin_lon
-    zs = sin_lat
+    location, east, north, up = _ecef_location_and_basis(params)
 
     res = [
-        xr, xe, xs, x,
-        yr, ye, ys, y,
-        zr, ze, zs, z,
+        east[0], north[0], up[0], location[0],
+        east[1], north[1], up[1], location[1],
+        east[2], north[2], up[2], location[2],
         0, 0, 0, 1
     ]
-
-    rot = [
-        1, 0, 0, 0,
-        0, 1, 0, 0,
-        0, 0, 1, 0,
-        0, 0, 0, 1
-    ]
-
-    mult = multiply_matrix(res, rot)
 
     scale_matrix = [
         s, 0, 0, 0,
@@ -118,7 +69,7 @@ def get_transform(params):
         0, 0, 0, 1
     ]
 
-    column_major_order = np.array(mult).reshape(4, 4).T.flatten().tolist()
+    column_major_order = np.array(res).reshape(4, 4).T.flatten().tolist()
 
     return multiply_matrix(column_major_order, scale_matrix)
 
@@ -157,9 +108,6 @@ def transform_bounding_volume_box(bounding_volume_box, transform):
         new_half_axes_list[6], new_half_axes_list[7], new_half_axes_list[8]
     ]
 
-def rad(deg):
-    return deg * math.pi / 180
-
 def to_box(info):
     size = info.get('size')
     center = info.get('center')
@@ -173,6 +121,8 @@ def to_box(info):
 def run(config):
 
     size = config.get('size')
+    if not size:
+        raise ValueError('tileset config requires mesh "size" [width, depth, height] from tiling metadata')
     depth = config.get('depth')
     output_dir = config.get('output_dir')
 
@@ -276,4 +226,5 @@ def run(config):
             'uri': '0_0_0.glb'
         })
     }
+
     return tileset

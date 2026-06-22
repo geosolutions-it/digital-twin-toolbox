@@ -18,6 +18,7 @@ celery.conf.result_backend_transport_options = {'visibility_timeout': CELERY_VIS
 celery.conf.visibility_timeout = CELERY_VISIBILITY_TIMOUT
 
 celery.conf.task_routes = {name: {'queue': queue} for name, queue in TASK_QUEUES.items()}
+celery.conf.task_track_started = True
 
 
 class PipelineDatabaseTask(Task):
@@ -54,6 +55,11 @@ class AssetDatabaseTask(Task):
                 asset_in['asset_type'] = retval['asset_type']
                 asset_in['geometry_type'] = retval['geometry_type']
                 asset_in['upload_result'] = retval['payload']
+            elif einfo is not None:
+                asset_in['upload_result'] = {
+                    'error': str(einfo.exception),
+                    'traceback': einfo.traceback,
+                }
             asset.sqlmodel_update(asset_in)
             session.add(asset)
             session.commit()

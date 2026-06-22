@@ -8,7 +8,7 @@ from app.models.task import Pipeline, PipelinePublic, PipelinesPublic, PipelineP
 from app.worker.pipelines import run as run_pipeline
 from app.worker.main import celery
 from celery.result import AsyncResult
-from celery.states import PENDING, REVOKED, STARTED
+from celery.states import REVOKED, PENDING, SUCCESS, FAILURE, STARTED
 
 router = APIRouter()
 
@@ -149,7 +149,29 @@ def read_pipeline(session: SessionDep, current_user: CurrentUser, id: uuid.UUID)
     if not current_user.is_superuser and (asset.owner_id != current_user.id):
         raise HTTPException(status_code=400, detail="Not enough permissions for linked asset")
     pipeline_in = pipeline.model_dump()
-    pipeline_extended = PipelinePublicExtended.model_validate({ **pipeline_in, 'asset': asset }, update={ "owner_id": pipeline.owner_id })
+    pipeline_extended = PipelinePublicExtended.model_validate(
+        {**pipeline_in, "asset": asset},
+        update={"owner_id": pipeline.owner_id},
+    )
+
+    if pipeline.task_id and pipeline.task_status == PENDING:
+        async_result = AsyncResult(pipeline.task_id, app=celery)
+        celery_status = async_result.state
+        if celery_status in (STARTED, 'PROGRESS'):
+            pipeline_extended = pipeline_extended.model_copy(
+                update={'task_status': STARTED},
+            )
+        elif celery_status == SUCCESS and async_result.ready():
+            result = async_result.result
+            if isinstance(result, dict):
+                pipeline_extended = pipeline_extended.model_copy(
+                    update={'task_status': SUCCESS, 'task_result': result},
+                )
+        elif celery_status == FAILURE and async_result.ready():
+            pipeline_extended = pipeline_extended.model_copy(
+                update={'task_status': FAILURE},
+            )
+
     return pipeline_extended
 
 @router.delete("/{id}")

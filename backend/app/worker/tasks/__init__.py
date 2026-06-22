@@ -7,37 +7,23 @@ CAPABILITIES = {
             '.tiff': 'inspect_raster',
             '.tif': 'inspect_raster',
         },
-        'pipeline_matchers': [
-            {'geometry_type': 'Polygon'},
-            {'geometry_type': 'Point'},
-        ],
     },
     'point-cloud': {
         'extensions': {
             '.laz': 'inspect_pointcloud',
             '.las': 'inspect_pointcloud',
         },
-        'pipeline_matchers': [
-            {'geometry_type': 'PointCloud'},
-        ],
     },
     'mesh': {
         'extensions': {
             '.obj': 'inspect_mesh',
-            '.ply': 'inspect_mesh',
             '.obj.zip': 'inspect_mesh',
         },
-        'pipeline_matchers': [
-            {'asset_type': 'Mesh'},
-        ],
     },
     'photogrammetry': {
         'extensions': {
             '.phg.zip': 'inspect_photogrammetry',
         },
-        'pipeline_matchers': [
-            {'asset_type': 'Photogrammetry'},
-        ],
     },
     # Shared queue drained by every worker: lightweight, dependency-free tasks
     # (GLB inspection + asset/pipeline cleanup) that must run regardless of which
@@ -47,7 +33,6 @@ CAPABILITIES = {
         'extensions': {
             '.glb': 'inspect_glb',
         },
-        'pipeline_matchers': [],
     },
 }
 
@@ -73,17 +58,4 @@ def inspection_task_for_extension(extension: str) -> str | None:
         task = caps.get('extensions', {}).get(extension)
         if task:
             return task
-    return None
-
-
-def pipeline_queue_for_asset(asset_type: str | None, geometry_type: str | None) -> str | None:
-    for queue, caps in CAPABILITIES.items():
-        for matcher in caps.get('pipeline_matchers', []):
-            expected_asset_type = matcher.get('asset_type')
-            expected_geometry_type = matcher.get('geometry_type')
-            if expected_asset_type is not None and expected_asset_type != asset_type:
-                continue
-            if expected_geometry_type is not None and expected_geometry_type != geometry_type:
-                continue
-            return queue
     return None

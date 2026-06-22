@@ -23,6 +23,7 @@
     "earcut": "^3.0.0",
     "form-data": "4.0.0",
     "framer-motion": "10.16.16",
+    "maplibre-gl": "^4.7.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-error-boundary": "^4.0.13",

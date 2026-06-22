@@ -72,6 +72,19 @@ services:
     env_file:
       - .env
 
+  # Local-only container log viewer (http://localhost:9999). Reads the Docker
+  # socket read-only to tail logs of all services, including the workers.
+  dozzle:
+    image: amir20/dozzle:latest
+    restart: "no"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    # Bind to localhost by default so logs are never exposed on a LAN. Set
+    # DOZZLE_BIND_HOST=0.0.0.0 if your setup cannot reach it via localhost
+    # (e.g. some native-docker WSL configs).
+    ports:
+      - "${DOZZLE_BIND_HOST:-127.0.0.1}:9999:8080"
+
 networks:
   traefik-public:
     # For local dev, don't expect an external Traefik network
