@@ -1,6 +1,7 @@
 import subprocess
 import json
 import os
+from app.worker.common.utils import run_subprocess
 
 
 def _as_float(value, name):
@@ -20,7 +21,7 @@ def scale_geometric_error(leaf, scale=1):
 def py3dtiles_convert(input_path, output_path, srs_in, geometric_error_scale_factor=1):
     scale = _as_float(geometric_error_scale_factor, 'geometric_error_scale_factor')
 
-    res = subprocess.run([
+    res = run_subprocess([
         'py3dtiles', 'convert', input_path,
         '--overwrite', '--classification', '--force-srs-in',
         '--color_scale', "255",

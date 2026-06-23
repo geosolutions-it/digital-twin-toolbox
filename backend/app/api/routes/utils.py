@@ -217,9 +217,15 @@ def create_asset(session, file_info, current_user, to_ellipsoidal_height):
             if '.shp' in zip_file_extensions:
                 filename = filename.replace('.zip', '.shp.zip')
                 extension = "".join(Path(filename).suffixes)
+            elif '.obj' in zip_file_extensions:
+                filename = filename.replace('.zip', '.obj.zip')
+                extension = "".join(Path(filename).suffixes)
             else:
                 if not all(ext in ['.jpg', '.json', '.jpg.png', '.png', ''] for ext in zip_file_extensions):
-                    raise HTTPException(status_code=500, detail=f"Not supported file, empty zip file")
+                    raise HTTPException(
+                        status_code=500,
+                        detail="Not supported zip archive. Include a .obj mesh (optionally .mtl and textures), shapefile (.shp), or photogrammetry images.",
+                    )
                 else:
                     filename = filename.replace('.zip', '.phg.zip')
                     extension = "".join(Path(filename).suffixes)
@@ -236,7 +242,7 @@ def create_asset(session, file_info, current_user, to_ellipsoidal_height):
     point_cloud_data_extensions = [".laz", ".las"]
     raster_formats = [".tiff", ".tif"]
     photogrammetry_formats = [".phg.zip"]
-    mesh_formats = [".obj", ".ply"]
+    mesh_formats = [".obj", ".obj.zip"]
     supported_extensions = [".glb"] + vector_data_extensions + point_cloud_data_extensions + raster_formats + photogrammetry_formats + mesh_formats
 
     if not extension in supported_extensions:

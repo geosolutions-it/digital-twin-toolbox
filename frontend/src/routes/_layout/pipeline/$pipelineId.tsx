@@ -1,12 +1,14 @@
-import { Box, Flex } from "@chakra-ui/react"
+import { Box, Divider, Flex } from "@chakra-ui/react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import { PipelinesService } from "../../../client"
+import { hideUserSections } from "../../../utils"
 import PointCloudCanvas from "../../../components/Viewer/PointCloudCanvas"
 import PointGeometryCanvas from "../../../components/Viewer/PointGeometryCanvas"
 import PolygonGeometryCanvas from "../../../components/Viewer/PolygonGeometryCanvas"
 import PhotogrammetryCanvas from "../../../components/Viewer/PhotogrammetryCanvas"
 import { isCeleryTaskInProgress } from "../../../utils/celeryStatus"
+import MeshCanvas from "../../../components/Viewer/MeshCanvas"
 
 export const Route = createFileRoute("/_layout/pipeline/$pipelineId")({
   component: Pipeline,
@@ -65,6 +67,11 @@ function Pipeline() {
   return (
     <Box w="100%" pos="relative" h="calc(var(--dtt-vh))" m="0">
       <Flex pos="absolute" w="100%" h="100%">
+        <Box
+          w={hideUserSections() ? "100%" : "calc(100% - 74px)"}
+          pos="relative"
+        >
+          <Flex pos="absolute" w="100%" h="100%">
         {data?.asset?.geometry_type === "PointCloud" ? (
           <PointCloudCanvas
             assetId={assetId}
@@ -101,6 +108,18 @@ function Pipeline() {
             onCancel={handleOnCancel}
           />
         ) : null}
+        {data?.asset?.asset_type === "Mesh" ? (
+          <MeshCanvas
+            assetId={assetId}
+            pipeline={data}
+            onUpdate={handleOnUpdate}
+            onRun={handleOnRun}
+            onCancel={handleOnCancel}
+          />
+        ) : null}
+          </Flex>
+        </Box>
+        <Divider orientation="vertical" />
       </Flex>
     </Box>
   )

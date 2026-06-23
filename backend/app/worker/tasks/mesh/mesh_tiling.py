@@ -4,7 +4,8 @@ import os
 import bmesh
 import time
 import pathlib
-from app.worker.tasks.mesh.create_tileset import get_location_and_rotation, run as create_tileset_run, get_transform
+import numpy as np
+from app.worker.tasks.mesh.create_tileset import get_location_and_rotation, get_transform
 import json
 
 logging.basicConfig(level=logging.INFO)
@@ -92,16 +93,41 @@ def merge_vertices(threshold=0.0001):
 
 # import mesh
 def import_mesh(filepath):
-
     extension = pathlib.Path(filepath).suffix
     if extension == '.ply':
-        bpy.ops.wm.ply_import(filepath=filepath , forward_axis='Y', up_axis='Z')
+        bpy.ops.wm.ply_import(filepath=filepath, forward_axis='Y', up_axis='Z')
     else:
-        bpy.ops.wm.obj_import(filepath=filepath , forward_axis='Y', up_axis='Z')
+        bpy.ops.wm.obj_import(filepath=filepath, forward_axis='Y', up_axis='Z')
 
     obj = bpy.context.object
 
     merge_vertices()
+
+    min_x = float('inf')
+    min_y = float('inf')
+    min_z = float('inf')
+    max_x = float('-inf')
+    max_y = float('-inf')
+    max_z = float('-inf')
+    for vertex in obj.data.vertices:
+        x = vertex.co[0]
+        y = vertex.co[1]
+        z = vertex.co[2]
+        min_x = x if x < min_x else min_x
+        min_y = y if y < min_y else min_y
+        min_z = z if z < min_z else min_z
+        max_x = x if x > max_x else max_x
+        max_y = y if y > max_y else max_y
+        max_z = z if z > max_z else max_z
+
+    center_x = (min_x + max_x) / 2
+    center_y = (min_y + max_y) / 2
+    center_z = (min_z + max_z) / 2
+
+    for vertex in obj.data.vertices:
+        vertex.co[0] -= center_x
+        vertex.co[1] -= center_y
+        vertex.co[2] -= center_z
 
     top = float('-inf')
     left = float('inf')
@@ -256,45 +282,52 @@ def split_tile(params):
     for obj in bpy.context.scene.objects:
         obj.select_set(False)
         obj.hide_set(False)
-    
-    target.select_set(True)
-    bpy.context.view_layer.objects.active = target
-    bpy.ops.object.duplicate()
-    full = bpy.context.active_object
-    full.name = 'full'
 
-    nothing_selected = True
-    min_z = float('inf')
-    max_z = float('-inf')
-    for vertex in full.data.vertices:
-        x = vertex.co[0]
-        y = vertex.co[1]
-        z = vertex.co[2]
-        minx = bbox[0] - margin
-        miny = bbox[1] - margin
-        maxx = bbox[2] + margin
-        maxy = bbox[3] + margin
-        if x >= minx and x <= maxx and y >= miny and y <= maxy:
-            vertex.select = True
-            nothing_selected = False
-            min_z = z if z < min_z else min_z
-            max_z = z if z > max_z else max_z
-    center_z = min_z + (max_z - min_z) / 2
+    # select the tile's bbox+margin verts directly on the level mesh (numpy box mask)
+    minx = bbox[0] - margin
+    miny = bbox[1] - margin
+    maxx = bbox[2] + margin
+    maxy = bbox[3] + margin
 
-    if nothing_selected:
-        # if nothing is selected we skip and proceed with next tile
-        remove_obj(full)
+    verts = target.data.vertices
+    count = len(verts)
+    coords = np.empty(count * 3, dtype=np.float64)
+    verts.foreach_get('co', coords)
+    coords = coords.reshape(count, 3)
+    in_tile = (
+        (coords[:, 0] >= minx) & (coords[:, 0] <= maxx) &
+        (coords[:, 1] >= miny) & (coords[:, 1] <= maxy)
+    )
+
+    if not in_tile.any():
+        # nothing in this tile, skip and proceed with next
         return
 
+    verts.foreach_set('select', in_tile)
+    selected_z = coords[in_tile, 2]
+    min_z = float(selected_z.min())
+    max_z = float(selected_z.max())
+    center_z = min_z + (max_z - min_z) / 2
+
+    target.select_set(True)
+    bpy.context.view_layer.objects.active = target
+
+    # duplicate only the selected region; target keeps its geometry (incl margin overlap) for
+    # the next tile, so we avoid copying the whole level mesh per tile
+    existing = set(bpy.data.objects) # snapshot of current objects
     bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.duplicate()
     bpy.ops.mesh.separate(type='SELECTED')
     bpy.ops.object.mode_set(mode='OBJECT')
-    tile = bpy.data.objects['full.001']
+
+    # we look for new object created by duplicate
+    new_objs = [o for o in bpy.data.objects if o not in existing]
+    if not new_objs:
+        return
+    tile = new_objs[0]
     tile.name = 'tile'
     tile.hide_render = False
     bpy.ops.object.select_all(action="DESELECT")
-
-    remove_obj(full)
 
     tile.select_set(True)
     bpy.context.view_layer.objects.active = tile
@@ -364,7 +397,12 @@ def split_tile(params):
         with open(filepath.replace('.glb', '.json'), 'w') as f:
             json.dump(tile_info, f)
 
-        tile.data.transform(location_and_rotation.get('rotation'))
+        rotation = location_and_rotation.get('rotation')
+        if rotation is not None:
+            from mathutils import Matrix
+            if not isinstance(rotation, Matrix):
+                rotation = Matrix(rotation)
+            tile.data.transform(rotation)
         tile.data.update()
 
         location = location_and_rotation.get('location')
@@ -447,8 +485,6 @@ def run(params):
     altitude = params.get('altitude', 0)
     apply_transform = params.get('apply_transform', True)
     decimate_last_depth_level = params.get('decimate_last_depth_level', False)
-    create_tileset_json = params.get('create_tileset_json', True)
-    max_geometric_error = params.get('max_geometric_error', None)
     start_x = params.get('start_x', 0)
     start_y = params.get('start_y', 0)
     start_z = params.get('start_z', 0)
@@ -582,27 +618,10 @@ def run(params):
 
         remove_obj(cloned_merged)
 
-    remove_obj(merged)
-    remove_obj(target_model)
-
-    clean_up()
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-
-    if create_tileset_json:
-
-        config = {
-            **info,
-            "depth": depth,
-            'output_dir': output_dir,
-            'max_geometric_error': max_geometric_error
-        }
-
-        tileset = create_tileset_run(config)
-
-        with open(os.path.join(output_dir, 'tileset.json'), 'w') as f:
-            json.dump(tileset, f)
-
-        return tileset
+    # Save mesh info for the finalize step (runs in the parent process).
+    with open(os.path.join(output_dir, 'info.json'), 'w') as f:
+        json.dump(info, f)
 
     elapsed_time = (time.time() - start_time)
     logger.info(f"tiling completed in {elapsed_time} seconds")
+    return info

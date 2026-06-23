@@ -1,12 +1,11 @@
 import logging
 import subprocess
 import os
-import json
 import sys
+import json
 import psutil
-import numpy as np
-import open3d as o3d
 import cv2
+from app.worker.common.utils import run_subprocess
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -14,6 +13,104 @@ logger = logging.getLogger(__name__)
 def get_OpenSfM_bin():
     """Returns the command to run OpenSfM binaries"""
     return ['/bin/micromamba', 'run', '-n', 'opensfm', '/source/OpenSfM/bin/opensfm']
+
+# OpenSfM presets per survey type, auto-selected by OPK detection. Resource keys are injected
+# at runtime; 'reconstruct_algorithm' (CLI flag) and 'depthmap_min_consistent_views' (dense
+# stage) are not config.yaml keys.
+SFM_PRESET_AERIAL = {
+    'reconstruct_algorithm': 'triangulation',
+    'feature_type': 'SIFT',
+    'feature_min_frames': 30000,
+    'sift_peak_threshold': 0.066,
+    'matcher_type': 'FLANN',
+    'flann_algorithm': 'KDTREE',
+    'matching_gps_neighbors': 0,
+    'matching_gps_distance': 0,
+    'matching_graph_rounds': 50,
+    'triangulation_type': 'ROBUST',
+    'use_exif_size': 'no',
+    'use_altitude_tag': 'yes',
+    'optimize_camera_parameters': 'yes',
+    'bundle_outlier_filtering_type': 'AUTO',
+    'align_method': 'auto',
+    'align_orientation_prior': 'vertical',
+    'local_bundle_radius': 0,
+    'bundle_use_gcp': 'no',
+    'retriangulation_ratio': 2,
+    'undistorted_image_format': 'jpg',
+    'depthmap_min_consistent_views': 3,
+}
+
+SFM_PRESET_HANDHELD = {
+    'reconstruct_algorithm': 'incremental',
+    'feature_type': 'SIFT',
+    'feature_min_frames': 8000,
+    'sift_peak_threshold': 0.066,
+    'matcher_type': 'FLANN',
+    'flann_algorithm': 'KDTREE',
+    'matching_gps_neighbors': 0,
+    'matching_gps_distance': 0,
+    'matching_graph_rounds': 0,
+    'triangulation_type': 'ROBUST',
+    'use_exif_size': 'no',
+    'use_altitude_tag': 'no',
+    'optimize_camera_parameters': 'yes',
+    'bundle_outlier_filtering_type': 'AUTO',
+    'align_method': 'auto',
+    'align_orientation_prior': 'horizontal',
+    'local_bundle_radius': 0,
+    'bundle_use_gcp': 'no',
+    'retriangulation_ratio': 2,
+    'undistorted_image_format': 'jpg',
+    'depthmap_min_consistent_views': 2,
+}
+
+# config.yaml keys: everything in a preset except the non-OpenSfM helper keys.
+_NON_CONFIG_KEYS = {'reconstruct_algorithm', 'depthmap_min_consistent_views'}
+
+
+def survey_preset(process_dir, override=None):
+    """Preset for this survey: aerial if OPK detected (or override), else handheld."""
+    aerial = override if override is not None else is_aerial_survey(process_dir)
+    return SFM_PRESET_AERIAL if aerial else SFM_PRESET_HANDHELD
+
+
+def sfm_config_yaml(preset, resources):
+    """Build the OpenSfM config.yaml dict: preset SfM keys (minus helpers) + runtime resources."""
+    cfg = {k: v for k, v in preset.items() if k not in _NON_CONFIG_KEYS}
+    cfg['processes'] = resources['processes']
+    cfg['read_processes'] = resources['read_processes']
+    cfg['feature_process_size'] = resources['feature_process_size']
+    return cfg
+
+
+def is_aerial_survey(process_dir):
+    """Aerial if any extracted exif (process_dir/exif/*.exif) carries OPK orientation priors."""
+    exif_dir = os.path.join(process_dir, 'exif')
+    if not os.path.isdir(exif_dir):
+        return False
+    for name in os.listdir(exif_dir):
+        if not name.endswith('.exif'):
+            continue
+        try:
+            with open(os.path.join(exif_dir, name)) as f:
+                meta = json.load(f)
+        except (ValueError, OSError):
+            continue
+        if isinstance(meta, dict) and 'opk' in meta:
+            return True
+    return False
+
+def build_params(process_dir, config):
+    """Resolve the mesh/texture file paths under process_dir; tuning comes from config."""
+    return {
+        **config,
+        'process_dir': process_dir,
+        'output_xyz': os.path.join(process_dir, 'merged.xyz'),
+        'output_ply': os.path.join(process_dir, 'mesh.ply'),
+        'output_textured_dir': os.path.join(process_dir, 'textured'),
+        'output_textured_dir_zip': os.path.join(process_dir, 'textured.zip'),
+    }
 
 def remove_if_exists(path):
     """Remove file if it exists"""
@@ -192,7 +289,7 @@ def run_step(step_name, command, process_dir: str, skip_check=False):
         
     logger.info(f"Running step: {step_name}")
     try:
-        subprocess.run(command, check=True)
+        run_subprocess(command, check=True)
         return True
     except Exception as e:
         logger.error(f"Step {step_name} failed: {e}")

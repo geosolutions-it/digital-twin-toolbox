@@ -26,6 +26,7 @@ const UserMenu = () => {
         position="fixed"
         top={4}
         right={4}
+        zIndex={2}
       >
         <Menu>
           <MenuButton

@@ -4,6 +4,7 @@ import os
 import sqlalchemy.types as types
 import mapbox_earcut
 from app.core.config import settings
+from app.worker.common.utils import run_subprocess
 
 
 def earcut_flatten(data):
@@ -47,7 +48,7 @@ def pg2b3dm(table_task_name, output_3dtiles_path, attributes, geometric_error_fa
     if lod_column_name:
         options = options + ['--lodcolumn', lod_column_name, '--refinement', 'REPLACE']
 
-    subprocess.run([
+    run_subprocess([
         'pg2b3dm',
         '-h', settings.POSTGRES_SERVER,
         '-p', f"{settings.POSTGRES_PORT}",
