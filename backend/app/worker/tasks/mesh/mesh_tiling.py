@@ -4,6 +4,7 @@ import os
 import bmesh
 import time
 import pathlib
+import numpy as np
 from app.worker.tasks.mesh.create_tileset import get_location_and_rotation, get_transform
 import json
 
@@ -281,45 +282,52 @@ def split_tile(params):
     for obj in bpy.context.scene.objects:
         obj.select_set(False)
         obj.hide_set(False)
-    
-    target.select_set(True)
-    bpy.context.view_layer.objects.active = target
-    bpy.ops.object.duplicate()
-    full = bpy.context.active_object
-    full.name = 'full'
 
-    nothing_selected = True
-    min_z = float('inf')
-    max_z = float('-inf')
-    for vertex in full.data.vertices:
-        x = vertex.co[0]
-        y = vertex.co[1]
-        z = vertex.co[2]
-        minx = bbox[0] - margin
-        miny = bbox[1] - margin
-        maxx = bbox[2] + margin
-        maxy = bbox[3] + margin
-        if x >= minx and x <= maxx and y >= miny and y <= maxy:
-            vertex.select = True
-            nothing_selected = False
-            min_z = z if z < min_z else min_z
-            max_z = z if z > max_z else max_z
-    center_z = min_z + (max_z - min_z) / 2
+    # select the tile's bbox+margin verts directly on the level mesh (numpy box mask)
+    minx = bbox[0] - margin
+    miny = bbox[1] - margin
+    maxx = bbox[2] + margin
+    maxy = bbox[3] + margin
 
-    if nothing_selected:
-        # if nothing is selected we skip and proceed with next tile
-        remove_obj(full)
+    verts = target.data.vertices
+    count = len(verts)
+    coords = np.empty(count * 3, dtype=np.float64)
+    verts.foreach_get('co', coords)
+    coords = coords.reshape(count, 3)
+    in_tile = (
+        (coords[:, 0] >= minx) & (coords[:, 0] <= maxx) &
+        (coords[:, 1] >= miny) & (coords[:, 1] <= maxy)
+    )
+
+    if not in_tile.any():
+        # nothing in this tile, skip and proceed with next
         return
 
+    verts.foreach_set('select', in_tile)
+    selected_z = coords[in_tile, 2]
+    min_z = float(selected_z.min())
+    max_z = float(selected_z.max())
+    center_z = min_z + (max_z - min_z) / 2
+
+    target.select_set(True)
+    bpy.context.view_layer.objects.active = target
+
+    # duplicate only the selected region; target keeps its geometry (incl margin overlap) for
+    # the next tile, so we avoid copying the whole level mesh per tile
+    existing = set(bpy.data.objects) # snapshot of current objects
     bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.duplicate()
     bpy.ops.mesh.separate(type='SELECTED')
     bpy.ops.object.mode_set(mode='OBJECT')
-    tile = bpy.data.objects['full.001']
+
+    # we look for new object created by duplicate
+    new_objs = [o for o in bpy.data.objects if o not in existing]
+    if not new_objs:
+        return
+    tile = new_objs[0]
     tile.name = 'tile'
     tile.hide_render = False
     bpy.ops.object.select_all(action="DESELECT")
-
-    remove_obj(full)
 
     tile.select_set(True)
     bpy.context.view_layer.objects.active = tile
