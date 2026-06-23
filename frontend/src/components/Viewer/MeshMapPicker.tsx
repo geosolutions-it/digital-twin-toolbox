@@ -61,7 +61,7 @@ function hasCoordinates(latitude: number, longitude: number): boolean {
   return latitude !== 0 || longitude !== 0
 }
 
-/** MapLibre picker for mesh pipeline — draggable marker and footprint bbox. */
+/** MapLibre picker for mesh pipeline - draggable marker and footprint bbox. */
 function MeshMapPicker({
   latitude,
   longitude,

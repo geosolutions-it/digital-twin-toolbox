@@ -5,7 +5,7 @@ import subprocess
 import sys
 
 from app.worker.main import celery, PipelineDatabaseTask, AssetDatabaseTask
-from app.worker.common.utils import setup_output_directory
+from app.worker.common.utils import setup_output_directory, run_subprocess
 
 
 @celery.task(name="inspect_mesh", base=AssetDatabaseTask)
@@ -46,35 +46,23 @@ def inspect_mesh(options):
     }
 
 
-@celery.task(name="create_obj_mesh_3dtiles", base=PipelineDatabaseTask)
-def create_obj_mesh_3dtiles(pipeline_extended):
-    asset = pipeline_extended['asset']
-    asset_id = asset['id']
-    pipeline_id = pipeline_extended['id']
-    asset_extension = asset.get('extension', '.obj')
+MESH_TILING_DEFAULTS = {
+    'latitude': 0,
+    'longitude': 0,
+    'altitude': 0,
+    'depth': 4,
+    'tile_faces_target': 10000,
+    'texture_image_size': 512,
+    'max_geometric_error': 256,
+    'decimate_last_depth_level': False,
+}
 
-    pipeline_config = pipeline_extended.get('data') or {}
 
-    default_config = {
-        'latitude': 0,
-        'longitude': 0,
-        'altitude': 0,
-        'depth': 4,
-        'tile_faces_target': 10000,
-        'texture_image_size': 512,
-        'max_geometric_error': 256,
-        'decimate_last_depth_level': False,
-    }
-
-    config = {**default_config, **pipeline_config}
-
-    from app.worker.tasks.mesh.utils import resolve_mesh_input_file
-
-    input_file = resolve_mesh_input_file(asset_id, asset_extension)
+def _tile_obj_core(input_file, pipeline_id, config):
+    """OBJ -> 3D Tiles: subprocess tiling, build tileset.json, zip. Generic over input_file."""
     output_paths = setup_output_directory(pipeline_id)
-    os.makedirs(output_paths['output_path_3dtiles'], exist_ok=True)
-
     tiles_dir = output_paths['output_path_3dtiles']
+    os.makedirs(tiles_dir, exist_ok=True)
 
     tiling_params = {
         'input_file': input_file,
@@ -92,18 +80,13 @@ def create_obj_mesh_3dtiles(pipeline_extended):
         'start_z': 0,
     }
 
-    subprocess.run(
+    run_subprocess(
         [sys.executable, '-m', 'app.worker.tasks.mesh.run_tiling', json.dumps(tiling_params)],
         check=True,
     )
 
     from app.worker.tasks.mesh.finalize import finalize_mesh_3dtiles_output
-
-    finalize_mesh_3dtiles_output(
-        tiles_dir,
-        config['depth'],
-        config['max_geometric_error'],
-    )
+    finalize_mesh_3dtiles_output(tiles_dir, config['depth'], config['max_geometric_error'])
 
     shutil.make_archive(output_paths['output_path_3dtiles_zip'], 'zip', tiles_dir)
 
@@ -112,3 +95,32 @@ def create_obj_mesh_3dtiles(pipeline_extended):
         'tileset': output_paths['output_tileset'],
         'download': output_paths['output_tileset_zip'],
     }
+
+
+@celery.task(name="resolve_mesh_input")
+def resolve_mesh_input(pipeline_extended):
+    """Resolve the uploaded mesh asset to an OBJ path (extracts .obj.zip) and build the tile payload."""
+    from app.worker.tasks.mesh.utils import resolve_mesh_input_file
+
+    asset = pipeline_extended['asset']
+    input_file = resolve_mesh_input_file(asset['id'], asset.get('extension', '.obj'))
+    config = {**MESH_TILING_DEFAULTS, **(pipeline_extended.get('data') or {})}
+    return {'pipeline_extended': pipeline_extended, 'input_file': input_file, 'config': config}
+
+
+@celery.task(name="crop_obj")
+def crop_obj(payload):
+    """Generic mesh crop. Crops input_file to payload['bbox'] in place; no-op when bbox is absent."""
+    from app.worker.tasks.mesh.mesh_tiling import crop_mesh
+    crop_mesh(payload['input_file'], payload.get('bbox'))
+    return payload
+
+
+@celery.task(name="tile_obj_3dtiles", base=PipelineDatabaseTask)
+def tile_obj_3dtiles(payload):
+    """Generic terminal tiling step. Consumes {pipeline_extended, input_file, config} from the previous step."""
+    return _tile_obj_core(
+        payload['input_file'],
+        payload['pipeline_extended']['id'],
+        {**MESH_TILING_DEFAULTS, **payload['config']},
+    )

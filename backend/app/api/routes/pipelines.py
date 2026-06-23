@@ -12,6 +12,16 @@ from celery.states import REVOKED, PENDING, SUCCESS, FAILURE, STARTED
 
 router = APIRouter()
 
+def _collect_task_ids(result):
+    """All task ids in the chain (walks result.parent); one id for single-task pipelines."""
+    ids = []
+    node = result
+    while node is not None:
+        if getattr(node, 'id', None):
+            ids.append(node.id)
+        node = getattr(node, 'parent', None)
+    return ids
+
 @router.get("/", response_model=PipelinesPublic)
 def read_pipelines(
     session: SessionDep, current_user: CurrentUser, skip: int = 0, limit: int = 100
@@ -79,10 +89,12 @@ async def process_pipeline_task(
         if action_type == 'run' and pipeline_extended.task_status not in (PENDING, STARTED):
             pipeline_extended_dict = pipeline_extended.model_dump()
             task = run_pipeline(pipeline_extended_dict)
+            task_ids = _collect_task_ids(task)
             pipeline_out = {
                 "task_id": task.id,
                 "task_status": PENDING,
-                "task_result": None,
+                # store all chain ids so cancel can revoke the running step, not just the tail
+                "task_result": {"task_ids": task_ids} if len(task_ids) > 1 else None,
             }
             pipeline.sqlmodel_update(pipeline_out)
             session.add(pipeline)
@@ -90,10 +102,16 @@ async def process_pipeline_task(
             session.refresh(pipeline)
 
         if action_type == 'cancel' and pipeline.task_id and pipeline_extended.task_status in (PENDING, STARTED):
-            task = AsyncResult(pipeline.task_id)
-            task.revoke(terminate=True)
+            # revoke every chain task (running one terminated); single id for non-chains
+            task_ids = []
+            if isinstance(pipeline.task_result, dict):
+                task_ids = pipeline.task_result.get('task_ids') or []
+            if not task_ids:
+                task_ids = [pipeline.task_id]
+            for tid in task_ids:
+                AsyncResult(tid, app=celery).revoke(terminate=True)
             pipeline_out = {
-                "task_id": task.id,
+                "task_id": pipeline.task_id,
                 "task_status": REVOKED,
                 "task_result": None
             }

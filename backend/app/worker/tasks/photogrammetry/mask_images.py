@@ -3,7 +3,7 @@ import os
 import json
 import cv2
 import numpy as np
-from app.worker.tasks.photogrammetry.point_cloud_to_mesh import transform_extent_to_local
+from app.worker.tasks.photogrammetry.geo import transform_extent_to_local
 import shutil
 
 logging.basicConfig(level=logging.INFO)
@@ -12,8 +12,11 @@ logger = logging.getLogger(__name__)
 def run(process_dir):
 
     if not os.path.exists(os.path.join(process_dir, 'masks')):
-        reference_lla = None
+        # masking is extent-based; nothing to mask without a geo reference
         reference_lla_path = os.path.join(process_dir, 'reference_lla.json')
+        if not os.path.exists(reference_lla_path):
+            logger.info("Skip masks creation (no reference_lla.json)")
+            return
         with open(reference_lla_path, 'r') as f:
             reference_lla = json.load(f)
 

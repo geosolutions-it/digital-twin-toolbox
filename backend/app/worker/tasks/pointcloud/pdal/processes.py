@@ -4,21 +4,21 @@ import os
 import math
 from pyproj import CRS
 from app.worker.tasks.pointcloud.crs import resolve_epsg_codes_from_pdal_metadata
-from app.worker.common.utils import get_asset_upload_path
+from app.worker.common.utils import get_asset_upload_path, run_subprocess
 
 
 def pdal_metadata(file_path):
-    result = subprocess.run(
+    result = run_subprocess(
         ['pdal', 'info', file_path, '--metadata'],
-        stdout=subprocess.PIPE
+        capture_output=True,
     )
     return json.loads(result.stdout.decode("utf-8"))
 
 
 def pdal_stats(file_path):
-    result = subprocess.run(
+    result = run_subprocess(
         ['pdal', 'info', file_path, '--stats'],
-        stdout=subprocess.PIPE
+        capture_output=True,
     )
     return json.loads(result.stdout.decode("utf-8"))
 
@@ -57,7 +57,7 @@ def point_cloud_preview(input_file_path, output_file_path, metadata, stats):
     with open(pipeline_sample_path, "w") as f:
         json.dump(pipeline, f)
 
-    res = subprocess.run(['pdal', 'pipeline', pipeline_sample_path], capture_output=True, text=True)
+    res = run_subprocess(['pdal', 'pipeline', pipeline_sample_path], capture_output=True, text=True)
 
     if not os.path.isfile(output_file_path):
         print(res.stderr)
@@ -121,7 +121,7 @@ def process_las(pipeline_id, asset, sample_radius=None, to_ellipsoidal_height=Fa
     with open(pipeline_process_path, "w") as f:
         json.dump(pipeline, f)
 
-    res = subprocess.run(['pdal', 'pipeline', pipeline_process_path], capture_output=True, text=True)
+    res = run_subprocess(['pdal', 'pipeline', pipeline_process_path], capture_output=True, text=True)
 
     if not os.path.isfile(output_processed_laz_path):
         print(res.stderr)

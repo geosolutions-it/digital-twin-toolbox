@@ -132,6 +132,7 @@ function PhotogrammetryCanvas({
     depthmap_processes: 1,
     texture_image_resolution: 4096,
     texture_image_processes: 1,
+    depth: 4,
     ...pipeline.data,
   })
 
@@ -412,6 +413,18 @@ function PhotogrammetryCanvas({
               onChange={(event) =>
                 handleOnChange("texture_image_processes", parseInt(event.target.value))
               }
+            />
+          </FormControl>
+          <FormControl mt={2} mb={2}>
+            <FormLabel fontSize="xs" htmlFor="depth">
+              Depth
+            </FormLabel>
+            <Input
+              id="depth"
+              size="xs"
+              type="number"
+              value={data.depth}
+              onChange={(e) => handleOnChange("depth", Number(e.target.value))}
             />
           </FormControl>
           <Flex mt={2}>

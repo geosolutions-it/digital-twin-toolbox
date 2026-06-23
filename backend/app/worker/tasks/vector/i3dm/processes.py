@@ -3,12 +3,13 @@ import json
 import os
 import sqlalchemy.types as types
 from app.core.config import settings
+from app.worker.common.utils import run_subprocess
 
 i3dm_db = f"Host={settings.POSTGRES_SERVER};Username={settings.POSTGRES_USER};password={settings.POSTGRES_PASSWORD};Port={settings.POSTGRES_PORT};Database={settings.POSTGRES_TASKS_DB}"
 
 
 def i3dm_export(table_task_name, output_3dtiles_path, max_geometric_error, geometry_column_name, max_features_per_tile, fid_column_name, table):
-    subprocess.run([
+    run_subprocess([
         'i3dm.export',
         '-c', i3dm_db,
         '-t', table_task_name,

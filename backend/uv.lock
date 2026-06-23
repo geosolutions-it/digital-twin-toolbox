@@ -113,9 +113,6 @@ api = [
     { name = "sqlmodel" },
     { name = "tenacity" },
 ]
-mesh = [
-    { name = "bpy" },
-]
 dev = [
     { name = "coverage" },
     { name = "mypy" },
@@ -124,9 +121,13 @@ dev = [
     { name = "ruff" },
     { name = "types-passlib" },
 ]
+mesh = [
+    { name = "bpy" },
+]
 photogrammetry = [
     { name = "open3d" },
     { name = "opencv-python" },
+    { name = "psutil" },
 ]
 pointcloud = [
     { name = "laspy", extra = ["laszip"] },
@@ -173,7 +174,6 @@ api = [
     { name = "sqlmodel", specifier = ">=0.0.21,<1.0.0" },
     { name = "tenacity", specifier = ">=8.2.3,<9.0.0" },
 ]
-mesh = [{ name = "bpy", specifier = "==4.5.1" }]
 dev = [
     { name = "coverage", specifier = ">=7.4.3,<8.0.0" },
     { name = "mypy", specifier = ">=1.8.0,<2.0.0" },
@@ -182,9 +182,11 @@ dev = [
     { name = "ruff", specifier = ">=0.2.2,<1.0.0" },
     { name = "types-passlib", specifier = ">=1.7.7.20240106,<2.0.0" },
 ]
+mesh = [{ name = "bpy", specifier = "==4.5.1" }]
 photogrammetry = [
     { name = "open3d", specifier = ">=0.19.0,<1.0.0" },
     { name = "opencv-python", specifier = ">=4.11.0.86,<5.0.0" },
+    { name = "psutil", specifier = ">=5.9.0,<8.0.0" },
 ]
 pointcloud = [
     { name = "laspy", extras = ["laszip"], specifier = ">=2.5.4,<3.0.0" },

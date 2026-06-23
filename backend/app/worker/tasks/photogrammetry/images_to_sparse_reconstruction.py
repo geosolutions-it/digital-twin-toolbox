@@ -5,10 +5,10 @@ import json
 import time
 import shutil
 import numpy as np
-import app.worker.tasks.photogrammetry.mask_images as mask_images
 from app.worker.tasks.photogrammetry.utils import (
     get_OpenSfM_bin, remove_if_exists, memory_available,
-    create_config_for_stage, run_step, calculate_resource_allocation
+    create_config_for_stage, run_step, calculate_resource_allocation,
+    survey_preset, sfm_config_yaml, SFM_PRESET_AERIAL, SFM_PRESET_HANDHELD
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -49,32 +49,13 @@ def run(process_dir, config):
     logger.info(f"Resource allocation: {resources['processes']} processes, "
                 f"{resources['feature_process_size']} feature process size")
 
-    config_yaml = {
-        'processes': resources['processes'],
-        'read_processes': resources['read_processes'],
-        'feature_type': 'SIFT',
-        'feature_process_size': resources['feature_process_size'],
-        'feature_min_frames': 30000,
-        'sift_peak_threshold': 0.066,
-        'matcher_type': 'FLANN',
-        'flann_algorithm': 'KDTREE',
-        'matching_gps_neighbors': 0,
-        'matching_gps_distance': 0,
-        'matching_graph_rounds': 50,
-        'triangulation_type': 'ROBUST',
-        'use_exif_size': 'no',
-        'use_altitude_tag': 'yes',
-        'optimize_camera_parameters': 'yes',
-        'bundle_outlier_filtering_type': 'AUTO',
-        'align_method': 'auto',
-        'align_orientation_prior': 'vertical',
-        'local_bundle_radius': 0,
-        'bundle_use_gcp': 'no',
-        'retriangulation_ratio': 2,
-        'undistorted_image_format': 'jpg',
-    }
+    # survey type is auto-detected from OPK after extract_metadata; allow an explicit override
+    aerial = config.get('aerial')
 
-    create_config_for_stage(process_dir, config_yaml)
+    # pre-extract config: keep altitude (detection is post-extract); rewritten before features
+    pre_config = sfm_config_yaml(SFM_PRESET_HANDHELD, resources)
+    pre_config['use_altitude_tag'] = 'yes'
+    create_config_for_stage(process_dir, pre_config)
 
     original_camera_models_overrides = os.path.join(images_dir, 'camera_models_overrides.json')
     camera_models_overrides = os.path.join(process_dir, 'camera_models_overrides.json')
@@ -98,10 +79,16 @@ def run(process_dir, config):
         remove_if_exists(camera_models_overrides)
         remove_if_exists(exif_overrides)
 
+    # select the preset from extracted metadata, then write the real config
+    preset = survey_preset(process_dir, override=aerial)
+    is_aerial = preset is SFM_PRESET_AERIAL
+    logger.info(f"Survey type: {'aerial (OPK detected)' if is_aerial else 'handheld'}")
+    create_config_for_stage(process_dir, sfm_config_yaml(preset, resources))
+
     run_step('detect_features', cmd + ['detect_features', process_dir], process_dir)
     run_step('match_features', cmd + ['match_features', process_dir], process_dir)
     run_step('create_tracks', cmd + ['create_tracks', process_dir], process_dir)
-    run_step('reconstruct', cmd + ['reconstruct', '--algorithm', 'triangulation', process_dir], process_dir)
+    run_step('reconstruct', cmd + ['reconstruct', '--algorithm', preset['reconstruct_algorithm'], process_dir], process_dir)
 
 
     # optional
@@ -117,12 +104,19 @@ def run(process_dir, config):
         with open(reconstruction_path, 'r') as f:
             reconstruction = json.load(f)
 
-        cameras_path = os.path.join(process_dir, 'camera_models.json')
-        remove_if_exists(cameras_path)
+    if not reconstruction:
+        raise RuntimeError(
+            "OpenSfM produced no reconstruction (reconstruction.json is empty). "
+            "Likely no feature matches / insufficient image overlap. Check the "
+            "detect_features and match_features logs for feature and match counts."
+        )
 
-        cameras = reconstruction[0].get('cameras')
-        with open(cameras_path, 'w') as f:
-            json.dump(cameras, f, indent=4)
+    cameras_path = os.path.join(process_dir, 'camera_models.json')
+    remove_if_exists(cameras_path)
+
+    cameras = reconstruction[0].get('cameras')
+    with open(cameras_path, 'w') as f:
+        json.dump(cameras, f, indent=4)
 
     end = time.time()
     elapsed_time = end - start

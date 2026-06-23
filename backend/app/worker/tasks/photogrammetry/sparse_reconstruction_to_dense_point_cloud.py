@@ -5,10 +5,10 @@ import time
 import numpy as np
 import open3d as o3d
 import app.worker.tasks.photogrammetry.mask_images as mask_images
-from app.worker.tasks.photogrammetry.point_cloud_to_mesh import transform_extent_to_local
+from app.worker.tasks.photogrammetry.geo import transform_extent_to_local
 from app.worker.tasks.photogrammetry.utils import (
     get_OpenSfM_bin, run_step, create_config_for_stage,
-    calculate_depthmap_resources
+    calculate_depthmap_resources, survey_preset
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -19,8 +19,10 @@ def crop_dense_point_cloud(params):
     """Crop a dense point cloud using geographic bounds"""
     process_dir = params.get('process_dir')
 
-    reference_lla = None
     reference_lla_path = os.path.join(process_dir, 'reference_lla.json')
+    if not os.path.exists(reference_lla_path):
+        logger.info("Skip point cloud cropping (no reference_lla.json)")
+        return
     with open(reference_lla_path, 'r') as f:
         reference_lla = json.load(f)
 
@@ -29,6 +31,9 @@ def crop_dense_point_cloud(params):
     if os.path.exists(config_path):
         with open(config_path, 'r') as f:
             config = json.load(f)
+    if not config:
+        logger.info("Skip point cloud cropping (no config.json)")
+        return
     extent = config.get('extent')
     projection = config.get('projection')
     bbox = transform_extent_to_local(reference_lla, extent, projection)
@@ -64,10 +69,13 @@ def run(process_dir, config):
         depthmap_processes = resources["depthmap_processes"]
         depthmap_resolution = resources["depthmap_resolution"]
 
+    # same survey preset as the sparse stage sets the depth consistency
+    preset = survey_preset(process_dir, override=config.get('aerial'))
+
     config_yaml = {
         'processes': depthmap_processes,
         'read_processes': depthmap_processes,
-        'depthmap_min_consistent_views': 3,
+        'depthmap_min_consistent_views': preset['depthmap_min_consistent_views'],
         'depthmap_resolution': depthmap_resolution,
         'undistorted_image_format': 'jpg',
         'undistorted_image_max_size': depthmap_resolution

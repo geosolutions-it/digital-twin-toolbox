@@ -25,8 +25,13 @@ class PipelineDatabaseTask(Task):
     abstract = True
 
     def after_return(self, status, retval, task_id, args, kwargs, einfo):
+        # pipeline_extended comes directly (single task) or in the forwarded payload (chain).
+        pipeline_extended = kwargs.get('pipeline_extended')
+        if pipeline_extended is None and args and isinstance(args[0], dict):
+            pipeline_extended = args[0].get('pipeline_extended')
+        if pipeline_extended is None:
+            return
         with Session(engine) as session:
-            pipeline_extended = kwargs.get('pipeline_extended')
             pipeline = session.get(Pipeline, pipeline_extended['id'])
             pipeline_in = {"task_id": task_id, "task_status": status}
             if status == SUCCESS:
