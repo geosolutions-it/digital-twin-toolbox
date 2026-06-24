@@ -48,6 +48,8 @@ photogrammetry = [
     "psutil>=5.9.0,<8.0.0",
 ]
 dev = [
+    # Dev hot reload: auto-restart backend/workers on code changes (compose.sh --dev).
+    "watchfiles>=1.0.0,<2.0.0",
     "pytest>=7.4.3,<8.0.0",
     "mypy>=1.8.0,<2.0.0",
     "ruff>=0.2.2,<1.0.0",

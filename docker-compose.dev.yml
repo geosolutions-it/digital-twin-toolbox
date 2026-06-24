@@ -1,7 +1,49 @@
+# Hot reload for `compose.sh --dev`: mounts the source and runs each process
+# under `watchfiles`. Keep the workers below in sync with --workers (comment out
+# the ones you are not running). Set WATCHFILES_FORCE_POLLING=true in .env if
+# changes are not detected (Docker Desktop / WSL2 on /mnt/c).
 services:
   backend:
+    build:
+      args:
+        INSTALL_DEV: ${INSTALL_DEV-true}
     volumes:
-      # Mount only the source package so the in-image virtualenv at /app/.venv
-      # (and alembic.ini, prestart.sh, …) are not shadowed by the bind mount.
       - ./backend/app:/app/app
     command: /start-reload.sh
+
+  worker-vector:
+    build:
+      args:
+        INSTALL_DEV: ${INSTALL_DEV-true}
+    volumes:
+      - ./backend/app:/app/app
+    command:
+      - 'watchfiles "celery -A app.worker.main.celery worker --queues=vector,common --include=app.worker.tasks.vector.task,app.worker.tasks.common.task --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}" /app/app'
+
+  worker-point-cloud:
+    build:
+      args:
+        INSTALL_DEV: ${INSTALL_DEV-true}
+    volumes:
+      - ./backend/app:/app/app
+    command:
+      - 'watchfiles "celery -A app.worker.main.celery worker --queues=point-cloud,common --include=app.worker.tasks.pointcloud.task,app.worker.tasks.common.task --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}" /app/app'
+
+  worker-mesh:
+    build:
+      args:
+        INSTALL_DEV: ${INSTALL_DEV-true}
+    volumes:
+      - ./backend/app:/app/app
+    command:
+      - 'watchfiles "celery -A app.worker.main.celery worker --queues=mesh,common --include=app.worker.tasks.mesh.task,app.worker.tasks.common.task --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}" /app/app'
+
+  # Not an official pipeline yet; uncomment (with --workers photogrammetry) to develop it.
+  # worker-photogrammetry:
+  #   build:
+  #     args:
+  #       INSTALL_DEV: ${INSTALL_DEV-true}
+  #   volumes:
+  #     - ./backend/app:/app/app
+  #   command:
+  #     - 'watchfiles "celery -A app.worker.main.celery worker --queues=photogrammetry,common --include=app.worker.tasks.photogrammetry.task,app.worker.tasks.common.task --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}" /app/app'

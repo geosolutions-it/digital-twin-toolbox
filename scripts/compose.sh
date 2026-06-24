@@ -12,7 +12,8 @@ Usage: ./scripts/compose.sh [OPTIONS] -- DOCKER COMPOSE ARGS
 
 Options:
   --prod              Exclude docker-compose.override.yml (production mode)
-  --dev               Include docker-compose.dev.yml (mounted volumes + hot reload)
+  --dev               Hot reload (mounted source) for the backend and the
+                        selected --workers
   --workers LIST      Comma-separated list of workers to include:
                         vector, point-cloud, mesh, photogrammetry
   -h, --help          Show this help and exit
@@ -75,11 +76,6 @@ if [ "$PROD" = false ]; then
   FILES="$FILES -f docker-compose.override.yml"
 fi
 
-# Backend hot-reload override (mounted volume + reload command).
-if [ "$DEV" = true ]; then
-  FILES="$FILES -f docker-compose.dev.yml"
-fi
-
 if [ -n "$WORKERS" ]; then
   for worker in $(echo "$WORKERS" | tr ',' ' '); do
     file="docker-compose.worker.$worker.yml"
@@ -89,6 +85,11 @@ if [ -n "$WORKERS" ]; then
     fi
     FILES="$FILES -f $file"
   done
+fi
+
+# Dev overrides must be applied AFTER the worker base files so they win.
+if [ "$DEV" = true ]; then
+  FILES="$FILES -f docker-compose.dev.yml"
 fi
 
 docker compose $FILES "$@"
