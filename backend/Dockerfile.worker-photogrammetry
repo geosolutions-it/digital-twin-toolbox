@@ -65,10 +65,15 @@ RUN cd / \
 
 # worker python deps -> /app/.venv (no conda; the worker imports only pip packages).
 # Last so dependency changes don't invalidate the native-build layers above.
+ARG INSTALL_DEV=false
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --no-install-workspace --no-dev --group worker --group photogrammetry
+    if [ "$INSTALL_DEV" = "true" ]; then \
+      uv sync --frozen --no-install-workspace --group worker --group photogrammetry --group dev; \
+    else \
+      uv sync --frozen --no-install-workspace --no-dev --group worker --group photogrammetry; \
+    fi
 
 
 # Final stage: runtime libs + built artifacts only (no toolchain, no uv, no -dev libs, no ddt env).
