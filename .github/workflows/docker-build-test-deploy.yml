@@ -5,6 +5,8 @@ on:
     branches:
       - main
       - gha
+    tags:
+      - 'v*'
   pull_request:
     branches:
       - main
@@ -35,7 +37,7 @@ jobs:
   login-and-deploy:
      runs-on: self-hosted
      needs: build-and-test
-     if: ${{ github.event_name != 'pull_request' && github.ref_name == 'main' }}
+     if: ${{ github.event_name != 'pull_request' && (github.ref_name == 'main' || startsWith(github.ref, 'refs/tags/')) }}
      steps:
       - name: Checkout code
         uses: actions/checkout@v4
