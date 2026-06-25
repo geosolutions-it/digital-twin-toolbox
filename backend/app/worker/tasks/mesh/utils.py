@@ -65,8 +65,8 @@ def resolve_mesh_input_file(asset_id: str, extension: str) -> str:
     return asset_file_path
 
 
-def estimate_mesh_size_from_obj(filepath: str) -> list[float] | None:
-    """Axis-aligned bounding box dimensions [width, depth, height] in meters."""
+def estimate_mesh_bbox_from_obj(filepath: str) -> dict | None:
+    """size [w, d, h] and offset (bbox center vs model origin) [x, y, z], in meters."""
     min_x = min_y = min_z = float("inf")
     max_x = max_y = max_z = float("-inf")
     vertex_count = 0
@@ -93,4 +93,7 @@ def estimate_mesh_size_from_obj(filepath: str) -> list[float] | None:
     if vertex_count == 0:
         return None
 
-    return [max_x - min_x, max_y - min_y, max_z - min_z]
+    return {
+        "size": [max_x - min_x, max_y - min_y, max_z - min_z],
+        "offset": [(min_x + max_x) / 2, (min_y + max_y) / 2, (min_z + max_z) / 2],
+    }

@@ -92,42 +92,23 @@ def merge_vertices(threshold=0.0001):
     bpy.ops.object.editmode_toggle()
 
 # import mesh
-def import_mesh(filepath):
+def import_mesh(filepath, forward_axis='Y', up_axis='Z'):
     extension = pathlib.Path(filepath).suffix
     if extension == '.ply':
-        bpy.ops.wm.ply_import(filepath=filepath, forward_axis='Y', up_axis='Z')
+        bpy.ops.wm.ply_import(filepath=filepath, forward_axis=forward_axis, up_axis=up_axis)
     else:
-        bpy.ops.wm.obj_import(filepath=filepath, forward_axis='Y', up_axis='Z')
+        bpy.ops.wm.obj_import(filepath=filepath, forward_axis=forward_axis, up_axis=up_axis)
 
     obj = bpy.context.object
 
+    # non-default axes are stored as an object transform; bake into the mesh data so
+    # AABB, ENU transform and export share one vertex frame
+    bpy.ops.object.select_all(action='DESELECT')
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+
     merge_vertices()
-
-    min_x = float('inf')
-    min_y = float('inf')
-    min_z = float('inf')
-    max_x = float('-inf')
-    max_y = float('-inf')
-    max_z = float('-inf')
-    for vertex in obj.data.vertices:
-        x = vertex.co[0]
-        y = vertex.co[1]
-        z = vertex.co[2]
-        min_x = x if x < min_x else min_x
-        min_y = y if y < min_y else min_y
-        min_z = z if z < min_z else min_z
-        max_x = x if x > max_x else max_x
-        max_y = y if y > max_y else max_y
-        max_z = z if z > max_z else max_z
-
-    center_x = (min_x + max_x) / 2
-    center_y = (min_y + max_y) / 2
-    center_z = (min_z + max_z) / 2
-
-    for vertex in obj.data.vertices:
-        vertex.co[0] -= center_x
-        vertex.co[1] -= center_y
-        vertex.co[2] -= center_z
 
     top = float('-inf')
     left = float('inf')
@@ -270,10 +251,8 @@ def split_tile(params):
     apply_transform = params.get('apply_transform')
     cage_extrusion = params.get('cage_extrusion')
     should_decimate = params.get('should_decimate')
-    center = params.get('center')
     location_and_rotation = params.get('location_and_rotation')
     transform = params.get('transform')
-    tile_size = params.get('tile_size')
     default_mat = params.get('default_mat')
     export_asset = params.get('export_asset')
     unwrap_uv = params.get('unwrap_uv')
@@ -304,10 +283,6 @@ def split_tile(params):
         return
 
     verts.foreach_set('select', in_tile)
-    selected_z = coords[in_tile, 2]
-    min_z = float(selected_z.min())
-    max_z = float(selected_z.max())
-    center_z = min_z + (max_z - min_z) / 2
 
     target.select_set(True)
     bpy.context.view_layer.objects.active = target
@@ -385,14 +360,26 @@ def split_tile(params):
     tile.name = name
 
     if apply_transform:
+        # bounding volume from the tile's actual local AABB (incl. margin overlap),
+        # computed before the ENU rotation/location move it into ECEF
+        tcount = len(tile.data.vertices)
+        tcoords = np.empty(tcount * 3, dtype=np.float64)
+        tile.data.vertices.foreach_get('co', tcoords)
+        tcoords = tcoords.reshape(tcount, 3)
+        tmin = tcoords.min(axis=0)
+        tmax = tcoords.max(axis=0)
         tile_info = {
             'center': [
-                center[0],
-                center[1],
-                center_z
+                float((tmin[0] + tmax[0]) / 2),
+                float((tmin[1] + tmax[1]) / 2),
+                float((tmin[2] + tmax[2]) / 2),
             ],
             'transform': transform,
-            'size': [tile_size[0], tile_size[1], tile.dimensions[2]]
+            'size': [
+                float(tmax[0] - tmin[0]),
+                float(tmax[1] - tmin[1]),
+                float(tmax[2] - tmin[2]),
+            ],
         }
         with open(filepath.replace('.glb', '.json'), 'w') as f:
             json.dump(tile_info, f)
@@ -488,6 +475,8 @@ def run(params):
     start_x = params.get('start_x', 0)
     start_y = params.get('start_y', 0)
     start_z = params.get('start_z', 0)
+    forward_axis = params.get('forward_axis', 'Y')
+    up_axis = params.get('up_axis', 'Z')
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
     start_time = time.time()
@@ -496,7 +485,7 @@ def run(params):
 
     bake_mat = create_bake_material()
 
-    merged, info = import_mesh(input_file)
+    merged, info = import_mesh(input_file, forward_axis, up_axis)
     merged.hide_render = True
 
     merged.select_set(True)
@@ -588,9 +577,6 @@ def run(params):
                     cage_extrusion = 0.001
                     should_decimate = False
 
-                center_x = left + (x * w_unit) + w_unit / 2
-                center_y = top - (y * h_unit) - h_unit / 2
-
                 split_tile({
                     'target': cloned_merged,
                     'bbox': (minx, miny, maxx, maxy),
@@ -608,8 +594,6 @@ def run(params):
                     'cage_extrusion': cage_extrusion,
                     'location_and_rotation': location_and_rotation,
                     'transform': transform,
-                    'center': [center_x, center_y, 0],
-                    'tile_size': [w_unit, h_unit],
                     'export_asset': export_gltf,
                     'factor_force_decimation': 5 / (2 ** z)
                 })

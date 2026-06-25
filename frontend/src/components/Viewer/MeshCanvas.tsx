@@ -11,6 +11,7 @@ import {
   FormLabel,
   Heading,
   Input,
+  Select,
   Text,
 } from "@chakra-ui/react"
 import { useMemo, useRef, useState } from "react"
@@ -18,7 +19,20 @@ import { FiDownload } from "react-icons/fi"
 import type { PipelinePublicExtended } from "../../client"
 import MeshMapPicker from "./MeshMapPicker"
 import { getPublicBasePath } from "../../utils"
-import { parseMeshSize } from "../../utils/meshFootprint"
+import {
+  type AxisOption,
+  parseVec3,
+  reorientMeshBbox,
+} from "../../utils/meshFootprint"
+
+const AXIS_OPTIONS: { value: AxisOption; label: string }[] = [
+  { value: "X", label: "X" },
+  { value: "Y", label: "Y" },
+  { value: "Z", label: "Z" },
+  { value: "NEGATIVE_X", label: "-X" },
+  { value: "NEGATIVE_Y", label: "-Y" },
+  { value: "NEGATIVE_Z", label: "-Z" },
+]
 import {
   celeryTaskStatusColor,
   celeryTaskStatusLabel,
@@ -39,14 +53,14 @@ function MeshCanvas({
   onUpdate,
   onCancel,
 }: MeshCanvasProps) {
-  const meshSize = useMemo(() => {
+  const meshSizeRaw = useMemo(() => {
     const candidates = [
       pipeline.asset?.upload_result?.size,
       pipeline.data?.size,
       pipeline.task_result?.size,
     ]
     for (const candidate of candidates) {
-      const parsed = parseMeshSize(candidate)
+      const parsed = parseVec3(candidate)
       if (parsed) {
         return parsed
       }
@@ -58,6 +72,25 @@ function MeshCanvas({
     pipeline.task_result?.size,
   ])
 
+  const meshOffsetRaw = useMemo(() => {
+    const candidates = [
+      pipeline.asset?.upload_result?.offset,
+      pipeline.data?.offset,
+      pipeline.task_result?.offset,
+    ]
+    for (const candidate of candidates) {
+      const parsed = parseVec3(candidate)
+      if (parsed) {
+        return parsed
+      }
+    }
+    return null
+  }, [
+    pipeline.asset?.upload_result?.offset,
+    pipeline.data?.offset,
+    pipeline.task_result?.offset,
+  ])
+
   const [data, setData] = useState({
     latitude: 0,
     longitude: 0,
@@ -67,8 +100,22 @@ function MeshCanvas({
     texture_image_size: 512,
     max_geometric_error: 256,
     decimate_last_depth_level: false,
+    forward_axis: "Y",
+    up_axis: "Z",
     ...pipeline.data,
   })
+
+  const footprint = useMemo(() => {
+    if (!meshSizeRaw) {
+      return null
+    }
+    return reorientMeshBbox(
+      meshSizeRaw,
+      meshOffsetRaw ?? [0, 0, 0],
+      (data.forward_axis as AxisOption) ?? "Y",
+      (data.up_axis as AxisOption) ?? "Z",
+    )
+  }, [meshSizeRaw, meshOffsetRaw, data.forward_axis, data.up_axis])
   const [zoomToLocationKey, setZoomToLocationKey] = useState(0)
   const skipNextLocationBlurZoomRef = useRef(false)
 
@@ -78,7 +125,7 @@ function MeshCanvas({
   const download = `${pipeline?.task_result?.download ?? ""}`
   const isRunning = isCeleryTaskInProgress(pipeline.task_status)
 
-  function handleOnChange(key: string, value: number | boolean) {
+  function handleOnChange(key: string, value: number | boolean | string) {
     setData((prev) => ({ ...prev, [key]: value }))
   }
 
@@ -235,12 +282,46 @@ function MeshCanvas({
               }
             />
           </FormControl>
-          {!meshSize && (
+          {!meshSizeRaw && (
             <Text fontSize="xs" color="gray.500" mb={4}>
               Mesh dimensions are not available yet. Re-upload or re-inspect the
               asset to show the footprint on the map.
             </Text>
           )}
+          <FormControl mt={2} mb={2}>
+            <FormLabel fontSize="xs" htmlFor="forward_axis">
+              Forward axis
+            </FormLabel>
+            <Select
+              id="forward_axis"
+              size="xs"
+              value={String(data.forward_axis)}
+              onChange={(e) => handleOnChange("forward_axis", e.target.value)}
+            >
+              {AXIS_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl mt={2} mb={2}>
+            <FormLabel fontSize="xs" htmlFor="up_axis">
+              Up axis
+            </FormLabel>
+            <Select
+              id="up_axis"
+              size="xs"
+              value={String(data.up_axis)}
+              onChange={(e) => handleOnChange("up_axis", e.target.value)}
+            >
+              {AXIS_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </Select>
+          </FormControl>
           <FormControl mt={2} mb={2}>
             <FormLabel fontSize="xs" htmlFor="depth">
               Depth
@@ -315,7 +396,8 @@ function MeshCanvas({
           latitude={data.latitude}
           longitude={data.longitude}
           onLocationChange={handleLocationChange}
-          meshSizeMeters={meshSize ?? undefined}
+          meshSizeMeters={footprint?.size ?? undefined}
+          meshOffsetMeters={footprint?.offset ?? undefined}
           zoomToLocationKey={zoomToLocationKey}
         />
       </Box>
