@@ -11,7 +11,7 @@ from app.worker.common.utils import setup_output_directory, run_subprocess
 @celery.task(name="inspect_mesh", base=AssetDatabaseTask)
 def inspect_mesh(options):
     from app.worker.tasks.mesh.utils import (
-        estimate_mesh_size_from_obj,
+        estimate_mesh_bbox_from_obj,
         resolve_mesh_input_file,
     )
 
@@ -23,10 +23,10 @@ def inspect_mesh(options):
     if not os.path.isfile(input_file):
         raise FileNotFoundError(f"Mesh file not found: {input_file}")
 
-    # OBJ size from a cheap vertex scan (no Blender). PLY is not sized at inspect time.
-    mesh_size = None
+    # OBJ bbox from a cheap vertex scan (no Blender). PLY is not sized at inspect time.
+    mesh_bbox = None
     if input_file.lower().endswith(".obj"):
-        mesh_size = estimate_mesh_size_from_obj(input_file)
+        mesh_bbox = estimate_mesh_bbox_from_obj(input_file)
 
     payload = {
         'metadata': False,
@@ -36,8 +36,9 @@ def inspect_mesh(options):
         'horizontal_epsg': None,
         'vertical_epsg': None,
     }
-    if mesh_size:
-        payload['size'] = mesh_size
+    if mesh_bbox:
+        payload['size'] = mesh_bbox['size']
+        payload['offset'] = mesh_bbox['offset']
 
     return {
         'asset_type': 'Mesh',
@@ -55,6 +56,8 @@ MESH_TILING_DEFAULTS = {
     'texture_image_size': 512,
     'max_geometric_error': 256,
     'decimate_last_depth_level': False,
+    'forward_axis': 'Y',
+    'up_axis': 'Z',
 }
 
 
@@ -75,6 +78,8 @@ def _tile_obj_core(input_file, pipeline_id, config):
         'texture_image_size': config['texture_image_size'],
         'apply_transform': True,
         'decimate_last_depth_level': config['decimate_last_depth_level'],
+        'forward_axis': config['forward_axis'],
+        'up_axis': config['up_axis'],
         'start_x': 0,
         'start_y': 0,
         'start_z': 0,

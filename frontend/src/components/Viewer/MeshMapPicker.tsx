@@ -5,6 +5,7 @@ import { buildMapLibreBasemapStyle } from "../../utils/mapBasemap"
 import {
   type MapBbox,
   computeMeshFootprintBboxFromDimensions,
+  parseMeshOffset,
   parseMeshSize,
 } from "../../utils/meshFootprint"
 
@@ -23,6 +24,7 @@ interface MeshMapPickerProps {
   longitude: number
   onLocationChange: (latitude: number, longitude: number) => void
   meshSizeMeters?: number[] | null
+  meshOffsetMeters?: number[] | null
   /** Increment to fly the map to the current latitude/longitude. */
   zoomToLocationKey?: number
 }
@@ -67,6 +69,7 @@ function MeshMapPicker({
   longitude,
   onLocationChange,
   meshSizeMeters = null,
+  meshOffsetMeters = null,
   zoomToLocationKey = 0,
   className,
   style,
@@ -86,6 +89,7 @@ function MeshMapPicker({
   longitudeRef.current = longitude
 
   const meshDimensions = parseMeshSize(meshSizeMeters)
+  const meshOffset = parseMeshOffset(meshOffsetMeters)
   const footprintBbox =
     meshDimensions === null
       ? null
@@ -94,6 +98,8 @@ function MeshMapPicker({
           longitude,
           meshDimensions[0],
           meshDimensions[1],
+          meshOffset?.[0] ?? 0,
+          meshOffset?.[1] ?? 0,
         )
   const footprintBboxRef = useRef(footprintBbox)
   footprintBboxRef.current = footprintBbox
