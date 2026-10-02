@@ -6,6 +6,8 @@ CAPABILITIES = {
             # used as colorization inputs for the point cloud pipeline (PDAL filters.colorization).
             '.tiff': 'inspect_raster',
             '.tif': 'inspect_raster',
+            '.gml': 'inspect_citygml',
+            '.gml.zip': 'inspect_citygml',
         },
     },
     'point-cloud': {
@@ -37,6 +39,8 @@ CAPABILITIES = {
 }
 
 TASK_QUEUES = {
+    'inspect_citygml': 'vector',
+    'create_citygml_3dtiles': 'vector',
     'inspect_vector': 'vector',
     'inspect_pointcloud': 'point-cloud',
     'inspect_raster': 'vector',

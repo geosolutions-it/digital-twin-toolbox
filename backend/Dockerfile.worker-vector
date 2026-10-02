@@ -25,14 +25,22 @@ RUN apt-get update && \
 
 FROM python:3.11-slim
 
-ENV PATH="/app/.venv/bin:$PATH"
+COPY --from=ghcr.io/astral-sh/uv:0.9.26 /uv /uvx /bin/
+
+ENV UV_COMPILE_BYTECODE=1
+ENV UV_LINK_MODE=copy
+ENV PATH="/app/.venv/bin:/opt/citygml-tools:${PATH}"
 ENV PYTHONPATH=/app
+ENV MAGO_3D_TILER_JAR=/bin/mago-3d-tiler.jar
+ENV CITYGML_TOOLS_BIN=/opt/citygml-tools/citygml-tools
 
 WORKDIR /app/
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
+        gdal-bin \
         libgdal36 \
+        openjdk-21-jre-headless \
         wget \
         unzip \
         ca-certificates && \
@@ -49,6 +57,15 @@ RUN cd /bin && \
     wget https://github.com/Geodan/i3dm.export/releases/download/v2.11.0/i3dm.export-linux-x64.zip && \
     unzip ./i3dm.export-linux-x64.zip && \
     rm -rf ./i3dm.export-linux-x64.zip
+
+RUN cd /tmp && \
+    wget -q https://github.com/Gaia3D/mago-3d-tiler/releases/download/v1.15.4/mago-3d-tiler-1.15.4.jar && \
+    mv mago-3d-tiler-1.15.4.jar /bin/mago-3d-tiler.jar && \
+    wget -q https://github.com/citygml4j/citygml-tools/releases/download/v2.5.0/citygml-tools-2.5.0.zip && \
+    unzip -q citygml-tools-2.5.0.zip && \
+    mv citygml-tools-2.5.0 /opt/citygml-tools && \
+    chmod +x /opt/citygml-tools/citygml-tools && \
+    rm -rf /tmp/*
 
 COPY ./scripts/ /app/
 COPY ./alembic.ini /app/
