@@ -9,11 +9,6 @@ CAPABILITIES = {
             '.gml': 'inspect_citygml',
             '.gml.zip': 'inspect_citygml',
         },
-        'pipeline_matchers': [
-            {'asset_type': 'CityGML'},
-            {'geometry_type': 'Polygon'},
-            {'geometry_type': 'Point'},
-        ],
     },
     'point-cloud': {
         'extensions': {
