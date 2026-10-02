@@ -1,5 +1,5 @@
 from app.worker.main import celery
-from app.worker.pipelines import polygon, point, pointcloud, obj, photogrammetry
+from app.worker.pipelines import polygon, point, pointcloud, obj, photogrammetry, citygml
 from app.worker.tasks import inspection_task_for_extension
 
 
@@ -10,6 +10,8 @@ def run(pipeline_extended):
 
     if asset_type == 'Mesh':
         return obj.run(pipeline_extended)
+    if asset_type == 'CityGML':
+        return citygml.run(pipeline_extended)
     if geometry_type == 'Polygon':
         return polygon.run(pipeline_extended)
     if geometry_type == 'Point':

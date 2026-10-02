@@ -9,6 +9,7 @@ import PolygonGeometryCanvas from "../../../components/Viewer/PolygonGeometryCan
 import PhotogrammetryCanvas from "../../../components/Viewer/PhotogrammetryCanvas"
 import { isCeleryTaskInProgress } from "../../../utils/celeryStatus"
 import MeshCanvas from "../../../components/Viewer/MeshCanvas"
+import CityGMLCanvas from "../../../components/Viewer/CityGMLCanvas"
 
 export const Route = createFileRoute("/_layout/pipeline/$pipelineId")({
   component: Pipeline,
@@ -90,7 +91,17 @@ function Pipeline() {
             onCancel={handleOnCancel}
           />
         ) : null}
-        {data?.asset?.geometry_type === "Polygon" ? (
+        {data?.asset?.asset_type === "CityGML" ? (
+          <CityGMLCanvas
+            assetId={assetId}
+            pipeline={data}
+            onUpdate={handleOnUpdate}
+            onRun={handleOnRun}
+            onCancel={handleOnCancel}
+          />
+        ) : null}
+        {data?.asset?.geometry_type === "Polygon" &&
+        data?.asset?.asset_type !== "CityGML" ? (
           <PolygonGeometryCanvas
             assetId={assetId}
             pipeline={data}
