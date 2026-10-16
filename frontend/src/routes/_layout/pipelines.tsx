@@ -22,6 +22,8 @@ import {
   Heading,
   Icon,
   Input,
+  InputGroup,
+  InputLeftElement,
   Modal,
   ModalBody,
   ModalCloseButton,
@@ -29,12 +31,14 @@ import {
   ModalFooter,
   ModalHeader,
   ModalOverlay,
+  Progress,
   Select,
   SkeletonText,
   Table,
   TableContainer,
   Tbody,
   Td,
+  Text,
   Th,
   Thead,
   Tooltip,
@@ -47,7 +51,7 @@ import React from "react"
 import { useEffect } from "react"
 import { type SubmitHandler, useForm } from "react-hook-form"
 import { FaPlus } from "react-icons/fa"
-import { FiDownload, FiEdit, FiFileMinus, FiTrash } from "react-icons/fi"
+import { FiDownload, FiEdit, FiSearch, FiTrash } from "react-icons/fi"
 import { z } from "zod"
 import { AssetsService, PipelinesService } from "../../client"
 import type { ApiError, PipelineCreate } from "../../client"
@@ -184,12 +188,34 @@ function getPipelinesQueryOptions({ page }: { page: number }) {
   }
 }
 
+function StatusCell({ status }: { status?: string | null }) {
+  return (
+    <Flex direction="column" gap={1} maxW="160px">
+      <Badge colorScheme={celeryTaskStatusColor(status)} width="fit-content">
+        {celeryTaskStatusLabel(status)}
+      </Badge>
+      {isCeleryTaskInProgress(status) && (
+        <Progress
+          size="xs"
+          isIndeterminate
+          borderRadius="full"
+          colorScheme={celeryTaskStatusColor(status)}
+        />
+      )}
+    </Flex>
+  )
+}
+
 function PipelinesTable() {
   const queryClient = useQueryClient()
+  const showToast = useCustomToast()
   const { page } = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
   const setPage = (page: number) =>
     navigate({ search: (prev) => ({ ...prev, page }) })
+
+  const [selected, setSelected] = React.useState<Set<string>>(new Set())
+  const [query, setQuery] = React.useState("")
 
   const {
     data: pipelines,
@@ -208,8 +234,12 @@ function PipelinesTable() {
     },
   })
 
+  const rows = (pipelines?.data || []).filter((p) =>
+    p.title.toLowerCase().includes(query.toLowerCase()),
+  )
   const hasNextPage = !isPlaceholderData && pipelines?.data.length === PER_PAGE
   const hasPreviousPage = page > 1
+  const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id))
 
   useEffect(() => {
     if (hasNextPage) {
@@ -217,13 +247,65 @@ function PipelinesTable() {
     }
   }, [page, queryClient, hasNextPage])
 
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const toggleAll = () =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (rows.every((r) => next.has(r.id))) rows.forEach((r) => next.delete(r.id))
+      else rows.forEach((r) => next.add(r.id))
+      return next
+    })
+
+  const bulkDelete = useMutation({
+    mutationFn: async () => {
+      for (const id of Array.from(selected)) {
+        await PipelinesService.deletePipeline({ id })
+      }
+    },
+    onSuccess: () => {
+      showToast("Deleted", `Removed ${selected.size} pipeline(s).`, "success")
+      setSelected(new Set())
+    },
+    onError: () => {
+      showToast("An error occurred.", "Could not delete the selection.", "error")
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["pipelines"] })
+    },
+  })
+
   return (
     <>
+      <InputGroup maxW="320px" mb={4}>
+        <InputLeftElement pointerEvents="none">
+          <Icon as={FiSearch} color="gray.400" />
+        </InputLeftElement>
+        <Input
+          placeholder="Filter by title"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </InputGroup>
+
       <TableContainer>
-        <Table>
+        <Table variant="simple">
           <Thead>
             <Tr>
-              <Th>Title</Th>
+              <Th width="40px">
+                <Checkbox
+                  isChecked={allSelected}
+                  onChange={toggleAll}
+                  aria-label="Select all"
+                />
+              </Th>
+              <Th>Job</Th>
               <Th>Status</Th>
               <Th />
             </Tr>
@@ -231,7 +313,7 @@ function PipelinesTable() {
           {isPending ? (
             <Tbody>
               <Tr>
-                {new Array(3).fill(null).map((_, index) => (
+                {new Array(4).fill(null).map((_, index) => (
                   <Td key={index}>
                     <SkeletonText noOfLines={1} paddingBlock="16px" />
                   </Td>
@@ -240,56 +322,63 @@ function PipelinesTable() {
             </Tbody>
           ) : (
             <Tbody>
-              {pipelines?.data.map((pipeline) => {
-                const download: string = `${pipeline?.task_result?.download}`
+              {rows.map((pipeline) => {
+                const download = `${pipeline?.task_result?.download}`
+                const source = (pipeline as any).source
+                const subtitle = source?.key
+                  ? `s3://…/${source.key}`
+                  : pipeline.asset_id
+                    ? "uploaded asset"
+                    : "no input"
                 return (
-                  <Tr key={pipeline.id} opacity={isPlaceholderData ? 0.5 : 1}>
+                  <Tr
+                    key={pipeline.id}
+                    opacity={isPlaceholderData ? 0.5 : 1}
+                    bg={selected.has(pipeline.id) ? "blue.50" : undefined}
+                    _dark={{
+                      bg: selected.has(pipeline.id) ? "blue.900" : undefined,
+                    }}
+                  >
                     <Td>
-                      {pipeline?.asset_id ? (
-                        <Tooltip label="Click to edit pipeline">
+                      <Checkbox
+                        isChecked={selected.has(pipeline.id)}
+                        onChange={() => toggle(pipeline.id)}
+                        aria-label={`Select ${pipeline.title}`}
+                      />
+                    </Td>
+                    <Td>
+                      <Flex direction="column" gap={0.5} minW={0}>
+                        {pipeline.asset_id ? (
                           <Link
                             to="/pipeline/$pipelineId"
                             params={{ pipelineId: pipeline.id }}
                           >
                             <HStack>
-                              <FiEdit fontSize="16px" />
-                              <span>{pipeline.title}</span>
+                              <FiEdit fontSize="14px" />
+                              <Text fontWeight="600">{pipeline.title}</Text>
                             </HStack>
                           </Link>
-                        </Tooltip>
-                      ) : (
-                        <Tooltip label="The connected asset has been removed">
-                          <Flex gap={2} alignItems="center">
-                            <Icon
-                              as={FiFileMinus}
-                              color="ui.danger"
-                              fontSize="16px"
-                            />{" "}
-                            {pipeline.title}
-                          </Flex>
-                        </Tooltip>
-                      )}
+                        ) : (
+                          <Text fontWeight="600">{pipeline.title}</Text>
+                        )}
+                        <Text fontSize="xs" color="gray.500">
+                          {subtitle}
+                        </Text>
+                      </Flex>
                     </Td>
                     <Td>
                       <Flex gap={2} alignItems="center">
-                        <Badge
-                          colorScheme={celeryTaskStatusColor(pipeline.task_status)}
-                        >
-                          {celeryTaskStatusLabel(pipeline.task_status)}
-                        </Badge>
+                        <StatusCell status={pipeline.task_status} />
                         {pipeline.task_result && (
                           <Tooltip label="Download 3D Tiles">
-                            <a
-                              href={download}
-                              download={`${pipeline.title}.zip`}
-                            >
+                            <a href={download} download={`${pipeline.title}.zip`}>
                               <FiDownload fontSize="16px" />
                             </a>
                           </Tooltip>
                         )}
                       </Flex>
                     </Td>
-                    <Td maxWidth="80px">
+                    <Td maxWidth="60px">
                       <RemoveButton id={pipeline.id} />
                     </Td>
                   </Tr>
@@ -299,13 +388,8 @@ function PipelinesTable() {
           )}
         </Table>
       </TableContainer>
-      <Flex
-        gap={4}
-        alignItems="center"
-        mt={4}
-        direction="row"
-        justifyContent="center"
-      >
+
+      <Flex gap={4} alignItems="center" mt={4} justifyContent="center">
         <Button onClick={() => setPage(page - 1)} isDisabled={!hasPreviousPage}>
           Previous
         </Button>
@@ -314,6 +398,41 @@ function PipelinesTable() {
           Next
         </Button>
       </Flex>
+
+      {selected.size > 0 && (
+        <Flex
+          position="fixed"
+          bottom={6}
+          left="50%"
+          transform="translateX(-50%)"
+          zIndex={20}
+          bg="white"
+          _dark={{ bg: "gray.800", borderColor: "gray.600" }}
+          border="1px solid"
+          borderColor="gray.200"
+          boxShadow="lg"
+          borderRadius="xl"
+          px={4}
+          py={3}
+          gap={3}
+          alignItems="center"
+        >
+          <Text fontWeight="700">{selected.size} selected</Text>
+          <Button
+            size="sm"
+            colorScheme="red"
+            variant="outline"
+            leftIcon={<FiTrash />}
+            isLoading={bulkDelete.isPending}
+            onClick={() => bulkDelete.mutate()}
+          >
+            Delete
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+            Clear
+          </Button>
+        </Flex>
+      )}
     </>
   )
 }
