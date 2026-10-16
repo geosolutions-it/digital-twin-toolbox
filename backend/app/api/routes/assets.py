@@ -1,18 +1,23 @@
 
 from app.api.deps import CurrentUser, SessionDep
 from fastapi import UploadFile, APIRouter, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
 from typing import Any
-import os
+import mimetypes
 from app.models.task import Asset, AssetPublic, AssetsPublic, Message, Pipeline
 from sqlmodel import func, select, col
 from pathlib import Path
 import uuid
-from app.worker.common.utils import get_asset_upload_path
+from app.core.storage import get_storage, upload_key
 from app.worker.pipelines import dispatch_upload_inspection
 from app.worker.main import celery
 import zipfile
 import app.api.routes.utils as routes_utils
+
+
+def _media_type(name):
+    mt, _ = mimetypes.guess_type(name)
+    return mt or "application/octet-stream"
 
 router = APIRouter()
 
@@ -92,8 +97,12 @@ async def get_asset_file(session: SessionDep, current_user: CurrentUser, filenam
     if not current_user.is_superuser and (asset.owner_id != current_user.id):
         raise HTTPException(status_code=400, detail="Not enough permissions")
 
-    output_path = get_asset_upload_path(f"{asset.id}/index{asset.extension}")
-    return FileResponse(output_path)
+    key = upload_key(f"{asset.id}/index{asset.extension}")
+    storage = get_storage()
+    if not storage.exists(key):
+        raise HTTPException(status_code=404, detail="Asset file not found")
+    return StreamingResponse(storage.iter_object(key), media_type="application/octet-stream",
+                             headers={"Content-Disposition": f'attachment; filename="{asset.filename}"'})
 
 @router.get("/{id}/download", response_model=None)
 async def download_asset(session: SessionDep, current_user: CurrentUser, id: uuid.UUID) -> Any:
@@ -106,8 +115,12 @@ async def download_asset(session: SessionDep, current_user: CurrentUser, id: uui
     if not current_user.is_superuser and (asset.owner_id != current_user.id):
         raise HTTPException(status_code=400, detail="Not enough permissions")
 
-    output_path = get_asset_upload_path(f"{asset.id}/index{asset.extension}")
-    return FileResponse(output_path)
+    key = upload_key(f"{asset.id}/index{asset.extension}")
+    storage = get_storage()
+    if not storage.exists(key):
+        raise HTTPException(status_code=404, detail="Asset file not found")
+    return StreamingResponse(storage.iter_object(key), media_type="application/octet-stream",
+                             headers={"Content-Disposition": f'attachment; filename="{asset.filename}"'})
 
 @router.get("/{id}/sample", response_model=None)
 async def read_asset_sample(session: SessionDep, current_user: CurrentUser, id: uuid.UUID) -> Any:
@@ -127,11 +140,11 @@ async def read_asset_sample(session: SessionDep, current_user: CurrentUser, id: 
     if asset.geometry_type == 'PointCloud':
         sample_extension = '.xyz'
 
-    sample_file_path = get_asset_upload_path(f"{asset.id}/sample{sample_extension}")
-    if not os.path.isfile(sample_file_path):
-        raise HTTPException(status_code=500, detail="Sample file not available")
-
-    return FileResponse(sample_file_path)
+    key = upload_key(f"{asset.id}/sample{sample_extension}")
+    storage = get_storage()
+    if not storage.exists(key):
+        raise HTTPException(status_code=404, detail="Sample not available")
+    return StreamingResponse(storage.iter_object(key), media_type=_media_type(f"sample{sample_extension}"))
 
 @router.delete("/{id}")
 def delete_asset(

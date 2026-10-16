@@ -1,30 +1,39 @@
-import os
 import uuid
+import posixpath
+import mimetypes
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
 
-from app.core.config import settings
+from app.core.storage import get_storage, output_key
 
 router = APIRouter()
 
-_OUTPUT_DIR = os.path.join(settings.ASSETS_DATA, "output")
+
+def _media_type(name):
+    mt, _ = mimetypes.guess_type(name)
+    return mt or "application/octet-stream"
+
 
 @router.get("/{pipeline_id}/{path:path}")
 def serve_output_artifact(pipeline_id: str, path: str):
-    """Serve only the public pipeline artifacts (3D Tiles + download.zip), never process/."""
+    """Serve only public pipeline artifacts (3D Tiles + download.zip), never process/.
+
+    Proxies the object through the storage layer so it works on any backend and
+    keeps the tileset's relative references intact under one URL prefix.
+    """
     try:
         uuid.UUID(pipeline_id)
     except ValueError:
         raise HTTPException(status_code=404)
 
-    base = os.path.realpath(os.path.join(_OUTPUT_DIR, pipeline_id))
-    target = os.path.realpath(os.path.join(base, path))
-    if target != base and not target.startswith(base + os.sep):
+    norm = posixpath.normpath(path)
+    if norm.startswith("/") or norm == ".." or ".." in norm.split("/"):
+        raise HTTPException(status_code=404)
+    if norm != "download.zip" and norm != "tiles" and not norm.startswith("tiles/"):
         raise HTTPException(status_code=404)
 
-    rel = os.path.relpath(target, base)
-    if rel != 'download.zip' and rel != 'tiles' and not rel.startswith('tiles' + os.sep):
+    storage = get_storage()
+    key = output_key(pipeline_id, norm)
+    if not storage.exists(key):
         raise HTTPException(status_code=404)
-    if not os.path.isfile(target):
-        raise HTTPException(status_code=404)
-    return FileResponse(target)
+    return StreamingResponse(storage.iter_object(key), media_type=_media_type(norm))

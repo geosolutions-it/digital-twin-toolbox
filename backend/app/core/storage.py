@@ -48,6 +48,9 @@ class Storage(ABC):
     @abstractmethod
     def delete_prefix(self, key_prefix: str) -> None: ...
 
+    @abstractmethod
+    def iter_object(self, key: str, chunk: int = 1048576): ...
+
     def local_path(self, key: str) -> str | None:
         return None
 
@@ -92,6 +95,11 @@ class LocalStorage(Storage):
             shutil.rmtree(target, ignore_errors=True)
         elif os.path.exists(target):
             os.remove(target)
+
+    def iter_object(self, key: str, chunk: int = 1048576):
+        with open(self._path(key), "rb") as f:
+            while (b := f.read(chunk)):
+                yield b
 
     def local_path(self, key: str) -> str | None:
         return self._path(key)
@@ -148,6 +156,10 @@ class S3Storage(Storage):
             return True
         except ClientError:
             return False
+
+    def iter_object(self, key: str, chunk: int = 1048576):
+        body = self.client.get_object(Bucket=self.bucket, Key=key)["Body"]
+        yield from body.iter_chunks(chunk)
 
     def delete_prefix(self, key_prefix: str) -> None:
         paginator = self.client.get_paginator("list_objects_v2")
