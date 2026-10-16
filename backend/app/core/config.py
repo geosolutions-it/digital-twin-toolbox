@@ -57,6 +57,14 @@ class Settings(BaseSettings):
     ASSETS_DATA: str = ""
     DTT_ENABLE_USERS_MANAGEMENT: bool = False
 
+    STORAGE_BACKEND: Literal["local", "s3"] = "local"
+    S3_ENDPOINT_URL: str | None = None
+    S3_BUCKET: str | None = None
+    S3_ACCESS_KEY_ID: str | None = None
+    S3_SECRET_ACCESS_KEY: str | None = None
+    S3_REGION: str | None = None
+    S3_ADDRESSING_STYLE: Literal["path", "virtual"] = "path"
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> PostgresDsn:

@@ -6,6 +6,7 @@ import uuid
 from app.models.task import Pipeline, PipelinePublic, PipelinesPublic, PipelinePublicExtended, PipelineCreate, Message, Asset, PipelinesActionTypes, PipelineUpdate
 
 from app.worker.pipelines import run as run_pipeline
+from app.services.pipeline_config import validate_pipeline_config
 from app.worker.main import celery
 from celery.result import AsyncResult
 from celery.states import REVOKED, PENDING, SUCCESS, FAILURE, STARTED
@@ -88,6 +89,9 @@ async def process_pipeline_task(
     try:
         if action_type == 'run' and pipeline_extended.task_status not in (PENDING, STARTED):
             pipeline_extended_dict = pipeline_extended.model_dump()
+            pipeline_extended_dict['data'] = validate_pipeline_config(
+                asset.geometry_type, asset.asset_type, pipeline_extended_dict.get('data')
+            )
             task = run_pipeline(pipeline_extended_dict)
             task_ids = _collect_task_ids(task)
             pipeline_out = {

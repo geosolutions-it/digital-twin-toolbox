@@ -1,16 +1,30 @@
 import json
+import os
 import shutil
+import tempfile
 
 from sqlmodel import Session, select
 from app.core.db import engine
+from app.core.config import settings
+from app.core.storage import get_storage, upload_key, output_key
 from app.models.task import Asset
+from app.models.config import PointCloudConfig
 from app.worker.main import celery, PipelineDatabaseTask, AssetDatabaseTask
-from app.worker.common.utils import get_asset_upload_path, setup_output_directory
 from app.worker.tasks.pointcloud.crs import resolve_epsg_codes_from_pdal_metadata
 from app.worker.tasks.pointcloud.pdal.processes import (
     pdal_metadata, pdal_stats, point_cloud_preview, process_las, resolve_asset_crs
 )
 from app.worker.tasks.pointcloud.py3dtiles.processes import py3dtiles_convert
+
+
+def _materialize(storage, key, scratch, name):
+    """Local path for a stored object: reuse it in place (local) or download it."""
+    local = storage.local_path(key)
+    if local and os.path.exists(local):
+        return local
+    dest = os.path.join(scratch, name)
+    storage.download_file(key, dest)
+    return dest
 
 
 @celery.task(name="inspect_pointcloud", base=AssetDatabaseTask)
@@ -19,22 +33,33 @@ def inspect_pointcloud(options):
     asset_id = asset['id']
     extension = asset['extension']
 
-    asset_file_path = get_asset_upload_path(f"{asset_id}/index{extension}")
+    storage = get_storage()
 
-    metadata_json = pdal_metadata(asset_file_path)
-    with open(get_asset_upload_path(f"{asset_id}/metadata.json"), 'w') as f:
-        json.dump(metadata_json, f)
+    with tempfile.TemporaryDirectory() as scratch:
+        asset_file_path = _materialize(
+            storage, upload_key(f"{asset_id}/index{extension}"), scratch, f"index{extension}"
+        )
 
-    stats_json = pdal_stats(asset_file_path)
-    with open(get_asset_upload_path(f"{asset_id}/stats.json"), 'w') as f:
-        json.dump(stats_json, f)
+        metadata_json = pdal_metadata(asset_file_path)
+        metadata_path = os.path.join(scratch, 'metadata.json')
+        with open(metadata_path, 'w') as f:
+            json.dump(metadata_json, f)
+        storage.upload_file(metadata_path, upload_key(f"{asset_id}/metadata.json"))
 
-    crs_codes = resolve_epsg_codes_from_pdal_metadata(metadata_json['metadata'])
-    epsg = crs_codes['epsg']
-    horizontal_epsg = crs_codes['horizontal_epsg']
-    vertical_epsg = crs_codes['vertical_epsg']
+        stats_json = pdal_stats(asset_file_path)
+        stats_path = os.path.join(scratch, 'stats.json')
+        with open(stats_path, 'w') as f:
+            json.dump(stats_json, f)
+        storage.upload_file(stats_path, upload_key(f"{asset_id}/stats.json"))
 
-    point_cloud_preview(asset_file_path, get_asset_upload_path(f"{asset_id}/sample.xyz"), metadata_json, stats_json)
+        crs_codes = resolve_epsg_codes_from_pdal_metadata(metadata_json['metadata'])
+        epsg = crs_codes['epsg']
+        horizontal_epsg = crs_codes['horizontal_epsg']
+        vertical_epsg = crs_codes['vertical_epsg']
+
+        sample_path = os.path.join(scratch, 'sample.xyz')
+        point_cloud_preview(asset_file_path, sample_path, metadata_json, stats_json)
+        storage.upload_file(sample_path, upload_key(f"{asset_id}/sample.xyz"))
 
     return {
         'asset_type': 'LAS',
@@ -50,55 +75,67 @@ def inspect_pointcloud(options):
     }
 
 
-@celery.task(name="create_point_cloud_3dtiles", base=PipelineDatabaseTask)
-def create_point_cloud_3dtiles(pipeline_extended):
-    pipeline_config = pipeline_extended.get('data') or {}
-
-    default_config = {
-        "colorization_image": '',
-        "sample_radius": None,
-        "to_ellipsoidal_height": False,
-        "ground_classification": False,
-        "geometric_error_scale_factor": 1,
-    }
-
-    config = {**default_config, **pipeline_config}
-    if config.get('geometric_error_scale_factor') is not None:
-        config['geometric_error_scale_factor'] = float(config['geometric_error_scale_factor'])
-
-    asset = pipeline_extended['asset']
-    pipeline_id = pipeline_extended['id']
-
-    output_paths = setup_output_directory(pipeline_id)
-
-    colorization_image = config['colorization_image'] or ''
-    colorization_image_path = None
-    if colorization_image:
-        with Session(engine) as session:
-            statement = select(Asset).where(Asset.filename == colorization_image).limit(1)
-            image_asset = session.exec(statement).first()
-            colorization_image_path = get_asset_upload_path(f"{image_asset.id}/index{image_asset.extension}")
-
-    input_file = process_las(
-        pipeline_id, asset,
-        sample_radius=config['sample_radius'],
-        to_ellipsoidal_height=config['to_ellipsoidal_height'],
-        colorization_image=colorization_image_path,
-        ground_classification=config['ground_classification']
+def _resolve_colorization_path(storage, filename, scratch):
+    with Session(engine) as session:
+        statement = select(Asset).where(Asset.filename == filename).limit(1)
+        image_asset = session.exec(statement).first()
+    if not image_asset:
+        return None
+    return _materialize(
+        storage,
+        upload_key(f"{image_asset.id}/index{image_asset.extension}"),
+        scratch,
+        f"colorization{image_asset.extension}",
     )
 
-    horizontal_epsg, _vertical_epsg = resolve_asset_crs(asset)
-    crs_in = horizontal_epsg
 
-    if not crs_in:
-        raise Exception('Not recognized Point Cloud CRS')
+@celery.task(name="create_point_cloud_3dtiles", base=PipelineDatabaseTask)
+def create_point_cloud_3dtiles(pipeline_extended):
+    config = PointCloudConfig(**(pipeline_extended.get('data') or {}))
 
-    py3dtiles_convert(input_file, output_paths['output_path_3dtiles'], f'{crs_in}', config['geometric_error_scale_factor'])
+    asset = pipeline_extended['asset']
+    asset_id = asset['id']
+    extension = asset['extension']
+    pipeline_id = pipeline_extended['id']
 
-    shutil.make_archive(output_paths['output_path_3dtiles_zip'], 'zip', output_paths['output_path_3dtiles'])
+    storage = get_storage()
 
+    with tempfile.TemporaryDirectory() as scratch:
+        input_file = _materialize(
+            storage, upload_key(f"{asset_id}/index{extension}"), scratch, f"index{extension}"
+        )
+
+        colorization_image_path = None
+        if config.colorization_image:
+            colorization_image_path = _resolve_colorization_path(
+                storage, config.colorization_image, scratch
+            )
+
+        processed_file = process_las(
+            scratch, input_file, asset,
+            sample_radius=config.sample_radius,
+            to_ellipsoidal_height=config.to_ellipsoidal_height,
+            colorization_image=colorization_image_path,
+            ground_classification=config.ground_classification,
+        )
+
+        horizontal_epsg, _vertical_epsg = resolve_asset_crs(asset)
+        if not horizontal_epsg:
+            raise Exception('Not recognized Point Cloud CRS')
+
+        tiles_dir = os.path.join(scratch, 'tiles')
+        py3dtiles_convert(processed_file, tiles_dir, f'{horizontal_epsg}', config.geometric_error_scale_factor)
+
+        zip_base = os.path.join(scratch, 'download')
+        shutil.make_archive(zip_base, 'zip', tiles_dir)
+
+        storage.delete_prefix(output_key(pipeline_id, 'tiles'))
+        storage.upload_dir(tiles_dir, output_key(pipeline_id, 'tiles'))
+        storage.upload_file(zip_base + '.zip', output_key(pipeline_id, 'download.zip'))
+
+    base = settings.API_V1_STR
     return {
-        'output': output_paths['output_path'],
-        'tileset': output_paths['output_tileset'],
-        'download': output_paths['output_tileset_zip']
+        'output': output_key(pipeline_id),
+        'tileset': f"{base}/output/{pipeline_id}/tiles/tileset.json",
+        'download': f"{base}/output/{pipeline_id}/download.zip",
     }

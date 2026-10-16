@@ -84,8 +84,7 @@ def resolve_asset_crs(asset):
     return horizontal_epsg, vertical_epsg
 
 
-def process_las(pipeline_id, asset, sample_radius=None, to_ellipsoidal_height=False, colorization_image='', ground_classification=False):
-    asset_upload_path = get_asset_upload_path(f"{asset['id']}/index{asset['extension']}")
+def process_las(work_dir, input_path, asset, sample_radius=None, to_ellipsoidal_height=False, colorization_image=None, ground_classification=False):
     pipeline = []
 
     if sample_radius:
@@ -111,12 +110,12 @@ def process_las(pipeline_id, asset, sample_radius=None, to_ellipsoidal_height=Fa
         ]
 
     if len(pipeline) == 0:
-        return asset_upload_path
+        return input_path
 
-    output_processed_laz_path = get_asset_upload_path(f"{asset['id']}/{pipeline_id}.laz")
-    pipeline_process_path = get_asset_upload_path(f"{asset['id']}/{pipeline_id}.pipeline.json")
+    output_processed_laz_path = os.path.join(work_dir, 'processed.laz')
+    pipeline_process_path = os.path.join(work_dir, 'process.pipeline.json')
 
-    pipeline = [{"filename": asset_upload_path, "type": 'readers.las'}] + pipeline + [{"type": 'writers.las', "filename": output_processed_laz_path, "compression": True}]
+    pipeline = [{"filename": input_path, "type": 'readers.las'}] + pipeline + [{"type": 'writers.las', "filename": output_processed_laz_path, "compression": True}]
 
     with open(pipeline_process_path, "w") as f:
         json.dump(pipeline, f)

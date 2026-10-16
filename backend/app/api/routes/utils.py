@@ -8,10 +8,9 @@ from app.models.task import Message, Pipeline, Asset
 from app.utils import generate_test_email, send_email
 from celery.states import PENDING, SUCCESS
 from app.core.config import settings
-import shutil
 import os
 from pathlib import Path
-from app.worker.common.utils import get_asset_upload_path
+from app.core.storage import get_storage, upload_key
 from app.worker.pipelines import dispatch_upload_inspection
 import zipfile
 
@@ -259,16 +258,17 @@ def create_asset(session, file_info, current_user, to_ellipsoidal_height):
 
     asset = Asset.model_validate(asset_in, update={"owner_id": current_user.id})
 
-    output_file_path = get_asset_upload_path(f"{asset.id}/index{asset.extension}")
-    os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
+    storage = get_storage()
+    key = upload_key(f"{asset.id}/index{asset.extension}")
     if isinstance(file, str):
-        shutil.move(file, output_file_path)
+        storage.upload_file(file, key)
+        try:
+            os.remove(file)
+        except OSError:
+            pass
     else:
         try:
-            file.seek(0)
-            with open(output_file_path, 'wb') as f:
-                while contents := file.read(1024 * 1024):
-                    f.write(contents)
+            storage.upload_fileobj(file, key)
         except Exception:
             raise HTTPException(status_code=500, detail="There was an error uploading the file")
         finally:
