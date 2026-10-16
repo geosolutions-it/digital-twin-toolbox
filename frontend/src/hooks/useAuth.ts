@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 import { AxiosError } from "axios"
 import {
@@ -23,11 +23,20 @@ const useAuth = () => {
   const navigate = useNavigate()
   const showToast = useCustomToast()
   const queryClient = useQueryClient()
-  const { data: user, isLoading } = useQuery<UserPublic | null, Error>({
+  const { data: user, isLoading, error: userError } = useQuery<UserPublic | null, Error>({
     queryKey: ["currentUser"],
     queryFn: UsersService.readUserMe,
     enabled: hideUserSections() ? false : isLoggedIn(),
+    retry: false,
   })
+
+  useEffect(() => {
+    if (userError && !hideUserSections()) {
+      localStorage.removeItem("access_token")
+      queryClient.removeQueries({ queryKey: ["currentUser"] })
+      navigate({ to: "/login" })
+    }
+  }, [userError])
 
   const signUpMutation = useMutation({
     mutationFn: (data: UserRegister) =>
