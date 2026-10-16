@@ -53,6 +53,9 @@ class Storage(ABC):
     @abstractmethod
     def list(self, prefix: str) -> list[str]: ...
 
+    @abstractmethod
+    def list_dir(self, prefix: str, delimiter: str = "/") -> dict: ...
+
 
 class S3Storage(Storage):
     def __init__(self, bucket, endpoint_url=None, access_key=None, secret_key=None,
@@ -117,6 +120,21 @@ class S3Storage(Storage):
             for obj in page.get("Contents", []):
                 keys.append(obj["Key"])
         return keys
+
+    def list_dir(self, prefix: str, delimiter: str = "/") -> dict:
+        if prefix and not prefix.endswith(delimiter):
+            prefix = prefix + delimiter
+        folders, files = [], []
+        paginator = self.client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix, Delimiter=delimiter):
+            for cp in page.get("CommonPrefixes", []):
+                folders.append(cp["Prefix"])
+            for obj in page.get("Contents", []):
+                key = obj["Key"]
+                if key == prefix:
+                    continue
+                files.append({"key": key, "name": key[len(prefix):], "size": obj["Size"]})
+        return {"prefix": prefix, "folders": folders, "files": files}
 
     def delete_prefix(self, key_prefix: str) -> None:
         paginator = self.client.get_paginator("list_objects_v2")
