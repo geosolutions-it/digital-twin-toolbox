@@ -4,11 +4,12 @@ import { createFileRoute } from "@tanstack/react-router"
 import { PipelinesService } from "../../../client"
 import { hideUserSections } from "../../../utils"
 import PointCloudCanvas from "../../../components/Viewer/PointCloudCanvas"
-import PointGeometryCanvas from "../../../components/Viewer/PointGeometryCanvas"
-import PolygonGeometryCanvas from "../../../components/Viewer/PolygonGeometryCanvas"
-import PhotogrammetryCanvas from "../../../components/Viewer/PhotogrammetryCanvas"
+// Other pipeline viewers hidden for now (point-cloud focus):
+// import PointGeometryCanvas from "../../../components/Viewer/PointGeometryCanvas"
+// import PolygonGeometryCanvas from "../../../components/Viewer/PolygonGeometryCanvas"
+// import PhotogrammetryCanvas from "../../../components/Viewer/PhotogrammetryCanvas"
+// import MeshCanvas from "../../../components/Viewer/MeshCanvas"
 import { isCeleryTaskInProgress } from "../../../utils/celeryStatus"
-import MeshCanvas from "../../../components/Viewer/MeshCanvas"
 
 export const Route = createFileRoute("/_layout/pipeline/$pipelineId")({
   component: Pipeline,
@@ -81,42 +82,7 @@ function Pipeline() {
             onCancel={handleOnCancel}
           />
         ) : null}
-        {data?.asset?.geometry_type === "Point" ? (
-          <PointGeometryCanvas
-            assetId={assetId}
-            pipeline={data}
-            onUpdate={handleOnUpdate}
-            onRun={handleOnRun}
-            onCancel={handleOnCancel}
-          />
-        ) : null}
-        {data?.asset?.geometry_type === "Polygon" ? (
-          <PolygonGeometryCanvas
-            assetId={assetId}
-            pipeline={data}
-            onUpdate={handleOnUpdate}
-            onRun={handleOnRun}
-            onCancel={handleOnCancel}
-          />
-        ) : null}
-        {data?.asset?.asset_type === "Photogrammetry" ? (
-          <PhotogrammetryCanvas
-            assetId={assetId}
-            pipeline={data}
-            onUpdate={handleOnUpdate}
-            onRun={handleOnRun}
-            onCancel={handleOnCancel}
-          />
-        ) : null}
-        {data?.asset?.asset_type === "Mesh" ? (
-          <MeshCanvas
-            assetId={assetId}
-            pipeline={data}
-            onUpdate={handleOnUpdate}
-            onRun={handleOnRun}
-            onCancel={handleOnCancel}
-          />
-        ) : null}
+        {/* Point / Polygon / Photogrammetry / Mesh viewers hidden for now (point-cloud focus) */}
           </Flex>
         </Box>
         <Divider orientation="vertical" />

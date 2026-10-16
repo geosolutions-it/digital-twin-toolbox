@@ -1,35 +1,22 @@
 import { Box, Flex, Icon, Text, useColorModeValue } from "@chakra-ui/react"
-import { useQueryClient } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
-import { FiBox, FiFile, FiMap, FiSettings, FiUsers } from "react-icons/fi"
-
-import type { UserPublic } from "../../client"
-import { hideUserSections } from '../../utils'
+import { FiBox, FiFile } from "react-icons/fi"
 
 interface SidebarItemsProps {
   onClose?: () => void
 }
 
 const SidebarItems = ({ onClose }: SidebarItemsProps) => {
-  const queryClient = useQueryClient()
   const textColor = useColorModeValue("ui.main", "ui.light")
   const bgActive = useColorModeValue("#E2E8F0", "#4A5568")
-  const currentUser = queryClient.getQueryData<UserPublic>(["currentUser"])
-
-  const shouldHideUserSections = hideUserSections();
 
   const items = [
     { icon: FiFile, title: "Assets", path: "/assets" },
     { icon: FiBox, title: "Pipelines", path: "/pipelines" },
-    { icon: FiMap, title: "Map", path: "/map" },
-    ...(shouldHideUserSections ? [] : [{ icon: FiSettings, title: "User Settings", path: "/settings" }]),
+    // { icon: FiMap, title: "Map", path: "/map" }, // MapStore hidden for now
   ]
 
-  const finalItems = !shouldHideUserSections && currentUser?.is_superuser
-    ? [...items, { icon: FiUsers, title: "Admin", path: "/admin" }]
-    : items
-
-  const listItems = finalItems.map(({ icon, title, path }) => (
+  const listItems = items.map(({ icon, title, path }) => (
     <Flex
       as={Link}
       to={path}
