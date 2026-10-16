@@ -9,4 +9,3 @@ class PointCloudConfig(BaseModel):
     sample_radius: float | None = None
     to_ellipsoidal_height: bool = False
     ground_classification: bool = False
-    geometric_error_scale_factor: float = 1.0

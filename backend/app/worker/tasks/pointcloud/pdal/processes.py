@@ -23,6 +23,29 @@ def pdal_stats(file_path):
     return json.loads(result.stdout.decode("utf-8"))
 
 
+def detect_point_attributes(file_path):
+    """Return (has_classification, has_intensity): include an attribute only when the
+    cloud actually carries it with useful variation, not just a zeroed dimension."""
+    try:
+        stats = pdal_stats(file_path)
+    except Exception:
+        return False, False
+    by_name = {s.get('name'): s for s in (stats.get('stats') or {}).get('statistic', [])}
+
+    def varied(name):
+        s = by_name.get(name)
+        if not s:
+            return False
+        mn, mx = s.get('minimum'), s.get('maximum')
+        return mn is not None and mx is not None and mn != mx
+
+    cls = by_name.get('Classification') or {}
+    # classified if values vary, or a single non-trivial class (not 0/1 = unclassified)
+    has_classification = varied('Classification') or cls.get('minimum') not in (None, 0, 1)
+    has_intensity = varied('Intensity')
+    return has_classification, has_intensity
+
+
 def point_cloud_preview(input_file_path, output_file_path, metadata, stats):
     pipeline = [{"filename": input_file_path, "type": 'readers.las'}]
 

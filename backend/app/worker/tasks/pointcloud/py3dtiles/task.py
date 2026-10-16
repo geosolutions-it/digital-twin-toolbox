@@ -12,7 +12,8 @@ from app.models.config import PointCloudConfig
 from app.worker.main import celery, PipelineDatabaseTask, AssetDatabaseTask
 from app.worker.tasks.pointcloud.crs import resolve_epsg_codes_from_pdal_metadata
 from app.worker.tasks.pointcloud.pdal.processes import (
-    pdal_metadata, pdal_stats, point_cloud_preview, process_las, resolve_asset_crs
+    pdal_metadata, pdal_stats, point_cloud_preview, process_las, resolve_asset_crs,
+    detect_point_attributes,
 )
 from app.worker.tasks.pointcloud.py3dtiles.processes import py3dtiles_convert
 
@@ -120,8 +121,15 @@ def create_point_cloud_3dtiles(pipeline_extended):
         if not horizontal_epsg:
             raise Exception('Not recognized Point Cloud CRS')
 
+        has_classification, has_intensity = detect_point_attributes(processed_file)
+        if config.ground_classification:
+            has_classification = True
+
         tiles_dir = os.path.join(scratch, 'tiles')
-        py3dtiles_convert(processed_file, tiles_dir, f'{horizontal_epsg}', config.geometric_error_scale_factor)
+        py3dtiles_convert(
+            processed_file, tiles_dir, f'{horizontal_epsg}',
+            include_classification=has_classification, include_intensity=has_intensity,
+        )
 
         zip_base = os.path.join(scratch, 'download')
         shutil.make_archive(zip_base, 'zip', tiles_dir)
