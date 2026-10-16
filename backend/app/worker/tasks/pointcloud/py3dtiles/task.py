@@ -18,10 +18,7 @@ from app.worker.tasks.pointcloud.py3dtiles.processes import py3dtiles_convert
 
 
 def _materialize(storage, key, scratch, name):
-    """Local path for a stored object: reuse it in place (local) or download it."""
-    local = storage.local_path(key)
-    if local and os.path.exists(local):
-        return local
+    """Download a stored object to local scratch and return its path."""
     dest = os.path.join(scratch, name)
     storage.download_file(key, dest)
     return dest

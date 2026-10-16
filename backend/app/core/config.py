@@ -57,7 +57,6 @@ class Settings(BaseSettings):
     ASSETS_DATA: str = ""
     DTT_ENABLE_USERS_MANAGEMENT: bool = False
 
-    STORAGE_BACKEND: Literal["local", "s3"] = "local"
     S3_ENDPOINT_URL: str | None = None
     S3_BUCKET: str | None = None
     S3_ACCESS_KEY_ID: str | None = None

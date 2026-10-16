@@ -1,13 +1,12 @@
-"""Pluggable object storage for assets and pipeline outputs.
+"""Object storage for assets and pipeline outputs.
 
-Keys are backend-agnostic relative paths (e.g. "upload/<id>/index.laz",
-"output/<id>/tiles/tileset.json"). The local backend maps a key under
-settings.ASSETS_DATA, so it reproduces today's on-disk layout exactly; the s3
-backend maps the same key to an object in a bucket. Workers download inputs to
-local scratch and upload outputs back, so no shared filesystem is required.
+Keys are relative paths (e.g. "upload/<id>/index.laz", "output/<id>/tiles/tileset.json")
+mapped to objects in an S3-compatible bucket. Single-box/dev runs a bundled SeaweedFS;
+a cloud deploy points the S3_* settings at its own bucket. Workers download inputs to
+local scratch and upload outputs back, so no shared filesystem is required. The Storage
+interface stays thin so other object-store backends can be added later.
 """
 import os
-import shutil
 from abc import ABC, abstractmethod
 
 from app.core.config import settings
@@ -50,59 +49,6 @@ class Storage(ABC):
 
     @abstractmethod
     def iter_object(self, key: str, chunk: int = 1048576): ...
-
-    def local_path(self, key: str) -> str | None:
-        return None
-
-
-class LocalStorage(Storage):
-    def __init__(self, root: str):
-        self.root = root
-
-    def _path(self, key: str) -> str:
-        return os.path.join(self.root, key)
-
-    def upload_fileobj(self, fileobj, key: str) -> None:
-        dest = self._path(key)
-        os.makedirs(os.path.dirname(dest), exist_ok=True)
-        fileobj.seek(0)
-        with open(dest, "wb") as f:
-            while chunk := fileobj.read(1024 * 1024):
-                f.write(chunk)
-
-    def upload_file(self, local_path: str, key: str) -> None:
-        dest = self._path(key)
-        os.makedirs(os.path.dirname(dest), exist_ok=True)
-        if os.path.abspath(local_path) != os.path.abspath(dest):
-            shutil.copyfile(local_path, dest)
-
-    def download_file(self, key: str, local_path: str) -> None:
-        src = self._path(key)
-        os.makedirs(os.path.dirname(local_path), exist_ok=True)
-        if os.path.abspath(src) != os.path.abspath(local_path):
-            shutil.copyfile(src, local_path)
-
-    def upload_dir(self, local_dir: str, key_prefix: str) -> None:
-        for full, rel in _iter_files(local_dir):
-            self.upload_file(full, f"{key_prefix}/{rel}")
-
-    def exists(self, key: str) -> bool:
-        return os.path.exists(self._path(key))
-
-    def delete_prefix(self, key_prefix: str) -> None:
-        target = self._path(key_prefix)
-        if os.path.isdir(target):
-            shutil.rmtree(target, ignore_errors=True)
-        elif os.path.exists(target):
-            os.remove(target)
-
-    def iter_object(self, key: str, chunk: int = 1048576):
-        with open(self._path(key), "rb") as f:
-            while (b := f.read(chunk)):
-                yield b
-
-    def local_path(self, key: str) -> str | None:
-        return self._path(key)
 
 
 class S3Storage(Storage):
@@ -180,16 +126,13 @@ _storage: Storage | None = None
 def get_storage() -> Storage:
     global _storage
     if _storage is None:
-        if settings.STORAGE_BACKEND == "s3":
-            _storage = S3Storage(
-                bucket=settings.S3_BUCKET,
-                endpoint_url=settings.S3_ENDPOINT_URL,
-                access_key=settings.S3_ACCESS_KEY_ID,
-                secret_key=settings.S3_SECRET_ACCESS_KEY,
-                region=settings.S3_REGION,
-                addressing_style=settings.S3_ADDRESSING_STYLE,
-                create_bucket=settings.S3_CREATE_BUCKET,
-            )
-        else:
-            _storage = LocalStorage(root=settings.ASSETS_DATA)
+        _storage = S3Storage(
+            bucket=settings.S3_BUCKET,
+            endpoint_url=settings.S3_ENDPOINT_URL,
+            access_key=settings.S3_ACCESS_KEY_ID,
+            secret_key=settings.S3_SECRET_ACCESS_KEY,
+            region=settings.S3_REGION,
+            addressing_style=settings.S3_ADDRESSING_STYLE,
+            create_bucket=settings.S3_CREATE_BUCKET,
+        )
     return _storage

@@ -51,5 +51,6 @@ def test_upload_dir_and_delete_prefix(s3, tmp_path):
     assert not s3.exists("output/pid/tiles/tileset.json")
 
 
-def test_local_path_none(s3):
-    assert s3.local_path("anything") is None
+def test_iter_object(s3, tmp_path):
+    s3.upload_fileobj(io.BytesIO(b"x y z\n1 2 3\n"), "upload/a/sample.xyz")
+    assert b"".join(s3.iter_object("upload/a/sample.xyz")) == b"x y z\n1 2 3\n"
