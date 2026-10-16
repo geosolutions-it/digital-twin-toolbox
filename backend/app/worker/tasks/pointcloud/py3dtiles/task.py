@@ -1,4 +1,3 @@
-import json
 import os
 import shutil
 import tempfile
@@ -39,16 +38,7 @@ def inspect_pointcloud(options):
         )
 
         metadata_json = pdal_metadata(asset_file_path)
-        metadata_path = os.path.join(scratch, 'metadata.json')
-        with open(metadata_path, 'w') as f:
-            json.dump(metadata_json, f)
-        storage.upload_file(metadata_path, upload_key(f"{asset_id}/metadata.json"))
-
         stats_json = pdal_stats(asset_file_path)
-        stats_path = os.path.join(scratch, 'stats.json')
-        with open(stats_path, 'w') as f:
-            json.dump(stats_json, f)
-        storage.upload_file(stats_path, upload_key(f"{asset_id}/stats.json"))
 
         crs_codes = resolve_epsg_codes_from_pdal_metadata(metadata_json['metadata'])
         epsg = crs_codes['epsg']
@@ -63,8 +53,6 @@ def inspect_pointcloud(options):
         'asset_type': 'LAS',
         'geometry_type': 'PointCloud',
         'payload': {
-            'metadata': True,
-            'stats': True,
             'sample': True,
             'epsg': epsg,
             'horizontal_epsg': horizontal_epsg,

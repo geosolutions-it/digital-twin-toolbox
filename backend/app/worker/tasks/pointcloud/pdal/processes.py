@@ -4,7 +4,7 @@ import os
 import math
 from pyproj import CRS
 from app.worker.tasks.pointcloud.crs import resolve_epsg_codes_from_pdal_metadata
-from app.worker.common.utils import get_asset_upload_path, run_subprocess
+from app.worker.common.utils import run_subprocess
 
 
 def pdal_metadata(file_path):
@@ -91,19 +91,6 @@ def resolve_asset_crs(asset):
     upload_result = asset.get('upload_result') or {}
     horizontal_epsg = upload_result.get('horizontal_epsg') or upload_result.get('epsg')
     vertical_epsg = upload_result.get('vertical_epsg')
-
-    if horizontal_epsg is None or vertical_epsg is None:
-        metadata_path = get_asset_upload_path(f"{asset['id']}/metadata.json")
-        if os.path.isfile(metadata_path):
-            with open(metadata_path) as f:
-                metadata_json = json.load(f)
-            metadata = metadata_json.get('metadata', metadata_json)
-            crs_codes = resolve_epsg_codes_from_pdal_metadata(metadata)
-            if horizontal_epsg is None:
-                horizontal_epsg = crs_codes['horizontal_epsg'] or crs_codes['epsg']
-            if vertical_epsg is None:
-                vertical_epsg = crs_codes['vertical_epsg']
-
     return horizontal_epsg, vertical_epsg
 
 
