@@ -66,8 +66,7 @@ def _recompute_geometric_error(tileset_path):
 
     root = data["root"]
     visit(root)
-    # keep py3dtiles' large top-level geometricError: it governs whether the whole
-    # tileset is rendered at distance, so shrinking it culls everything when zoomed out.
+    # top-level geometricError left as-is: shrinking it culls the tileset when zoomed out
     with open(tileset_path, "w") as f:
         json.dump(data, f)
     return root.get("geometricError")

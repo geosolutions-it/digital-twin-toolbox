@@ -2,11 +2,14 @@ from app.api.deps import CurrentUser, SessionDep
 from fastapi import APIRouter, HTTPException
 from typing import Any
 from sqlmodel import func, select
+import os
 import uuid
-from app.models.task import Pipeline, PipelinePublic, PipelinesPublic, PipelinePublicExtended, PipelineCreate, Message, Asset, PipelinesActionTypes, PipelineUpdate
+from app.models.task import Pipeline, PipelinePublic, PipelinesPublic, PipelinePublicExtended, PipelineCreate, PipelineBatchCreate, Message, Asset, PipelinesActionTypes, PipelineUpdate
 
 from app.worker.pipelines import run as run_pipeline
+from app.worker.pipelines import pointcloud as _pc
 from app.services.pipeline_config import validate_pipeline_config
+from app.core.storage import get_storage
 from app.worker.main import celery
 from celery.result import AsyncResult
 from celery.states import REVOKED, PENDING, SUCCESS, FAILURE, STARTED
@@ -64,6 +67,59 @@ def create_pipeline(
     session.commit()
     session.refresh(pipeline)
     return pipeline
+
+_SOURCE_DISPATCH = {"PointCloud": _pc.run}
+_SOURCE_EXTENSIONS = {"PointCloud": (".laz", ".las")}
+
+
+@router.post("/batch", response_model=Any)
+def create_pipeline_batch(
+    *, session: SessionDep, current_user: CurrentUser, batch_in: PipelineBatchCreate
+) -> Any:
+    """
+    Create and dispatch one pipeline per matching file under a bucket prefix.
+    """
+    dispatch = _SOURCE_DISPATCH.get(batch_in.pipeline)
+    if dispatch is None:
+        raise HTTPException(status_code=422, detail=f"Unsupported batch pipeline: {batch_in.pipeline}")
+
+    try:
+        data = validate_pipeline_config(batch_in.pipeline, None, batch_in.data)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=f"Invalid config: {e}")
+
+    exts = _SOURCE_EXTENSIONS[batch_in.pipeline]
+    keys = [k for k in get_storage().list(batch_in.prefix) if k.lower().endswith(exts)]
+    if not keys:
+        raise HTTPException(status_code=404, detail=f"No matching files under prefix {batch_in.prefix!r}")
+
+    batch_id = uuid.uuid4()
+    created = []
+    for key in keys:
+        name = os.path.basename(key)
+        pipeline = Pipeline(
+            title=f"{batch_in.title} / {name}" if batch_in.title else name,
+            asset_id=None,
+            data=data,
+            task_id=None,
+            task_status=None,
+            task_result=None,
+            source={"key": key, "extension": os.path.splitext(key)[1]},
+            batch_id=batch_id,
+            owner_id=current_user.id,
+        )
+        session.add(pipeline)
+        session.commit()
+        session.refresh(pipeline)
+
+        task = dispatch(pipeline.model_dump())
+        pipeline.sqlmodel_update({"task_id": task.id, "task_status": PENDING})
+        session.add(pipeline)
+        session.commit()
+        created.append(str(pipeline.id))
+
+    return {"batch_id": str(batch_id), "count": len(created), "pipeline_ids": created}
+
 
 @router.post("/{id}/task/{action_type}", response_model=Any)
 async def process_pipeline_task(

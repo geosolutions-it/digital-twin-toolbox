@@ -42,6 +42,8 @@ class PipelineBase(SQLModel):
     task_id: str | None
     task_status: str | None
     task_result: Optional[dict | None] | None = Field(nullable=True, sa_type=JSONB)
+    source: Optional[dict] = Field(default=None, nullable=True, sa_type=JSONB)
+    batch_id: uuid.UUID | None = Field(default=None, nullable=True, index=True)
 
 
 class Pipeline(PipelineBase, table=True):
@@ -62,6 +64,13 @@ class PipelinePublicExtended(PipelinePublic):
 
 class PipelineCreate(PipelineBase):
     title: str = Field(min_length=1, max_length=255)
+
+
+class PipelineBatchCreate(SQLModel):
+    prefix: str
+    pipeline: str = "PointCloud"
+    data: Optional[dict] = None
+    title: str | None = None
 
 
 class PipelinesPublic(SQLModel):
