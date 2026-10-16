@@ -107,19 +107,29 @@ def resolve_asset_crs(asset):
     return horizontal_epsg, vertical_epsg
 
 
-def process_las(work_dir, input_path, asset, sample_radius=None, to_ellipsoidal_height=False, colorization_image=None, ground_classification=False):
+def resolve_crs_from_file(input_path):
+    """Read horizontal/vertical EPSG straight from the point cloud, so a job can
+    run from a bucket key with no pre-inspected Asset."""
+    try:
+        metadata_json = pdal_metadata(input_path)
+        codes = resolve_epsg_codes_from_pdal_metadata(metadata_json['metadata'])
+        return (codes.get('horizontal_epsg') or codes.get('epsg')), codes.get('vertical_epsg')
+    except Exception:
+        return None, None
+
+
+def process_las(work_dir, input_path, sample_radius=None, to_ellipsoidal_height=False, horizontal_epsg=None, vertical_epsg=None, colorization_image=None, ground_classification=False):
     pipeline = []
 
     if sample_radius:
         pipeline += [{"type": 'filters.sample', "radius": sample_radius}]
 
     if to_ellipsoidal_height:
-        horizontal_epsg, vertical_epsg = resolve_asset_crs(asset)
         if not horizontal_epsg:
             raise Exception('Not recognized Point Cloud horizontal CRS (required for ellipsoidal height conversion)')
-        vertical_epsg = vertical_epsg or 3855
+        vepsg = vertical_epsg or 3855
         geodetic_crs = CRS(horizontal_epsg).geodetic_crs.to_epsg()
-        pipeline += [{"type": 'filters.reprojection', "in_srs": f"EPSG:{horizontal_epsg}+{vertical_epsg}", "out_srs": f"EPSG:{horizontal_epsg}+{geodetic_crs}", "error_on_failure": True}]
+        pipeline += [{"type": 'filters.reprojection', "in_srs": f"EPSG:{horizontal_epsg}+{vepsg}", "out_srs": f"EPSG:{horizontal_epsg}+{geodetic_crs}", "error_on_failure": True}]
 
     if colorization_image:
         pipeline += [{"type": 'filters.colorization', "raster": colorization_image}]

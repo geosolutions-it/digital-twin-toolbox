@@ -50,6 +50,9 @@ class Storage(ABC):
     @abstractmethod
     def iter_object(self, key: str, chunk: int = 1048576): ...
 
+    @abstractmethod
+    def list(self, prefix: str) -> list[str]: ...
+
 
 class S3Storage(Storage):
     def __init__(self, bucket, endpoint_url=None, access_key=None, secret_key=None,
@@ -106,6 +109,14 @@ class S3Storage(Storage):
     def iter_object(self, key: str, chunk: int = 1048576):
         body = self.client.get_object(Bucket=self.bucket, Key=key)["Body"]
         yield from body.iter_chunks(chunk)
+
+    def list(self, prefix: str) -> list[str]:
+        keys = []
+        paginator = self.client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                keys.append(obj["Key"])
+        return keys
 
     def delete_prefix(self, key_prefix: str) -> None:
         paginator = self.client.get_paginator("list_objects_v2")
