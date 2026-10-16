@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     S3_SECRET_ACCESS_KEY: str | None = None
     S3_REGION: str | None = None
     S3_ADDRESSING_STYLE: Literal["path", "virtual"] = "path"
+    S3_CREATE_BUCKET: bool = False
 
     @computed_field  # type: ignore[prop-decorator]
     @property

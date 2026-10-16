@@ -99,7 +99,7 @@ class LocalStorage(Storage):
 
 class S3Storage(Storage):
     def __init__(self, bucket, endpoint_url=None, access_key=None, secret_key=None,
-                 region=None, addressing_style="path"):
+                 region=None, addressing_style="path", create_bucket=False):
         import boto3
         from botocore.config import Config
 
@@ -112,6 +112,18 @@ class S3Storage(Storage):
             region_name=region,
             config=Config(s3={"addressing_style": addressing_style}),
         )
+        if create_bucket:
+            self._ensure_bucket()
+
+    def _ensure_bucket(self):
+        from botocore.exceptions import ClientError
+        try:
+            self.client.head_bucket(Bucket=self.bucket)
+        except ClientError:
+            try:
+                self.client.create_bucket(Bucket=self.bucket)
+            except ClientError:
+                pass
 
     def upload_fileobj(self, fileobj, key: str) -> None:
         fileobj.seek(0)
@@ -164,6 +176,7 @@ def get_storage() -> Storage:
                 secret_key=settings.S3_SECRET_ACCESS_KEY,
                 region=settings.S3_REGION,
                 addressing_style=settings.S3_ADDRESSING_STYLE,
+                create_bucket=settings.S3_CREATE_BUCKET,
             )
         else:
             _storage = LocalStorage(root=settings.ASSETS_DATA)

@@ -80,6 +80,19 @@ services:
     ports:
       - "${DOZZLE_BIND_HOST:-127.0.0.1}:9999:8080"
 
+  seaweedfs:
+    image: chrislusf/seaweedfs:latest
+    restart: "no"
+    command: "server -s3 -dir=/data"
+    ports:
+      - "8333:8333"
+      - "8889:8888"
+    volumes:
+      - app-seaweedfs-data:/data
+
+volumes:
+  app-seaweedfs-data:
+
 networks:
   traefik-public:
     # For local dev, don't expect an external Traefik network
