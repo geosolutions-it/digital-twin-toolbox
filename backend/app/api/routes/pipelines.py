@@ -224,6 +224,24 @@ def finalize_pipeline_batch(
     return {"ok": True}
 
 
+@router.put("/batch/{batch_id}", response_model=Any)
+def update_pipeline_batch(
+    *, session: SessionDep, current_user: CurrentUser, batch_id: uuid.UUID, pipeline_in: PipelineUpdate
+) -> Any:
+    """Apply one config to every pipeline in a batch."""
+    pipelines = session.exec(select(Pipeline).where(Pipeline.batch_id == batch_id)).all()
+    if not pipelines:
+        raise HTTPException(status_code=404, detail="Batch not found")
+    update_dict = pipeline_in.model_dump(exclude_unset=True)
+    for pipeline in pipelines:
+        if not current_user.is_superuser and (pipeline.owner_id != current_user.id):
+            raise HTTPException(status_code=400, detail="Not enough permissions")
+        pipeline.sqlmodel_update(update_dict)
+        session.add(pipeline)
+    session.commit()
+    return {"batch_id": str(batch_id), "count": len(pipelines)}
+
+
 @router.post("/{id}/task/{action_type}", response_model=Any)
 async def process_pipeline_task(
     *, session: SessionDep, current_user: CurrentUser, id: uuid.UUID, action_type: PipelinesActionTypes

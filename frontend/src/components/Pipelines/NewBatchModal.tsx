@@ -16,7 +16,13 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useEffect } from "react"
 import { type SubmitHandler, useForm } from "react-hook-form"
-import { createPipelineBatch, createPipelineSource } from "../../api/pipelineBatch"
+import {
+  createPipelineBatch,
+  createPipelineSource,
+  updateBatchConfig,
+  updatePipelineConfig,
+} from "../../api/pipelineBatch"
+import { PipelinesService } from "../../client"
 import useCustomToast from "../../hooks/useCustomToast"
 
 interface NewBatchModalProps {
@@ -24,6 +30,11 @@ interface NewBatchModalProps {
   onClose: () => void
   initialPrefix?: string
   fileKey?: string
+  editPipelineId?: string
+  editBatchId?: string
+  targetIds?: string[]
+  initialValues?: Partial<BatchFormValues>
+  label?: string
 }
 
 interface BatchFormValues {
@@ -44,8 +55,28 @@ const EMPTY: BatchFormValues = {
   colorization_image: "",
 }
 
-const NewBatchModal = ({ isOpen, onClose, initialPrefix = "", fileKey }: NewBatchModalProps) => {
+function buildData(values: BatchFormValues): Record<string, unknown> {
+  const data: Record<string, unknown> = {}
+  if (values.sample_radius) data.sample_radius = Number(values.sample_radius)
+  if (values.to_ellipsoidal_height) data.to_ellipsoidal_height = true
+  if (values.ground_classification) data.ground_classification = true
+  if (values.colorization_image) data.colorization_image = values.colorization_image
+  return data
+}
+
+const NewBatchModal = ({
+  isOpen,
+  onClose,
+  initialPrefix = "",
+  fileKey,
+  editPipelineId,
+  editBatchId,
+  targetIds,
+  initialValues,
+  label,
+}: NewBatchModalProps) => {
   const single = !!fileKey
+  const edit = !!editPipelineId || !!editBatchId
   const queryClient = useQueryClient()
   const showToast = useCustomToast()
   const {
@@ -59,16 +90,28 @@ const NewBatchModal = ({ isOpen, onClose, initialPrefix = "", fileKey }: NewBatc
   })
 
   useEffect(() => {
-    if (isOpen) reset({ ...EMPTY, prefix: initialPrefix })
-  }, [isOpen, initialPrefix, reset])
+    if (!isOpen) return
+    reset(edit ? { ...EMPTY, ...initialValues } : { ...EMPTY, prefix: initialPrefix })
+  }, [isOpen, initialPrefix, initialValues, edit, reset])
 
   const mutation = useMutation({
-    mutationFn: (values: BatchFormValues) => {
-      const data: Record<string, unknown> = {}
-      if (values.sample_radius) data.sample_radius = Number(values.sample_radius)
-      if (values.to_ellipsoidal_height) data.to_ellipsoidal_height = true
-      if (values.ground_classification) data.ground_classification = true
-      if (values.colorization_image) data.colorization_image = values.colorization_image
+    mutationFn: async ({ values, run }: { values: BatchFormValues; run: boolean }) => {
+      const data = buildData(values)
+      if (edit) {
+        if (editBatchId) await updateBatchConfig(editBatchId, data)
+        else await updatePipelineConfig(editPipelineId!, data)
+        if (run) {
+          const ids = targetIds && targetIds.length ? targetIds : editPipelineId ? [editPipelineId] : []
+          for (const id of ids) {
+            try {
+              await PipelinesService.processPipelineTask({ id, actionType: "run" })
+            } catch {
+              // skip rows the run does not apply to (already running)
+            }
+          }
+        }
+        return { edited: true, run }
+      }
       if (single) {
         return createPipelineSource({
           key: fileKey!,
@@ -85,7 +128,10 @@ const NewBatchModal = ({ isOpen, onClose, initialPrefix = "", fileKey }: NewBatc
       })
     },
     onSuccess: (res: any) => {
-      const msg = single ? "Queued 1 point-cloud job." : `Queued ${res.count} point-cloud jobs.`
+      let msg: string
+      if (edit) msg = res?.run ? "Saved and re-running." : "Parameters saved."
+      else if (single) msg = "Queued 1 point-cloud job."
+      else msg = `Queued ${res.count} point-cloud jobs.`
       showToast("Success!", msg, "success")
       reset()
       onClose()
@@ -98,39 +144,49 @@ const NewBatchModal = ({ isOpen, onClose, initialPrefix = "", fileKey }: NewBatc
     },
   })
 
-  const onSubmit: SubmitHandler<BatchFormValues> = (values) => {
-    mutation.mutate(values)
-  }
+  const submit =
+    (run: boolean): SubmitHandler<BatchFormValues> =>
+    (values) =>
+      mutation.mutate({ values, run })
+
+  const heading = edit
+    ? `Adjust parameters${label ? `: ${label}` : ""}`
+    : single
+      ? "Process point cloud"
+      : "New point-cloud batch"
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} size={{ base: "sm", md: "md" }} isCentered>
       <ModalOverlay />
-      <ModalContent as="form" onSubmit={handleSubmit(onSubmit)}>
-        <ModalHeader>{single ? "Process point cloud" : "New point-cloud batch"}</ModalHeader>
+      <ModalContent as="form" onSubmit={handleSubmit(submit(!edit))}>
+        <ModalHeader>{heading}</ModalHeader>
         <ModalCloseButton />
         <ModalBody pb={6} display="flex" flexDirection="column" gap={4}>
-          {single ? (
+          {!edit &&
+            (single ? (
+              <FormControl>
+                <FormLabel>File</FormLabel>
+                <Input value={fileKey} isReadOnly fontFamily="mono" fontSize="sm" />
+              </FormControl>
+            ) : (
+              <FormControl isRequired isInvalid={!!errors.prefix}>
+                <FormLabel htmlFor="prefix">Bucket prefix</FormLabel>
+                <Input
+                  id="prefix"
+                  placeholder="e.g. city-timisoara/"
+                  {...register("prefix", { required: "Prefix is required." })}
+                />
+                {errors.prefix && (
+                  <FormErrorMessage>{errors.prefix.message}</FormErrorMessage>
+                )}
+              </FormControl>
+            ))}
+          {!edit && (
             <FormControl>
-              <FormLabel>File</FormLabel>
-              <Input value={fileKey} isReadOnly fontFamily="mono" fontSize="sm" />
-            </FormControl>
-          ) : (
-            <FormControl isRequired isInvalid={!!errors.prefix}>
-              <FormLabel htmlFor="prefix">Bucket prefix</FormLabel>
-              <Input
-                id="prefix"
-                placeholder="e.g. city-timisoara/"
-                {...register("prefix", { required: "Prefix is required." })}
-              />
-              {errors.prefix && (
-                <FormErrorMessage>{errors.prefix.message}</FormErrorMessage>
-              )}
+              <FormLabel htmlFor="title">Title (optional)</FormLabel>
+              <Input id="title" placeholder="Title" {...register("title")} />
             </FormControl>
           )}
-          <FormControl>
-            <FormLabel htmlFor="title">Title (optional)</FormLabel>
-            <Input id="title" placeholder="Title" {...register("title")} />
-          </FormControl>
           <FormControl>
             <FormLabel htmlFor="sample_radius">Sample radius (m, optional)</FormLabel>
             <Input
@@ -163,10 +219,33 @@ const NewBatchModal = ({ isOpen, onClose, initialPrefix = "", fileKey }: NewBatc
           </FormControl>
         </ModalBody>
         <ModalFooter gap={3}>
-          <Button variant="primary" type="submit" isLoading={isSubmitting}>
-            {single ? "Process" : "Create jobs"}
+          {edit ? (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                isLoading={isSubmitting}
+                onClick={handleSubmit(submit(false))}
+              >
+                Save
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                isLoading={isSubmitting}
+                onClick={handleSubmit(submit(true))}
+              >
+                Save & run
+              </Button>
+            </>
+          ) : (
+            <Button variant="primary" type="submit" isLoading={isSubmitting}>
+              {single ? "Process" : "Create jobs"}
+            </Button>
+          )}
+          <Button type="button" onClick={onClose} variant="ghost">
+            Cancel
           </Button>
-          <Button onClick={onClose}>Cancel</Button>
         </ModalFooter>
       </ModalContent>
     </Modal>
@@ -174,3 +253,4 @@ const NewBatchModal = ({ isOpen, onClose, initialPrefix = "", fileKey }: NewBatc
 }
 
 export default NewBatchModal
+export type { BatchFormValues }

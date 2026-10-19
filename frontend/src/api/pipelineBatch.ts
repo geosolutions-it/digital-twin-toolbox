@@ -45,6 +45,32 @@ export async function createPipelineSource(
   return res.data
 }
 
+export async function updatePipelineConfig(
+  id: string,
+  data: Record<string, unknown> | null,
+): Promise<unknown> {
+  const token = localStorage.getItem("access_token") || ""
+  const res = await axios.put(
+    `${OpenAPI.BASE}/api/v1/pipelines/${id}`,
+    { data },
+    token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
+  )
+  return res.data
+}
+
+export async function updateBatchConfig(
+  batchId: string,
+  data: Record<string, unknown> | null,
+): Promise<{ batch_id: string; count: number }> {
+  const token = localStorage.getItem("access_token") || ""
+  const res = await axios.put(
+    `${OpenAPI.BASE}/api/v1/pipelines/batch/${batchId}`,
+    { data },
+    token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
+  )
+  return res.data
+}
+
 export async function finalizePipelineBatch(batchId: string): Promise<{ ok: boolean }> {
   const token = localStorage.getItem("access_token") || ""
   const res = await axios.post(

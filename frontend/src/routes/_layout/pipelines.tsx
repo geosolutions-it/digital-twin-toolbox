@@ -51,13 +51,16 @@ import {
   FiPlay,
   FiRefreshCw,
   FiSearch,
+  FiSettings,
   FiSquare,
   FiTrash,
 } from "react-icons/fi"
 import { z } from "zod"
 import { OpenAPI, PipelinesService } from "../../client"
 import useCustomToast from "../../hooks/useCustomToast"
-import NewBatchModal from "../../components/Pipelines/NewBatchModal"
+import NewBatchModal, {
+  type BatchFormValues,
+} from "../../components/Pipelines/NewBatchModal"
 import { finalizePipelineBatch } from "../../api/pipelineBatch"
 
 const pipelinesSearchSchema = z.object({
@@ -216,6 +219,19 @@ function StatusCell({ status }: { status?: string | null }) {
 
 type Pipeline = any
 
+type EditTarget =
+  | { kind: "single"; id: string; label: string; values: Partial<BatchFormValues> }
+  | { kind: "batch"; batchId: string; ids: string[]; label: string; values: Partial<BatchFormValues> }
+
+function dataToValues(d: any): Partial<BatchFormValues> {
+  return {
+    sample_radius: d?.sample_radius != null ? String(d.sample_radius) : "",
+    colorization_image: d?.colorization_image || "",
+    to_ellipsoidal_height: !!d?.to_ellipsoidal_height,
+    ground_classification: !!d?.ground_classification,
+  }
+}
+
 function classify(status?: string | null): "success" | "running" | "failed" | "ready" {
   if (status === "SUCCESS") return "success"
   if (isCeleryTaskInProgress(status)) return "running"
@@ -295,11 +311,12 @@ interface RowProps {
   selected: Set<string>
   onToggle: (id: string) => void
   onAction: (ids: string[], action: RowAction) => void
+  onEdit?: (pipeline: Pipeline) => void
   dim?: boolean
   indent?: boolean
 }
 
-function PipelineRow({ pipeline, selected, onToggle, onAction, dim, indent }: RowProps) {
+function PipelineRow({ pipeline, selected, onToggle, onAction, onEdit, dim, indent }: RowProps) {
   const running = isCeleryTaskInProgress(pipeline.task_status)
   const download = `${pipeline?.task_result?.download}`
   const source = pipeline.source
@@ -375,6 +392,17 @@ function PipelineRow({ pipeline, selected, onToggle, onAction, dim, indent }: Ro
               />
             </Tooltip>
           )}
+          {!pipeline.asset_id && onEdit && (
+            <Tooltip label="Adjust parameters">
+              <IconButton
+                aria-label="Adjust parameters"
+                icon={<FiSettings />}
+                size="xs"
+                variant="ghost"
+                onClick={() => onEdit(pipeline)}
+              />
+            </Tooltip>
+          )}
           {running ? (
             <Tooltip label="Cancel">
               <IconButton
@@ -414,6 +442,7 @@ interface BatchGroupProps {
   onToggle: (id: string) => void
   onToggleMany: (ids: string[], select: boolean) => void
   onAction: (ids: string[], action: RowAction) => void
+  onEditBatch?: (id: string, items: Pipeline[]) => void
   dim?: boolean
 }
 
@@ -426,6 +455,7 @@ function BatchGroup({
   onToggle,
   onToggleMany,
   onAction,
+  onEditBatch,
   dim,
 }: BatchGroupProps) {
   const counts = countStatuses(items)
@@ -530,6 +560,17 @@ function BatchGroup({
                 />
               </Tooltip>
             )}
+            {onEditBatch && (
+              <Tooltip label="Adjust parameters">
+                <IconButton
+                  aria-label="Adjust parameters"
+                  icon={<FiSettings />}
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => onEditBatch(id, items)}
+                />
+              </Tooltip>
+            )}
             <Tooltip label="Rebuild combined tileset">
               <IconButton
                 aria-label="Rebuild combined tileset"
@@ -579,6 +620,7 @@ function PipelinesTable() {
   const [selected, setSelected] = React.useState<Set<string>>(new Set())
   const [query, setQuery] = React.useState("")
   const [collapsed, setCollapsed] = React.useState<Set<string>>(new Set())
+  const [editTarget, setEditTarget] = React.useState<EditTarget | null>(null)
 
   const {
     data: pipelines,
@@ -685,6 +727,17 @@ function PipelinesTable() {
   })
   const onAction = (ids: string[], action: RowAction) => act.mutate({ ids, action })
 
+  const editPipeline = (p: Pipeline) =>
+    setEditTarget({ kind: "single", id: p.id, label: p.title, values: dataToValues(p.data) })
+  const editBatch = (bid: string, items: Pipeline[]) =>
+    setEditTarget({
+      kind: "batch",
+      batchId: bid,
+      ids: items.map((i) => i.id),
+      label: batchMeta(items).label,
+      values: dataToValues(items[0]?.data),
+    })
+
   const bulkAction = useMutation({
     mutationFn: async (actionType: "run" | "cancel") => {
       for (const id of Array.from(selected)) {
@@ -755,6 +808,7 @@ function PipelinesTable() {
                   onToggle={toggle}
                   onToggleMany={toggleMany}
                   onAction={onAction}
+                  onEditBatch={editBatch}
                   dim={isPlaceholderData}
                 />
               ))}
@@ -765,6 +819,7 @@ function PipelinesTable() {
                   selected={selected}
                   onToggle={toggle}
                   onAction={onAction}
+                  onEdit={editPipeline}
                   dim={isPlaceholderData}
                 />
               ))}
@@ -837,6 +892,16 @@ function PipelinesTable() {
           </Button>
         </Flex>
       )}
+
+      <NewBatchModal
+        isOpen={!!editTarget}
+        onClose={() => setEditTarget(null)}
+        label={editTarget?.label}
+        initialValues={editTarget?.values}
+        editPipelineId={editTarget?.kind === "single" ? editTarget.id : undefined}
+        editBatchId={editTarget?.kind === "batch" ? editTarget.batchId : undefined}
+        targetIds={editTarget?.kind === "batch" ? editTarget.ids : undefined}
+      />
     </>
   )
 }
