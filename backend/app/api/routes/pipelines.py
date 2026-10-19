@@ -101,7 +101,16 @@ def create_pipeline_source(
         raise HTTPException(status_code=422, detail=f"Invalid config: {e}")
 
     key = source_in.key
-    output_base = f"output/{os.path.splitext(key)[0]}"
+    if source_in.title:
+        base_name = _slug(source_in.title)
+        out_name = base_name
+        i = 1
+        while storage.list(f"output/{out_name}/"):
+            out_name = f"{base_name}-{i}"
+            i += 1
+        output_base = f"output/{out_name}"
+    else:
+        output_base = f"output/{os.path.splitext(key)[0]}"
     pipeline = Pipeline(
         title=source_in.title or os.path.basename(key),
         asset_id=None,

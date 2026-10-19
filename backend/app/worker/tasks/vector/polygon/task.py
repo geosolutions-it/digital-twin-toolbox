@@ -258,39 +258,43 @@ def _rings_to_coords(rings, ground_z):
     return [[[float(x), float(y), ground_z] for x, y in ring] for ring in rings]
 
 
-def _extrude_items(items, tolerance):
-    """Tiler callback: extrude a set of features at a footprint-simplification tolerance."""
-    all_verts = []
-    counts = []
-    props = []
-    for it in items:
-        payload = it['extrude']
-        parts_tris = []
-        for part in payload['parts']:
-            rings = part['rings']
-            if tolerance > 0:
-                rings = _simplify_rings(rings, tolerance)
-            geom = {'type': 'Polygon', 'coordinates': _rings_to_coords(rings, part['ground_z'])}
-            options = {
-                'lower_limit': payload['lower'],
-                'upper_limit': payload['upper'],
-                'translate_z': 0,
-                'remove_bottom_surface': payload['remove_bottom'],
-            }
-            surface = geometry_to_polyhedral_surface(geom, options)
-            if not surface:
-                continue
+def _extrude_feature(payload, tolerance):
+    """Full per-feature extrusion; footprints simplified when tolerance > 0."""
+    parts_tris = []
+    for part in payload['parts']:
+        rings = part['rings']
+        if tolerance > 0:
+            rings = _simplify_rings(rings, tolerance)
+        geom = {'type': 'Polygon', 'coordinates': _rings_to_coords(rings, part['ground_z'])}
+        options = {
+            'lower_limit': payload['lower'],
+            'upper_limit': payload['upper'],
+            'translate_z': 0,
+            'remove_bottom_surface': payload['remove_bottom'],
+        }
+        surface = geometry_to_polyhedral_surface(geom, options)
+        if surface:
             tris = np.asarray(surface, dtype=np.float64)
             parts_tris.append(tris[:, :3, :].reshape(-1, 3))
-        if not parts_tris:
-            continue
-        verts = np.concatenate(parts_tris, axis=0)
-        all_verts.append(verts)
-        counts.append(len(verts))
-        props.append(it['properties'])
-    if not all_verts:
+    if not parts_tris:
         return None
-    return np.concatenate(all_verts, axis=0), counts, props
+    return np.concatenate(parts_tris, axis=0)
+
+
+def _extrude_items(items, tolerance):
+    """Tiler callback: per-feature extrusion with metadata at every level; nothing is
+    merged or dropped so coverage stays complete."""
+    verts, counts, props = [], [], []
+    for it in items:
+        mesh = _extrude_feature(it['extrude'], tolerance)
+        if mesh is None:
+            continue
+        verts.append(mesh)
+        counts.append(len(mesh))
+        props.append(it['properties'])
+    if not verts:
+        return None
+    return np.concatenate(verts, axis=0), counts, props
 
 
 @celery.task(name="create_polygon_3dtiles", base=PipelineDatabaseTask)
@@ -339,6 +343,7 @@ def create_polygon_3dtiles(pipeline_extended):
                         fmin = np.minimum(fmin, enu[:, :2].min(axis=0))
                         fmax = np.maximum(fmax, enu[:, :2].max(axis=0))
                 part_payloads.append({'rings': rings_enu, 'ground_z': ground_z})
+
             features.append({
                 'min': fmin,
                 'max': fmax,

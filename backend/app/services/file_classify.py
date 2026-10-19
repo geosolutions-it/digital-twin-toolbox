@@ -1,10 +1,5 @@
-"""Pick a processing workflow for a bucket file.
-
-A plain extension maps directly. A .zip is a container, not a format, so we read
-only its central directory (entry names, via range reads) and route by what it
-holds. Shapefiles inside a zip -> Polygon; other kinds are added here as their
-bucket workflows land. No full download, so a batch of hundreds stays cheap.
-"""
+"""Pick a workflow for a bucket file: by extension, or for a .zip by its inner
+contents (central directory read via range requests, so a big batch stays cheap)."""
 import struct
 
 _EXT_WORKFLOW = {

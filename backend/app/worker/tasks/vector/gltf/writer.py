@@ -1,8 +1,7 @@
 """Binary glTF (.glb) writer for triangle soups, numpy-packed, no gltf lib.
 
-Input is ENU metres (Z-up); swap to glTF Y-up so 3D Tiles' Y-up->Z-up restores ENU.
-Per-feature properties ride along as EXT_mesh_features + EXT_structural_metadata so
-features stay pickable and queryable in a 3D Tiles viewer.
+Input is ENU (Z-up), swapped to glTF Y-up; per-feature properties ride along as
+EXT_mesh_features + EXT_structural_metadata for picking.
 """
 import json
 import struct

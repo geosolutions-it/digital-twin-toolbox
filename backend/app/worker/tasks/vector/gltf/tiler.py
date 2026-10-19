@@ -1,15 +1,8 @@
-"""Quadtree tiler: features -> 3D Tiles 1.1 tileset + one .glb per node.
+"""Quadtree -> 3D Tiles 1.1 tileset + one .glb per node.
 
-Multi-resolution LOD with REPLACE refinement: every node (not just leaves) holds
-geometry for all features beneath it, so there are no empty tiles and no holes at
-any distance. Leaves are full resolution; parents re-extrude the same features with
-footprints simplified by a tolerance that grows toward the root. geometricError
-equals that tolerance, so a viewer loads coarse-first and refines as it approaches.
-
-The tiler is geometry-agnostic: it owns the tree and calls `extrude(items, tolerance)`,
-which returns (enu positions (M,3), per-feature vertex counts, per-feature properties)
-or None. Each feature item carries 2D 'min'/'max'/'centroid' (east,north) for splitting
-and 'properties' for the metadata schema.
+REPLACE refinement, every node full-coverage (no holes); geometricError is the
+simplification tolerance, 0 at leaves. Geometry-agnostic: calls
+extrude(items, tolerance) -> (enu, counts, props). Items carry 2D min/max/centroid.
 """
 import json
 import os
@@ -32,6 +25,8 @@ def _box(mn, mx):
 
 def _node(items, depth, max_features, max_depth, max_ge, schema, extrude, out_dir, counter):
     is_leaf = len(items) <= max_features or depth >= max_depth
+    # leaves render full detail; parents render the same features with footprints
+    # simplified at a tolerance that grows toward the root.
     tolerance = 0.0 if is_leaf else float(max_ge) / (2 ** depth)
 
     mesh = extrude(items, tolerance) or extrude(items, 0.0)
@@ -81,7 +76,7 @@ def build_tileset(features, output_dir, transform, extrude, max_features_per_til
 
     tileset = {
         "asset": {"version": "1.1"},
-        "geometricError": float(max_geometric_error),
+        "geometricError": float(root["geometricError"]),
         "root": root,
     }
     with open(os.path.join(output_dir, "tileset.json"), "w") as f:
