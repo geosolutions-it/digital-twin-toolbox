@@ -35,6 +35,8 @@ api = [
 vector = [
     "earcut>=1.1.5,<2.0.0",
     "mapbox-earcut>=1.0.3,<2.0.0",
+    "pymartini>=0.4.4,<1.0.0",
+    "quantized-mesh-tile>=0.7.0,<1.0.0",
 ]
 pointcloud = [
     "py3dtiles[las,ply,postgres]>=8.0.2,<9.0.0",
@@ -63,6 +65,19 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.uv]
+# Each worker image syncs exactly one component group, so their incompatible pins
+# (e.g. vector/quantized-mesh-tile needs numpy>=2, mesh/bpy + pointcloud/py3dtiles
+# need numpy<2) never coexist. Declared mutually exclusive so each resolves alone.
+conflicts = [
+    [
+        { group = "mesh" },
+        { group = "vector" },
+        { group = "pointcloud" },
+        { group = "photogrammetry" },
+    ],
+]
 
 [tool.mypy]
 strict = true

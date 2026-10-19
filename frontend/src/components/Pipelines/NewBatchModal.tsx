@@ -29,7 +29,7 @@ import { PipelinesService } from "../../client"
 import useCustomToast from "../../hooks/useCustomToast"
 import InputExpression from "../Viewer/InputExpression"
 
-type PipelineType = "PointCloud" | "Polygon"
+type PipelineType = "PointCloud" | "Polygon" | "Terrain"
 
 interface NewBatchModalProps {
   isOpen: boolean
@@ -59,6 +59,10 @@ interface BatchFormValues {
   remove_bottom_surface?: boolean
   max_features_per_tile?: string
   max_geometric_error?: string
+  max_error?: string
+  max_zoom?: string
+  vertex_normals?: boolean
+  water_key?: string
 }
 
 function heightValue(v: any): number | any[] | undefined {
@@ -81,10 +85,21 @@ const EMPTY: BatchFormValues = {
   remove_bottom_surface: true,
   max_features_per_tile: "",
   max_geometric_error: "",
+  max_error: "",
+  max_zoom: "",
+  vertex_normals: true,
+  water_key: "",
 }
 
 function buildData(values: BatchFormValues, type: PipelineType): Record<string, unknown> {
   const data: Record<string, unknown> = {}
+  if (type === "Terrain") {
+    if (values.to_ellipsoidal_height) data.to_ellipsoidal_height = true
+    if (values.max_zoom) data.max_zoom = Number(values.max_zoom)
+    data.vertex_normals = !!values.vertex_normals
+    if (values.water_key) data.water_key = values.water_key
+    return data
+  }
   if (type === "Polygon") {
     const upper = heightValue(values.upper_limit_height)
     const lower = heightValue(values.lower_limit_height)
@@ -253,6 +268,7 @@ const NewBatchModal = ({
               <Select id="pipelineType" {...register("pipelineType")}>
                 <option value="PointCloud">Point cloud</option>
                 <option value="Polygon">Polygon</option>
+                <option value="Terrain">Terrain</option>
               </Select>
             </FormControl>
           )}
@@ -263,7 +279,26 @@ const NewBatchModal = ({
             </FormControl>
           )}
 
-          {type === "Polygon" ? (
+          {type === "Terrain" ? (
+            <>
+              <FormControl>
+                <FormLabel htmlFor="max_zoom">Max zoom (optional)</FormLabel>
+                <Input id="max_zoom" type="number" placeholder="auto from resolution" {...register("max_zoom")} />
+              </FormControl>
+              <FormControl>
+                <Checkbox {...register("to_ellipsoidal_height")}>
+                  Convert heights to ellipsoidal (EGM2008)
+                </Checkbox>
+              </FormControl>
+              <FormControl>
+                <Checkbox {...register("vertex_normals")}>Vertex normals (lighting)</Checkbox>
+              </FormControl>
+              <FormControl>
+                <FormLabel htmlFor="water_key">Water layer (bucket key, optional)</FormLabel>
+                <Input id="water_key" placeholder="e.g. water/coastline.gpkg" fontFamily="mono" fontSize="sm" {...register("water_key")} />
+              </FormControl>
+            </>
+          ) : type === "Polygon" ? (
             <>
               <FormControl>
                 <FormLabel>Building height (m, optional)</FormLabel>

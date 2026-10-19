@@ -8,6 +8,9 @@ _EXT_WORKFLOW = {
     ".fgb": "Polygon",
     ".gpkg": "Polygon",
     ".geojson": "Polygon",
+    ".tif": "Terrain",
+    ".tiff": "Terrain",
+    ".vrt": "Terrain",
 }
 
 # inner-file suffix -> workflow, checked in order

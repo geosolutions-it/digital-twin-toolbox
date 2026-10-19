@@ -73,6 +73,7 @@ def create_pipeline(
 _SOURCE_TASK = {
     "PointCloud": "create_point_cloud_3dtiles",
     "Polygon": "create_polygon_3dtiles",
+    "Terrain": "create_terrain_tiles",
 }
 
 

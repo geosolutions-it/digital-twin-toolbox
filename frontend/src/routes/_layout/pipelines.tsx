@@ -224,7 +224,9 @@ type EditTarget =
   | { kind: "batch"; batchId: string; ids: string[]; label: string; type: PipelineType; sampleKey?: string; values: Partial<BatchFormValues> }
 
 function pipelineType(p: Pipeline): PipelineType {
-  return p?.source?.pipeline === "Polygon" ? "Polygon" : "PointCloud"
+  const t = p?.source?.pipeline
+  if (t === "Polygon" || t === "Terrain") return t
+  return "PointCloud"
 }
 
 function dataToValues(d: any): Partial<BatchFormValues> {
@@ -241,6 +243,10 @@ function dataToValues(d: any): Partial<BatchFormValues> {
     remove_bottom_surface: d?.remove_bottom_surface !== false,
     max_features_per_tile: num(d?.max_features_per_tile),
     max_geometric_error: num(d?.max_geometric_error),
+    max_error: num(d?.max_error),
+    max_zoom: num(d?.max_zoom),
+    vertex_normals: d?.vertex_normals !== false,
+    water_key: d?.water_key || "",
   }
 }
 

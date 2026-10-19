@@ -1,34 +1,26 @@
-import { Box, Divider, Flex } from "@chakra-ui/react"
+import { Box, Flex, Spinner } from "@chakra-ui/react"
 import { createFileRoute } from "@tanstack/react-router"
-import { OpenAPI } from "../../client/core/OpenAPI"
-import { getPublicBasePath, hideUserSections } from '../../utils'
+import { Suspense, lazy } from "react"
+
+// Lazy so the Cesium chunk only loads when the Map tab is opened.
+const CesiumMap = lazy(() => import("../../components/Viewer/CesiumMap"))
 
 export const Route = createFileRoute("/_layout/map")({
-  component: MapStore,
+  component: MapPage,
 })
 
-function MapStore() {
+function MapPage() {
   return (
-    <Box w="100%" pos="relative" h="calc(var(--dtt-vh))" m="0">
-      <Flex pos="absolute" w="100%" h="100%">
-        <Box w={hideUserSections() ? "100%" : "calc(100% - 74px)"} pos="relative">
-          <iframe
-            title="MapStore Viewer"
-            style={{
-              position: "absolute",
-              width: "100%",
-              height: "100%",
-              border: "none",
-              margin: 0,
-              padding: 0,
-            }}
-            src={`${getPublicBasePath()}mapstore/map.html?access_token=${localStorage.getItem(
-              "access_token",
-            )}&open_api_base=${OpenAPI.BASE}`}
-          />
-        </Box>
-        <Divider orientation="vertical" />
-      </Flex>
+    <Box w="100%" h="calc(var(--dtt-vh))" pos="relative" m="0">
+      <Suspense
+        fallback={
+          <Flex w="100%" h="100%" align="center" justify="center">
+            <Spinner />
+          </Flex>
+        }
+      >
+        <CesiumMap />
+      </Suspense>
     </Box>
   )
 }

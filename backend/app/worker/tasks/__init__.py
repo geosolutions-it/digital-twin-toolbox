@@ -44,6 +44,7 @@ TASK_QUEUES = {
     'inspect_glb': 'common',
     'inspect_mesh': 'mesh',
     'create_polygon_3dtiles': 'vector',
+    'create_terrain_tiles': 'vector',
     'read_vector_fields': 'vector',
     'create_point_instance_3dtiles': 'vector',
     'create_point_cloud_3dtiles': 'point-cloud',

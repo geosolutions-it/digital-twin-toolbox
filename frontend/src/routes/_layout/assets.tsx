@@ -166,18 +166,22 @@ function Breadcrumbs({ cwd, onNavigate }: { cwd: string; onNavigate: (p: string)
 
 const POINTCLOUD_EXT = [".laz", ".las"]
 const VECTOR_EXT = [".fgb", ".gpkg", ".geojson", ".zip"]
+const TERRAIN_EXT = [".tif", ".tiff", ".vrt"]
 
-function hintTypeForFile(name: string): "PointCloud" | "Polygon" | undefined {
+function hintTypeForFile(
+  name: string,
+): "PointCloud" | "Polygon" | "Terrain" | undefined {
   const n = name.toLowerCase()
   if (POINTCLOUD_EXT.some((e) => n.endsWith(e))) return "PointCloud"
   if (VECTOR_EXT.some((e) => n.endsWith(e))) return "Polygon"
+  if (TERRAIN_EXT.some((e) => n.endsWith(e))) return "Terrain"
   return undefined
 }
 
 function BucketBrowser({ cwd, setCwd }: { cwd: string; setCwd: (p: string) => void }) {
   const [batchPrefix, setBatchPrefix] = React.useState("")
   const [processKey, setProcessKey] = React.useState("")
-  const [processType, setProcessType] = React.useState<"PointCloud" | "Polygon" | undefined>()
+  const [processType, setProcessType] = React.useState<"PointCloud" | "Polygon" | "Terrain" | undefined>()
   const batchModal = useDisclosure()
   const processModal = useDisclosure()
 
@@ -191,7 +195,7 @@ function BucketBrowser({ cwd, setCwd }: { cwd: string; setCwd: (p: string) => vo
     batchModal.onOpen()
   }
 
-  const openProcess = (key: string, type?: "PointCloud" | "Polygon") => {
+  const openProcess = (key: string, type?: "PointCloud" | "Polygon" | "Terrain") => {
     setProcessKey(key)
     setProcessType(type)
     processModal.onOpen()

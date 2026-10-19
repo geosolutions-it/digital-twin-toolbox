@@ -1,6 +1,6 @@
 import { Box, Flex, Icon, Text, useColorModeValue } from "@chakra-ui/react"
 import { Link } from "@tanstack/react-router"
-import { FiBox, FiFile } from "react-icons/fi"
+import { FiBox, FiFile, FiMap } from "react-icons/fi"
 
 interface SidebarItemsProps {
   onClose?: () => void
@@ -13,7 +13,7 @@ const SidebarItems = ({ onClose }: SidebarItemsProps) => {
   const items = [
     { icon: FiFile, title: "Assets", path: "/assets" },
     { icon: FiBox, title: "Pipelines", path: "/pipelines" },
-    // { icon: FiMap, title: "Map", path: "/map" }, // MapStore hidden for now
+    { icon: FiMap, title: "Map", path: "/map" },
   ]
 
   const listItems = items.map(({ icon, title, path }) => (
