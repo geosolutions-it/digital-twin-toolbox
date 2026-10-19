@@ -7,6 +7,7 @@ from app.worker.main import celery, AssetDatabaseTask
 from app.worker.common.utils import (
     get_asset_upload_path, get_asset_table_name, get_pipeline_table_name, setup_output_directory
 )
+import app.worker.tasks.common.tiles3d  # noqa - registers finalize_tileset_batch
 
 
 @celery.task(name="inspect_glb", base=AssetDatabaseTask)

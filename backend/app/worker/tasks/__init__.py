@@ -57,6 +57,7 @@ TASK_QUEUES = {
     'photogrammetry_resolve_tile_input': 'photogrammetry',
     'complete_asset_remove_process': 'common',
     'complete_pipeline_remove_process': 'common',
+    'finalize_tileset_batch': 'common',
 }
 
 

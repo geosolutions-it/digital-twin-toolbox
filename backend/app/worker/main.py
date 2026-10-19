@@ -1,12 +1,13 @@
 import os
 import uuid
-from sqlmodel import Session
+from sqlmodel import Session, select
 from celery import Celery, Task
 from app.core.db import engine
+from app.core.config import settings
 from app.models.task import Pipeline, Asset
 from app.models.user_db import User  # noqa - registers user table for FK resolution
 from app.worker.tasks import TASK_QUEUES
-from celery.states import SUCCESS
+from celery.states import SUCCESS, FAILURE, REVOKED
 
 celery = Celery(__name__)
 celery.conf.broker_url = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379")
@@ -40,6 +41,23 @@ class PipelineDatabaseTask(Task):
             session.add(pipeline)
             session.commit()
             session.refresh(pipeline)
+            _maybe_finalize_batch(session, pipeline)
+
+
+def _maybe_finalize_batch(session, pipeline):
+    """When the last sibling of a batch reaches a terminal state, stitch the combined tileset."""
+    if not pipeline.batch_id:
+        return
+    prefix = (pipeline.source or {}).get('batch_output_prefix')
+    if not prefix:
+        return
+    siblings = session.exec(select(Pipeline).where(Pipeline.batch_id == pipeline.batch_id)).all()
+    if not all(s.task_status in (SUCCESS, FAILURE, REVOKED) for s in siblings):
+        return
+    celery.send_task(
+        'finalize_tileset_batch',
+        kwargs={'output_prefix': prefix, 'base': settings.API_V1_STR},
+    )
 
 
 class AssetDatabaseTask(Task):

@@ -62,6 +62,11 @@ def inspect_pointcloud(options):
 
 
 def _resolve_colorization_path(storage, filename, scratch):
+    # bucket-centric: a direct bucket key to a raster
+    if filename and storage.exists(filename):
+        ext = os.path.splitext(filename)[1] or '.tif'
+        return _materialize(storage, filename, scratch, f"colorization{ext}")
+    # legacy: an uploaded raster asset referenced by its filename
     with Session(engine) as session:
         statement = select(Asset).where(Asset.filename == filename).limit(1)
         image_asset = session.exec(statement).first()
@@ -105,6 +110,8 @@ def create_point_cloud_3dtiles(pipeline_extended):
     pipeline_id = pipeline_extended['id']
     storage = get_storage()
     input_key, extension = _resolve_input(pipeline_extended)
+    source = pipeline_extended.get('source') or {}
+    out_base = source.get('output_base') or output_key(pipeline_id)
 
     with tempfile.TemporaryDirectory() as scratch:
         input_file = _materialize(storage, input_key, scratch, f"index{extension}")
@@ -118,6 +125,8 @@ def create_point_cloud_3dtiles(pipeline_extended):
             colorization_image_path = _resolve_colorization_path(
                 storage, config.colorization_image, scratch
             )
+            if not colorization_image_path:
+                raise Exception(f"Colorization raster not found: {config.colorization_image!r}")
 
         processed_file = process_las(
             scratch, input_file,
@@ -141,13 +150,13 @@ def create_point_cloud_3dtiles(pipeline_extended):
         zip_base = os.path.join(scratch, 'download')
         shutil.make_archive(zip_base, 'zip', tiles_dir)
 
-        storage.delete_prefix(output_key(pipeline_id, 'tiles'))
-        storage.upload_dir(tiles_dir, output_key(pipeline_id, 'tiles'))
-        storage.upload_file(zip_base + '.zip', output_key(pipeline_id, 'download.zip'))
+        storage.delete_prefix(f"{out_base}/tiles")
+        storage.upload_dir(tiles_dir, f"{out_base}/tiles")
+        storage.upload_file(zip_base + '.zip', f"{out_base}/download.zip")
 
     base = settings.API_V1_STR
     return {
-        'output': output_key(pipeline_id),
-        'tileset': f"{base}/output/{pipeline_id}/tiles/tileset.json",
-        'download': f"{base}/output/{pipeline_id}/download.zip",
+        'output': out_base,
+        'tileset': f"{base}/{out_base}/tiles/tileset.json",
+        'download': f"{base}/{out_base}/download.zip",
     }

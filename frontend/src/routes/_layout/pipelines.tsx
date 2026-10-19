@@ -11,28 +11,19 @@ import {
   AlertDialogHeader,
   AlertDialogOverlay,
   Badge,
+  Box,
   Button,
   Checkbox,
   Container,
   Flex,
-  FormControl,
-  FormErrorMessage,
-  FormLabel,
   HStack,
   Heading,
   Icon,
+  IconButton,
   Input,
   InputGroup,
   InputLeftElement,
-  Modal,
-  ModalBody,
-  ModalCloseButton,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  ModalOverlay,
   Progress,
-  Select,
   SkeletonText,
   Table,
   TableContainer,
@@ -49,15 +40,25 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router"
 import React from "react"
 import { useEffect } from "react"
-import { type SubmitHandler, useForm } from "react-hook-form"
+import { useForm } from "react-hook-form"
 import { FaPlus } from "react-icons/fa"
-import { FiDownload, FiEdit, FiSearch, FiTrash } from "react-icons/fi"
+import {
+  FiChevronDown,
+  FiChevronRight,
+  FiDownload,
+  FiEdit,
+  FiExternalLink,
+  FiPlay,
+  FiRefreshCw,
+  FiSearch,
+  FiSquare,
+  FiTrash,
+} from "react-icons/fi"
 import { z } from "zod"
-import { AssetsService, PipelinesService } from "../../client"
-import type { ApiError, PipelineCreate } from "../../client"
+import { OpenAPI, PipelinesService } from "../../client"
 import useCustomToast from "../../hooks/useCustomToast"
-import { handleError } from "../../utils"
 import NewBatchModal from "../../components/Pipelines/NewBatchModal"
+import { finalizePipelineBatch } from "../../api/pipelineBatch"
 
 const pipelinesSearchSchema = z.object({
   page: z.number().catch(1),
@@ -163,9 +164,16 @@ const RemoveButton = ({ id }: RemoveButtonProps) => {
   const deleteModal = useDisclosure()
   return (
     <>
-      <Button onClick={deleteModal.onOpen} color="ui.danger" variant="unstyled">
-        <FiTrash fontSize="16px" />
-      </Button>
+      <Tooltip label="Delete">
+        <IconButton
+          aria-label="Delete"
+          icon={<FiTrash />}
+          size="xs"
+          variant="ghost"
+          colorScheme="red"
+          onClick={deleteModal.onOpen}
+        />
+      </Tooltip>
       <DeleteDialog
         id={id}
         isOpen={deleteModal.isOpen}
@@ -206,6 +214,360 @@ function StatusCell({ status }: { status?: string | null }) {
   )
 }
 
+type Pipeline = any
+
+function classify(status?: string | null): "success" | "running" | "failed" | "ready" {
+  if (status === "SUCCESS") return "success"
+  if (isCeleryTaskInProgress(status)) return "running"
+  if (!status) return "ready"
+  return "failed"
+}
+
+const SEG_COLORS: Record<string, string> = {
+  success: "green.400",
+  running: "yellow.400",
+  ready: "gray.300",
+  failed: "red.400",
+}
+
+function countStatuses(items: Pipeline[]) {
+  const counts = { success: 0, running: 0, ready: 0, failed: 0 }
+  for (const p of items) counts[classify(p.task_status)]++
+  return counts
+}
+
+function batchState(counts: ReturnType<typeof countStatuses>, total: number) {
+  if (counts.running)
+    return {
+      color: "yellow",
+      label: `Running ${Math.round((100 * counts.success) / total)}%`,
+    }
+  if (counts.ready) return { color: "blue", label: "Queued" }
+  if (counts.failed) return { color: "red", label: `Done · ${counts.failed} failed` }
+  return { color: "green", label: "Completed" }
+}
+
+function RollupBar({ counts }: { counts: ReturnType<typeof countStatuses> }) {
+  const order: (keyof typeof counts)[] = ["success", "running", "ready", "failed"]
+  return (
+    <Flex h="6px" minW="90px" borderRadius="full" overflow="hidden" bg="gray.100" _dark={{ bg: "gray.700" }}>
+      {order.map((k) =>
+        counts[k] ? <Box key={k} flex={counts[k]} bg={SEG_COLORS[k]} /> : null,
+      )}
+    </Flex>
+  )
+}
+
+function batchMeta(items: Pipeline[]) {
+  const first = items[0]
+  const t: string = first?.title || ""
+  const label = t.includes(" / ")
+    ? t.split(" / ")[0]
+    : `Batch ${String(first?.batch_id || "").slice(0, 8)}`
+  const key: string = first?.source?.key || ""
+  const dir = key.includes("/") ? key.slice(0, key.lastIndexOf("/")) : ""
+  return { label, source: dir ? `s3://…/${dir}/` : "" }
+}
+
+function groupPipelines(rows: Pipeline[]) {
+  const batches: { id: string; items: Pipeline[] }[] = []
+  const index = new Map<string, number>()
+  const solo: Pipeline[] = []
+  for (const p of rows) {
+    const bid = p.batch_id
+    if (!bid) {
+      solo.push(p)
+      continue
+    }
+    if (!index.has(bid)) {
+      index.set(bid, batches.length)
+      batches.push({ id: bid, items: [] })
+    }
+    batches[index.get(bid)!].items.push(p)
+  }
+  return { batches, solo }
+}
+
+type RowAction = "run" | "cancel" | "delete" | "rebuild"
+
+interface RowProps {
+  pipeline: Pipeline
+  selected: Set<string>
+  onToggle: (id: string) => void
+  onAction: (ids: string[], action: RowAction) => void
+  dim?: boolean
+  indent?: boolean
+}
+
+function PipelineRow({ pipeline, selected, onToggle, onAction, dim, indent }: RowProps) {
+  const running = isCeleryTaskInProgress(pipeline.task_status)
+  const download = `${pipeline?.task_result?.download}`
+  const source = pipeline.source
+  const subtitle = source?.key
+    ? `s3://…/${source.key}`
+    : pipeline.asset_id
+      ? "uploaded asset"
+      : "no input"
+  const isSel = selected.has(pipeline.id)
+  return (
+    <Tr
+      opacity={dim ? 0.5 : 1}
+      bg={isSel ? "blue.50" : undefined}
+      _dark={{ bg: isSel ? "blue.900" : undefined }}
+    >
+      <Td pl={indent ? 10 : undefined}>
+        <Checkbox
+          isChecked={isSel}
+          onChange={() => onToggle(pipeline.id)}
+          aria-label={`Select ${pipeline.title}`}
+        />
+      </Td>
+      <Td maxW={0}>
+        <Flex direction="column" gap={0.5} minW={0}>
+          {pipeline.asset_id ? (
+            <Link to="/pipeline/$pipelineId" params={{ pipelineId: pipeline.id }}>
+              <HStack minW={0}>
+                <FiEdit fontSize="14px" />
+                <Text fontWeight="600" isTruncated>
+                  {pipeline.title}
+                </Text>
+              </HStack>
+            </Link>
+          ) : (
+            <Text fontWeight="600" isTruncated>
+              {pipeline.title}
+            </Text>
+          )}
+          <Text fontSize="xs" color="gray.500" isTruncated>
+            {subtitle}
+          </Text>
+        </Flex>
+      </Td>
+      <Td>
+        <StatusCell status={pipeline.task_status} />
+      </Td>
+      <Td textAlign="right">
+        <HStack spacing={1} justify="flex-end">
+          {!pipeline.asset_id && pipeline.task_result?.tileset && (
+            <Tooltip label="Open tileset">
+              <IconButton
+                as="a"
+                href={`${OpenAPI.BASE}${pipeline.task_result.tileset}`}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Open tileset"
+                icon={<FiExternalLink />}
+                size="xs"
+                variant="ghost"
+              />
+            </Tooltip>
+          )}
+          {pipeline.task_result && (
+            <Tooltip label="Download 3D Tiles">
+              <IconButton
+                as="a"
+                href={download}
+                download={`${pipeline.title}.zip`}
+                aria-label="Download 3D Tiles"
+                icon={<FiDownload />}
+                size="xs"
+                variant="ghost"
+              />
+            </Tooltip>
+          )}
+          {running ? (
+            <Tooltip label="Cancel">
+              <IconButton
+                aria-label="Cancel"
+                icon={<FiSquare />}
+                size="xs"
+                variant="ghost"
+                colorScheme="orange"
+                onClick={() => onAction([pipeline.id], "cancel")}
+              />
+            </Tooltip>
+          ) : (
+            <Tooltip label="Run">
+              <IconButton
+                aria-label="Run"
+                icon={<FiPlay />}
+                size="xs"
+                variant="ghost"
+                colorScheme="green"
+                onClick={() => onAction([pipeline.id], "run")}
+              />
+            </Tooltip>
+          )}
+          <RemoveButton id={pipeline.id} />
+        </HStack>
+      </Td>
+    </Tr>
+  )
+}
+
+interface BatchGroupProps {
+  id: string
+  items: Pipeline[]
+  open: boolean
+  onToggleOpen: (id: string) => void
+  selected: Set<string>
+  onToggle: (id: string) => void
+  onToggleMany: (ids: string[], select: boolean) => void
+  onAction: (ids: string[], action: RowAction) => void
+  dim?: boolean
+}
+
+function BatchGroup({
+  id,
+  items,
+  open,
+  onToggleOpen,
+  selected,
+  onToggle,
+  onToggleMany,
+  onAction,
+  dim,
+}: BatchGroupProps) {
+  const counts = countStatuses(items)
+  const meta = batchMeta(items)
+  const state = batchState(counts, items.length)
+  const ids = items.map((p) => p.id)
+  const allSel = ids.every((i) => selected.has(i))
+
+  const batchRunning = counts.running > 0
+  const allDone = items.length > 0 && counts.success === items.length
+  const prefix: string = items[0]?.source?.batch_output_prefix || ""
+  const childUrl: string =
+    items.find((p) => p.task_result?.tileset)?.task_result?.tileset || ""
+  let parentUrl = ""
+  if (allDone && prefix && childUrl) {
+    const idx = childUrl.indexOf(prefix)
+    if (idx >= 0) parentUrl = `${OpenAPI.BASE}${childUrl.slice(0, idx)}${prefix}/tileset.json`
+  }
+  return (
+    <>
+      <Tr bg="blackAlpha.50" _dark={{ bg: "whiteAlpha.100" }}>
+        <Td>
+          <Checkbox
+            isChecked={allSel}
+            onChange={() => onToggleMany(ids, !allSel)}
+            aria-label={`Select batch ${meta.label}`}
+          />
+        </Td>
+        <Td maxW={0}>
+          <Flex align="center" gap={2} minW={0}>
+            <Box
+              as="button"
+              type="button"
+              onClick={() => onToggleOpen(id)}
+              aria-label="Toggle batch"
+              display="flex"
+              flexShrink={0}
+            >
+              <Icon as={open ? FiChevronDown : FiChevronRight} />
+            </Box>
+            <Flex direction="column" gap={0.5} minW={0}>
+              <Text fontWeight="700" isTruncated>
+                {meta.label}
+              </Text>
+              {meta.source && (
+                <Text fontSize="xs" color="gray.500" isTruncated>
+                  {meta.source}
+                </Text>
+              )}
+            </Flex>
+          </Flex>
+        </Td>
+        <Td>
+          <Flex align="center" gap={3}>
+            <Badge colorScheme={state.color} width="fit-content">
+              {state.label}
+            </Badge>
+            <Flex direction="column" gap={1} minW="90px">
+              <Text fontSize="xs" color="gray.500">
+                {counts.success}/{items.length} done
+              </Text>
+              <RollupBar counts={counts} />
+            </Flex>
+          </Flex>
+        </Td>
+        <Td textAlign="right">
+          <HStack spacing={1} justify="flex-end">
+            {parentUrl && (
+              <Tooltip label="Open combined tileset">
+                <IconButton
+                  as="a"
+                  href={parentUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="Open combined tileset"
+                  icon={<FiExternalLink />}
+                  size="xs"
+                  variant="ghost"
+                />
+              </Tooltip>
+            )}
+            {batchRunning ? (
+              <Tooltip label="Cancel batch">
+                <IconButton
+                  aria-label="Cancel batch"
+                  icon={<FiSquare />}
+                  size="xs"
+                  variant="ghost"
+                  colorScheme="orange"
+                  onClick={() => onAction(ids, "cancel")}
+                />
+              </Tooltip>
+            ) : (
+              <Tooltip label="Run batch">
+                <IconButton
+                  aria-label="Run batch"
+                  icon={<FiPlay />}
+                  size="xs"
+                  variant="ghost"
+                  colorScheme="green"
+                  onClick={() => onAction(ids, "run")}
+                />
+              </Tooltip>
+            )}
+            <Tooltip label="Rebuild combined tileset">
+              <IconButton
+                aria-label="Rebuild combined tileset"
+                icon={<FiRefreshCw />}
+                size="xs"
+                variant="ghost"
+                onClick={() => onAction([id], "rebuild")}
+              />
+            </Tooltip>
+            <Tooltip label="Delete batch">
+              <IconButton
+                aria-label="Delete batch"
+                icon={<FiTrash />}
+                size="xs"
+                variant="ghost"
+                colorScheme="red"
+                onClick={() => onAction(ids, "delete")}
+              />
+            </Tooltip>
+          </HStack>
+        </Td>
+      </Tr>
+      {open &&
+        items.map((p) => (
+          <PipelineRow
+            key={p.id}
+            pipeline={p}
+            selected={selected}
+            onToggle={onToggle}
+            onAction={onAction}
+            dim={dim}
+            indent
+          />
+        ))}
+    </>
+  )
+}
+
 function PipelinesTable() {
   const queryClient = useQueryClient()
   const showToast = useCustomToast()
@@ -216,6 +578,7 @@ function PipelinesTable() {
 
   const [selected, setSelected] = React.useState<Set<string>>(new Set())
   const [query, setQuery] = React.useState("")
+  const [collapsed, setCollapsed] = React.useState<Set<string>>(new Set())
 
   const {
     data: pipelines,
@@ -263,6 +626,23 @@ function PipelinesTable() {
       return next
     })
 
+  const toggleMany = (ids: string[], select: boolean) =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      ids.forEach((id) => (select ? next.add(id) : next.delete(id)))
+      return next
+    })
+
+  const toggleOpen = (id: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const { batches, solo } = groupPipelines(rows)
+
   const bulkDelete = useMutation({
     mutationFn: async () => {
       for (const id of Array.from(selected)) {
@@ -275,6 +655,48 @@ function PipelinesTable() {
     },
     onError: () => {
       showToast("An error occurred.", "Could not delete the selection.", "error")
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["pipelines"] })
+    },
+  })
+
+  const act = useMutation({
+    mutationFn: async ({ ids, action }: { ids: string[]; action: RowAction }) => {
+      if (action === "rebuild") {
+        await finalizePipelineBatch(ids[0])
+        return
+      }
+      for (const id of ids) {
+        try {
+          if (action === "delete") await PipelinesService.deletePipeline({ id })
+          else await PipelinesService.processPipelineTask({ id, actionType: action })
+        } catch {
+          // skip rows the action does not apply to
+        }
+      }
+    },
+    onSuccess: (_d, { action }) => {
+      if (action === "rebuild") showToast("Rebuilding", "Combined tileset is being rebuilt.", "success")
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["pipelines"] })
+    },
+  })
+  const onAction = (ids: string[], action: RowAction) => act.mutate({ ids, action })
+
+  const bulkAction = useMutation({
+    mutationFn: async (actionType: "run" | "cancel") => {
+      for (const id of Array.from(selected)) {
+        try {
+          await PipelinesService.processPipelineTask({ id, actionType })
+        } catch {
+          // skip rows the action does not apply to (already running, nothing to cancel)
+        }
+      }
+    },
+    onSuccess: (_d, actionType) => {
+      showToast(actionType === "run" ? "Started" : "Cancelled", `${selected.size} job(s).`, "success")
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["pipelines"] })
@@ -294,8 +716,8 @@ function PipelinesTable() {
         />
       </InputGroup>
 
-      <TableContainer>
-        <Table variant="simple">
+      <TableContainer w="100%">
+        <Table variant="simple" size="sm" width="100%">
           <Thead>
             <Tr>
               <Th width="40px">
@@ -306,8 +728,8 @@ function PipelinesTable() {
                 />
               </Th>
               <Th>Job</Th>
-              <Th>Status</Th>
-              <Th />
+              <Th width="200px">Status</Th>
+              <Th width="160px" />
             </Tr>
           </Thead>
           {isPending ? (
@@ -322,68 +744,30 @@ function PipelinesTable() {
             </Tbody>
           ) : (
             <Tbody>
-              {rows.map((pipeline) => {
-                const download = `${pipeline?.task_result?.download}`
-                const source = (pipeline as any).source
-                const subtitle = source?.key
-                  ? `s3://…/${source.key}`
-                  : pipeline.asset_id
-                    ? "uploaded asset"
-                    : "no input"
-                return (
-                  <Tr
-                    key={pipeline.id}
-                    opacity={isPlaceholderData ? 0.5 : 1}
-                    bg={selected.has(pipeline.id) ? "blue.50" : undefined}
-                    _dark={{
-                      bg: selected.has(pipeline.id) ? "blue.900" : undefined,
-                    }}
-                  >
-                    <Td>
-                      <Checkbox
-                        isChecked={selected.has(pipeline.id)}
-                        onChange={() => toggle(pipeline.id)}
-                        aria-label={`Select ${pipeline.title}`}
-                      />
-                    </Td>
-                    <Td>
-                      <Flex direction="column" gap={0.5} minW={0}>
-                        {pipeline.asset_id ? (
-                          <Link
-                            to="/pipeline/$pipelineId"
-                            params={{ pipelineId: pipeline.id }}
-                          >
-                            <HStack>
-                              <FiEdit fontSize="14px" />
-                              <Text fontWeight="600">{pipeline.title}</Text>
-                            </HStack>
-                          </Link>
-                        ) : (
-                          <Text fontWeight="600">{pipeline.title}</Text>
-                        )}
-                        <Text fontSize="xs" color="gray.500">
-                          {subtitle}
-                        </Text>
-                      </Flex>
-                    </Td>
-                    <Td>
-                      <Flex gap={2} alignItems="center">
-                        <StatusCell status={pipeline.task_status} />
-                        {pipeline.task_result && (
-                          <Tooltip label="Download 3D Tiles">
-                            <a href={download} download={`${pipeline.title}.zip`}>
-                              <FiDownload fontSize="16px" />
-                            </a>
-                          </Tooltip>
-                        )}
-                      </Flex>
-                    </Td>
-                    <Td maxWidth="60px">
-                      <RemoveButton id={pipeline.id} />
-                    </Td>
-                  </Tr>
-                )
-              })}
+              {batches.map((batch) => (
+                <BatchGroup
+                  key={batch.id}
+                  id={batch.id}
+                  items={batch.items}
+                  open={query !== "" || !collapsed.has(batch.id)}
+                  onToggleOpen={toggleOpen}
+                  selected={selected}
+                  onToggle={toggle}
+                  onToggleMany={toggleMany}
+                  onAction={onAction}
+                  dim={isPlaceholderData}
+                />
+              ))}
+              {solo.map((pipeline) => (
+                <PipelineRow
+                  key={pipeline.id}
+                  pipeline={pipeline}
+                  selected={selected}
+                  onToggle={toggle}
+                  onAction={onAction}
+                  dim={isPlaceholderData}
+                />
+              ))}
             </Tbody>
           )}
         </Table>
@@ -420,6 +804,26 @@ function PipelinesTable() {
           <Text fontWeight="700">{selected.size} selected</Text>
           <Button
             size="sm"
+            colorScheme="green"
+            variant="outline"
+            leftIcon={<FiPlay />}
+            isLoading={bulkAction.isPending && bulkAction.variables === "run"}
+            onClick={() => bulkAction.mutate("run")}
+          >
+            Run
+          </Button>
+          <Button
+            size="sm"
+            colorScheme="orange"
+            variant="outline"
+            leftIcon={<FiSquare />}
+            isLoading={bulkAction.isPending && bulkAction.variables === "cancel"}
+            onClick={() => bulkAction.mutate("cancel")}
+          >
+            Cancel
+          </Button>
+          <Button
+            size="sm"
             colorScheme="red"
             variant="outline"
             leftIcon={<FiTrash />}
@@ -437,133 +841,7 @@ function PipelinesTable() {
   )
 }
 
-const SelectAssets = React.forwardRef((props: any, ref) => {
-  const { data: assets } = useQuery({
-    queryFn: () =>
-      AssetsService.readAssets({
-        skip: 0,
-        limit: 9999,
-        extension: ".shp.zip,.las,.laz,.phg.zip,.obj,.obj.zip",
-        uploadStatus: "SUCCESS",
-      }),
-    queryKey: ["assets-select"],
-  })
-
-  return (
-    <Select {...props} ref={ref}>
-      {assets?.data.map((asset) => {
-        return (
-          <option key={asset.id} value={asset.id}>
-            {asset.filename}
-          </option>
-        )
-      })}
-    </Select>
-  )
-})
-
-interface AddPipelineProps {
-  isOpen: boolean
-  onClose: () => void
-}
-
-const AddPipeline = ({ isOpen, onClose }: AddPipelineProps) => {
-  const queryClient = useQueryClient()
-  const showToast = useCustomToast()
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm<PipelineCreate>({
-    mode: "onBlur",
-    criteriaMode: "all",
-    defaultValues: {
-      title: "",
-      data: {},
-      task_id: null,
-      task_status: null,
-      task_result: null,
-    },
-  })
-
-  const mutation = useMutation({
-    mutationFn: (data: PipelineCreate) => {
-      return PipelinesService.createPipeline({ requestBody: data })
-    },
-
-    onSuccess: () => {
-      showToast("Success!", "Pipeline created successfully.", "success")
-      reset()
-      onClose()
-    },
-    onError: (err: ApiError) => {
-      handleError(err, showToast)
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["pipelines"] })
-    },
-  })
-
-  const onSubmit: SubmitHandler<PipelineCreate> = (data) => {
-    mutation.mutate(data)
-  }
-
-  return (
-    <>
-      <Modal
-        isOpen={isOpen}
-        onClose={onClose}
-        size={{ base: "sm", md: "md" }}
-        isCentered
-      >
-        <ModalOverlay />
-        <ModalContent as="form" onSubmit={handleSubmit(onSubmit)}>
-          <ModalHeader>Add Pipeline</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody pb={6}>
-            <FormControl isRequired isInvalid={!!errors.asset_id}>
-              <FormLabel htmlFor="asset">Asset</FormLabel>
-              <SelectAssets
-                id="asset_id"
-                {...register("asset_id", {
-                  required: "Asset is required."
-                })}
-                placeholder="Select asset"
-              />
-              {errors.asset_id && (
-                <FormErrorMessage>{errors.asset_id.message}</FormErrorMessage>
-              )}
-            </FormControl>
-            <FormControl isRequired isInvalid={!!errors.title}>
-              <FormLabel htmlFor="title">Title</FormLabel>
-              <Input
-                id="title"
-                {...register("title", {
-                  required: "Title is required.",
-                })}
-                placeholder="Title"
-                type="text"
-              />
-              {errors.title && (
-                <FormErrorMessage>{errors.title.message}</FormErrorMessage>
-              )}
-            </FormControl>
-          </ModalBody>
-          <ModalFooter gap={3}>
-            <Button variant="primary" type="submit" isLoading={isSubmitting}>
-              Save
-            </Button>
-            <Button onClick={onClose}>Cancel</Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-    </>
-  )
-}
-
 function Pipelines() {
-  const addModal = useDisclosure()
   const batchModal = useDisclosure()
   return (
     <Container maxW="full">
@@ -571,13 +849,9 @@ function Pipelines() {
         Pipelines
       </Heading>
       <Flex py={8} gap={4}>
-        <Button gap={1} onClick={addModal.onOpen} variant="outline" size="sm">
-          <Icon as={FaPlus} /> Add Pipeline
-        </Button>
         <Button gap={1} onClick={batchModal.onOpen} variant="primary" size="sm">
           <Icon as={FaPlus} /> New batch
         </Button>
-        <AddPipeline isOpen={addModal.isOpen} onClose={addModal.onClose} />
         <NewBatchModal isOpen={batchModal.isOpen} onClose={batchModal.onClose} />
       </Flex>
       <PipelinesTable />

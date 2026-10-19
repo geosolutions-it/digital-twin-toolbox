@@ -1,10 +1,9 @@
-import uuid
 import posixpath
 import mimetypes
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
-from app.core.storage import get_storage, output_key
+from app.core.storage import get_storage
 
 router = APIRouter()
 
@@ -14,26 +13,21 @@ def _media_type(name):
     return mt or "application/octet-stream"
 
 
-@router.get("/{pipeline_id}/{path:path}")
-def serve_output_artifact(pipeline_id: str, path: str):
-    """Serve only public pipeline artifacts (3D Tiles + download.zip), never process/.
+@router.get("/{path:path}")
+def serve_output_artifact(path: str):
+    """Serve public pipeline/batch artifacts (3D Tiles + download.zip), never process/.
 
-    Proxies the object through the storage layer so it works on any backend and
-    keeps the tileset's relative references intact under one URL prefix.
+    Proxies objects under the output/ area through the storage layer, keeping the
+    tileset's relative references intact under one URL prefix. Works for both
+    single-pipeline outputs (output/<id>/...) and batch outputs (output/<prefix>/...).
     """
-    try:
-        uuid.UUID(pipeline_id)
-    except ValueError:
-        raise HTTPException(status_code=404)
-
     norm = posixpath.normpath(path)
-    if norm.startswith("/") or norm == ".." or ".." in norm.split("/"):
-        raise HTTPException(status_code=404)
-    if norm != "download.zip" and norm != "tiles" and not norm.startswith("tiles/"):
+    parts = norm.split("/")
+    if norm.startswith("/") or ".." in parts or "process" in parts:
         raise HTTPException(status_code=404)
 
     storage = get_storage()
-    key = output_key(pipeline_id, norm)
+    key = f"output/{norm}"
     if not storage.exists(key):
         raise HTTPException(status_code=404)
     return StreamingResponse(storage.iter_object(key), media_type=_media_type(norm))

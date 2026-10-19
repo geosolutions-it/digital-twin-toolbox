@@ -73,6 +73,13 @@ class PipelineBatchCreate(SQLModel):
     title: str | None = None
 
 
+class PipelineSourceCreate(SQLModel):
+    key: str
+    pipeline: str = "PointCloud"
+    data: Optional[dict] = None
+    title: str | None = None
+
+
 class PipelinesPublic(SQLModel):
     data: list[PipelinePublic]
     count: int
