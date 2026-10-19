@@ -71,6 +71,27 @@ export async function updateBatchConfig(
   return res.data
 }
 
+export interface VectorFields {
+  count: number
+  fields: { name: string; type: string }[]
+  properties: Record<string, unknown>
+}
+
+export async function getVectorFields(params: {
+  key?: string
+  prefix?: string
+}): Promise<VectorFields> {
+  const token = localStorage.getItem("access_token") || ""
+  const qs = new URLSearchParams()
+  if (params.key) qs.set("key", params.key)
+  if (params.prefix) qs.set("prefix", params.prefix)
+  const res = await axios.get(
+    `${OpenAPI.BASE}/api/v1/pipelines/vector-fields?${qs.toString()}`,
+    token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
+  )
+  return res.data
+}
+
 export async function finalizePipelineBatch(batchId: string): Promise<{ ok: boolean }> {
   const token = localStorage.getItem("access_token") || ""
   const res = await axios.post(

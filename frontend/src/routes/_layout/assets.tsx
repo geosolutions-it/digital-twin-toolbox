@@ -164,11 +164,20 @@ function Breadcrumbs({ cwd, onNavigate }: { cwd: string; onNavigate: (p: string)
   )
 }
 
-const PROCESSABLE = [".laz", ".las"]
+const POINTCLOUD_EXT = [".laz", ".las"]
+const VECTOR_EXT = [".fgb", ".gpkg", ".geojson", ".zip"]
+
+function hintTypeForFile(name: string): "PointCloud" | "Polygon" | undefined {
+  const n = name.toLowerCase()
+  if (POINTCLOUD_EXT.some((e) => n.endsWith(e))) return "PointCloud"
+  if (VECTOR_EXT.some((e) => n.endsWith(e))) return "Polygon"
+  return undefined
+}
 
 function BucketBrowser({ cwd, setCwd }: { cwd: string; setCwd: (p: string) => void }) {
   const [batchPrefix, setBatchPrefix] = React.useState("")
   const [processKey, setProcessKey] = React.useState("")
+  const [processType, setProcessType] = React.useState<"PointCloud" | "Polygon" | undefined>()
   const batchModal = useDisclosure()
   const processModal = useDisclosure()
 
@@ -182,8 +191,9 @@ function BucketBrowser({ cwd, setCwd }: { cwd: string; setCwd: (p: string) => vo
     batchModal.onOpen()
   }
 
-  const openProcess = (key: string) => {
+  const openProcess = (key: string, type?: "PointCloud" | "Polygon") => {
     setProcessKey(key)
+    setProcessType(type)
     processModal.onOpen()
   }
 
@@ -253,7 +263,7 @@ function BucketBrowser({ cwd, setCwd }: { cwd: string; setCwd: (p: string) => vo
                   )
                 })}
                 {files.map((file) => {
-                  const canProcess = PROCESSABLE.some((e) => file.name.toLowerCase().endsWith(e))
+                  const hintType = hintTypeForFile(file.name)
                   return (
                     <Tr key={file.key} _hover={{ bg: "blackAlpha.50", _dark: { bg: "whiteAlpha.100" } }}>
                       <Td>
@@ -269,12 +279,12 @@ function BucketBrowser({ cwd, setCwd }: { cwd: string; setCwd: (p: string) => vo
                         {humanSize(file.size)}
                       </Td>
                       <Td textAlign="right">
-                        {canProcess && (
+                        {hintType && (
                           <Button
                             size="xs"
                             variant="ghost"
                             leftIcon={<FiPlay />}
-                            onClick={() => openProcess(file.key)}
+                            onClick={() => openProcess(file.key, hintType)}
                           >
                             Process
                           </Button>
@@ -299,12 +309,23 @@ function BucketBrowser({ cwd, setCwd }: { cwd: string; setCwd: (p: string) => vo
       </TableContainer>
 
       <Text fontSize="xs" color="gray.500" mt={3}>
-        Listing the bucket by prefix. Use <b>Batch</b> on a folder to process all point
-        clouds under it; no per-file registration needed.
+        Listing the bucket by prefix. Use <b>Batch</b> on a folder to process every
+        supported file under it (point clouds, vectors, zipped shapefiles); the
+        workflow is detected per file. No per-file registration needed.
       </Text>
 
-      <NewBatchModal isOpen={batchModal.isOpen} onClose={batchModal.onClose} initialPrefix={batchPrefix} />
-      <NewBatchModal isOpen={processModal.isOpen} onClose={processModal.onClose} fileKey={processKey} />
+      <NewBatchModal
+        isOpen={batchModal.isOpen}
+        onClose={batchModal.onClose}
+        initialPrefix={batchPrefix}
+        selectableType
+      />
+      <NewBatchModal
+        isOpen={processModal.isOpen}
+        onClose={processModal.onClose}
+        fileKey={processKey}
+        pipelineType={processType}
+      />
     </>
   )
 }

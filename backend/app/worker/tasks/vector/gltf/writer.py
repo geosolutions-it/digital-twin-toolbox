@@ -113,13 +113,22 @@ def glb_bytes(enu_positions, feature_vertex_counts=None, features=None, schema=N
         {"bufferView": nrm_view, "componentType": _FLOAT, "count": count, "type": "VEC3"},
     ]
     attributes = {"POSITION": 0, "NORMAL": 1}
-    primitive = {"attributes": attributes, "mode": 4}
+    primitive = {"attributes": attributes, "mode": 4, "material": 0}
     gltf = {
         "asset": {"version": "2.0", "generator": "dtt-vector"},
         "scene": 0,
         "scenes": [{"nodes": [0]}],
         "nodes": [{"mesh": 0}],
         "meshes": [{"primitives": [primitive]}],
+        "materials": [{
+            "name": "white",
+            "doubleSided": True,
+            "pbrMetallicRoughness": {
+                "baseColorFactor": [1.0, 1.0, 1.0, 1.0],
+                "metallicFactor": 0.0,
+                "roughnessFactor": 1.0,
+            },
+        }],
     }
 
     use_meta = bool(schema) and feature_vertex_counts is not None and features

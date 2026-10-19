@@ -51,6 +51,12 @@ class Storage(ABC):
     def iter_object(self, key: str, chunk: int = 1048576): ...
 
     @abstractmethod
+    def size(self, key: str) -> int: ...
+
+    @abstractmethod
+    def read_range(self, key: str, start: int, length: int) -> bytes: ...
+
+    @abstractmethod
     def list(self, prefix: str) -> list[str]: ...
 
     @abstractmethod
@@ -112,6 +118,13 @@ class S3Storage(Storage):
     def iter_object(self, key: str, chunk: int = 1048576):
         body = self.client.get_object(Bucket=self.bucket, Key=key)["Body"]
         yield from body.iter_chunks(chunk)
+
+    def size(self, key: str) -> int:
+        return self.client.head_object(Bucket=self.bucket, Key=key)["ContentLength"]
+
+    def read_range(self, key: str, start: int, length: int) -> bytes:
+        rng = f"bytes={start}-{start + length - 1}"
+        return self.client.get_object(Bucket=self.bucket, Key=key, Range=rng)["Body"].read()
 
     def list(self, prefix: str) -> list[str]:
         keys = []

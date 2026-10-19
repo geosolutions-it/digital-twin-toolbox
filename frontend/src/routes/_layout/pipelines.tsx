@@ -58,6 +58,7 @@ import { OpenAPI, PipelinesService } from "../../client"
 import useCustomToast from "../../hooks/useCustomToast"
 import NewBatchModal, {
   type BatchFormValues,
+  type PipelineType,
 } from "../../components/Pipelines/NewBatchModal"
 import PageHeader from "../../components/Common/PageHeader"
 import { finalizePipelineBatch } from "../../api/pipelineBatch"
@@ -219,15 +220,27 @@ function StatusCell({ status }: { status?: string | null }) {
 type Pipeline = any
 
 type EditTarget =
-  | { kind: "single"; id: string; label: string; values: Partial<BatchFormValues> }
-  | { kind: "batch"; batchId: string; ids: string[]; label: string; values: Partial<BatchFormValues> }
+  | { kind: "single"; id: string; label: string; type: PipelineType; sampleKey?: string; values: Partial<BatchFormValues> }
+  | { kind: "batch"; batchId: string; ids: string[]; label: string; type: PipelineType; sampleKey?: string; values: Partial<BatchFormValues> }
+
+function pipelineType(p: Pipeline): PipelineType {
+  return p?.source?.pipeline === "Polygon" ? "Polygon" : "PointCloud"
+}
 
 function dataToValues(d: any): Partial<BatchFormValues> {
+  const num = (v: any) => (typeof v === "number" ? String(v) : "")
+  // heights may be a scalar or an expression array; keep arrays intact for the editor
+  const expr = (v: any) => (Array.isArray(v) ? v : typeof v === "number" ? String(v) : "")
   return {
     sample_radius: d?.sample_radius != null ? String(d.sample_radius) : "",
     colorization_image: d?.colorization_image || "",
     to_ellipsoidal_height: !!d?.to_ellipsoidal_height,
     ground_classification: !!d?.ground_classification,
+    lower_limit_height: expr(d?.lower_limit_height),
+    upper_limit_height: expr(d?.upper_limit_height),
+    remove_bottom_surface: d?.remove_bottom_surface !== false,
+    max_features_per_tile: num(d?.max_features_per_tile),
+    max_geometric_error: num(d?.max_geometric_error),
   }
 }
 
@@ -729,13 +742,15 @@ function PipelinesTable() {
   const onAction = (ids: string[], action: RowAction) => act.mutate({ ids, action })
 
   const editPipeline = (p: Pipeline) =>
-    setEditTarget({ kind: "single", id: p.id, label: p.title, values: dataToValues(p.data) })
+    setEditTarget({ kind: "single", id: p.id, label: p.title, type: pipelineType(p), sampleKey: p?.source?.key, values: dataToValues(p.data) })
   const editBatch = (bid: string, items: Pipeline[]) =>
     setEditTarget({
       kind: "batch",
       batchId: bid,
       ids: items.map((i) => i.id),
       label: batchMeta(items).label,
+      type: pipelineType(items[0]),
+      sampleKey: items[0]?.source?.key,
       values: dataToValues(items[0]?.data),
     })
 
@@ -909,6 +924,8 @@ function PipelinesTable() {
         isOpen={!!editTarget}
         onClose={() => setEditTarget(null)}
         label={editTarget?.label}
+        pipelineType={editTarget?.type}
+        editSampleKey={editTarget?.sampleKey}
         initialValues={editTarget?.values}
         editPipelineId={editTarget?.kind === "single" ? editTarget.id : undefined}
         editBatchId={editTarget?.kind === "batch" ? editTarget.batchId : undefined}

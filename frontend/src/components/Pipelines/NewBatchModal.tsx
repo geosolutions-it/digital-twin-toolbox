@@ -12,26 +12,35 @@ import {
   ModalFooter,
   ModalHeader,
   ModalOverlay,
+  Select,
+  Text,
 } from "@chakra-ui/react"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useEffect } from "react"
-import { type SubmitHandler, useForm } from "react-hook-form"
+import { Controller, type SubmitHandler, useForm } from "react-hook-form"
 import {
   createPipelineBatch,
   createPipelineSource,
+  getVectorFields,
   updateBatchConfig,
   updatePipelineConfig,
 } from "../../api/pipelineBatch"
 import { PipelinesService } from "../../client"
 import useCustomToast from "../../hooks/useCustomToast"
+import InputExpression from "../Viewer/InputExpression"
+
+type PipelineType = "PointCloud" | "Polygon"
 
 interface NewBatchModalProps {
   isOpen: boolean
   onClose: () => void
   initialPrefix?: string
   fileKey?: string
+  pipelineType?: PipelineType
+  selectableType?: boolean
   editPipelineId?: string
   editBatchId?: string
+  editSampleKey?: string
   targetIds?: string[]
   initialValues?: Partial<BatchFormValues>
   label?: string
@@ -40,23 +49,53 @@ interface NewBatchModalProps {
 interface BatchFormValues {
   prefix: string
   title?: string
+  pipelineType?: PipelineType
   sample_radius?: string
   to_ellipsoidal_height?: boolean
   ground_classification?: boolean
   colorization_image?: string
+  lower_limit_height?: any
+  upper_limit_height?: any
+  remove_bottom_surface?: boolean
+  max_features_per_tile?: string
+  max_geometric_error?: string
+}
+
+function heightValue(v: any): number | any[] | undefined {
+  if (v == null || v === "") return undefined
+  if (Array.isArray(v)) return v
+  const n = Number(v)
+  return Number.isNaN(n) ? undefined : n
 }
 
 const EMPTY: BatchFormValues = {
   prefix: "",
   title: "",
+  pipelineType: "PointCloud",
   sample_radius: "",
   to_ellipsoidal_height: false,
   ground_classification: false,
   colorization_image: "",
+  lower_limit_height: "",
+  upper_limit_height: "",
+  remove_bottom_surface: true,
+  max_features_per_tile: "",
+  max_geometric_error: "",
 }
 
-function buildData(values: BatchFormValues): Record<string, unknown> {
+function buildData(values: BatchFormValues, type: PipelineType): Record<string, unknown> {
   const data: Record<string, unknown> = {}
+  if (type === "Polygon") {
+    const upper = heightValue(values.upper_limit_height)
+    const lower = heightValue(values.lower_limit_height)
+    if (upper !== undefined) data.upper_limit_height = upper
+    if (lower !== undefined) data.lower_limit_height = lower
+    if (values.to_ellipsoidal_height) data.to_ellipsoidal_height = true
+    data.remove_bottom_surface = !!values.remove_bottom_surface
+    if (values.max_features_per_tile) data.max_features_per_tile = Number(values.max_features_per_tile)
+    if (values.max_geometric_error) data.max_geometric_error = Number(values.max_geometric_error)
+    return data
+  }
   if (values.sample_radius) data.sample_radius = Number(values.sample_radius)
   if (values.to_ellipsoidal_height) data.to_ellipsoidal_height = true
   if (values.ground_classification) data.ground_classification = true
@@ -69,8 +108,11 @@ const NewBatchModal = ({
   onClose,
   initialPrefix = "",
   fileKey,
+  pipelineType,
+  selectableType,
   editPipelineId,
   editBatchId,
+  editSampleKey,
   targetIds,
   initialValues,
   label,
@@ -83,6 +125,8 @@ const NewBatchModal = ({
     register,
     handleSubmit,
     reset,
+    watch,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<BatchFormValues>({
     mode: "onBlur",
@@ -91,12 +135,34 @@ const NewBatchModal = ({
 
   useEffect(() => {
     if (!isOpen) return
-    reset(edit ? { ...EMPTY, ...initialValues } : { ...EMPTY, prefix: initialPrefix })
-  }, [isOpen, initialPrefix, initialValues, edit, reset])
+    reset(
+      edit
+        ? { ...EMPTY, pipelineType, ...initialValues }
+        : { ...EMPTY, prefix: initialPrefix, pipelineType: pipelineType ?? "PointCloud" },
+    )
+  }, [isOpen, initialPrefix, initialValues, pipelineType, edit, reset])
+
+  const watchedType = watch("pipelineType")
+  const type: PipelineType = pipelineType ?? watchedType ?? "PointCloud"
+
+  const fieldsParam: { key?: string; prefix?: string } | null = fileKey
+    ? { key: fileKey }
+    : editSampleKey
+      ? { key: editSampleKey }
+      : !edit
+        ? { prefix: initialPrefix }
+        : null
+  const { data: vectorFields } = useQuery({
+    queryKey: ["vector-fields", fieldsParam],
+    queryFn: () => getVectorFields(fieldsParam!),
+    enabled: isOpen && type === "Polygon" && !!(fieldsParam?.key || fieldsParam?.prefix),
+    staleTime: 60000,
+  })
+  const properties = vectorFields?.properties ?? {}
 
   const mutation = useMutation({
     mutationFn: async ({ values, run }: { values: BatchFormValues; run: boolean }) => {
-      const data = buildData(values)
+      const data = buildData(values, type)
       if (edit) {
         if (editBatchId) await updateBatchConfig(editBatchId, data)
         else await updatePipelineConfig(editPipelineId!, data)
@@ -115,14 +181,14 @@ const NewBatchModal = ({
       if (single) {
         return createPipelineSource({
           key: fileKey!,
-          pipeline: "PointCloud",
+          pipeline: type,
           title: values.title || null,
           data,
         })
       }
       return createPipelineBatch({
         prefix: values.prefix,
-        pipeline: "PointCloud",
+        pipeline: type,
         title: values.title || null,
         data,
       })
@@ -130,8 +196,8 @@ const NewBatchModal = ({
     onSuccess: (res: any) => {
       let msg: string
       if (edit) msg = res?.run ? "Saved and re-running." : "Parameters saved."
-      else if (single) msg = "Queued 1 point-cloud job."
-      else msg = `Queued ${res.count} point-cloud jobs.`
+      else if (single) msg = "Queued 1 job."
+      else msg = `Queued ${res.count} jobs.`
       showToast("Success!", msg, "success")
       reset()
       onClose()
@@ -152,8 +218,8 @@ const NewBatchModal = ({
   const heading = edit
     ? `Adjust parameters${label ? `: ${label}` : ""}`
     : single
-      ? "Process point cloud"
-      : "New point-cloud batch"
+      ? "Process file"
+      : "New batch"
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} size={{ base: "sm", md: "md" }} isCentered>
@@ -181,42 +247,98 @@ const NewBatchModal = ({
                 )}
               </FormControl>
             ))}
+          {!edit && selectableType && (
+            <FormControl>
+              <FormLabel htmlFor="pipelineType">Workflow</FormLabel>
+              <Select id="pipelineType" {...register("pipelineType")}>
+                <option value="PointCloud">Point cloud</option>
+                <option value="Polygon">Polygon</option>
+              </Select>
+            </FormControl>
+          )}
           {!edit && (
             <FormControl>
               <FormLabel htmlFor="title">Title (optional)</FormLabel>
               <Input id="title" placeholder="Title" {...register("title")} />
             </FormControl>
           )}
-          <FormControl>
-            <FormLabel htmlFor="sample_radius">Sample radius (m, optional)</FormLabel>
-            <Input
-              id="sample_radius"
-              type="number"
-              step="0.01"
-              placeholder="e.g. 0.05"
-              {...register("sample_radius")}
-            />
-          </FormControl>
-          <FormControl>
-            <FormLabel htmlFor="colorization_image">Colorization raster (bucket key, optional)</FormLabel>
-            <Input
-              id="colorization_image"
-              placeholder="e.g. rasters/orthophoto.tif"
-              fontFamily="mono"
-              fontSize="sm"
-              {...register("colorization_image")}
-            />
-          </FormControl>
-          <FormControl>
-            <Checkbox {...register("to_ellipsoidal_height")}>
-              Convert to ellipsoidal height
-            </Checkbox>
-          </FormControl>
-          <FormControl>
-            <Checkbox {...register("ground_classification")}>
-              Classify ground points
-            </Checkbox>
-          </FormControl>
+
+          {type === "Polygon" ? (
+            <>
+              <FormControl>
+                <FormLabel>Building height (m, optional)</FormLabel>
+                <Controller
+                  control={control}
+                  name="upper_limit_height"
+                  render={({ field }) => (
+                    <InputExpression id="upper_limit_height" type="number" properties={properties} value={field.value} onChange={field.onChange} />
+                  )}
+                />
+              </FormControl>
+              <FormControl>
+                <FormLabel>Base height (m, optional)</FormLabel>
+                <Controller
+                  control={control}
+                  name="lower_limit_height"
+                  render={({ field }) => (
+                    <InputExpression id="lower_limit_height" type="number" properties={properties} value={field.value} onChange={field.onChange} />
+                  )}
+                />
+              </FormControl>
+              <Text fontSize="xs" color="gray.500">
+                Use the menu on a field to bind a value to an attribute (e.g. height from a column).
+              </Text>
+              <FormControl>
+                <Checkbox {...register("to_ellipsoidal_height")}>
+                  Convert heights to ellipsoidal (EGM2008)
+                </Checkbox>
+              </FormControl>
+              <FormControl>
+                <Checkbox {...register("remove_bottom_surface")}>Remove bottom surface</Checkbox>
+              </FormControl>
+              <FormControl>
+                <FormLabel htmlFor="max_features_per_tile">Max features per tile (optional)</FormLabel>
+                <Input id="max_features_per_tile" type="number" placeholder="1000" {...register("max_features_per_tile")} />
+              </FormControl>
+              <FormControl>
+                <FormLabel htmlFor="max_geometric_error">Max geometric error (optional)</FormLabel>
+                <Input id="max_geometric_error" type="number" placeholder="500" {...register("max_geometric_error")} />
+              </FormControl>
+            </>
+          ) : (
+            <>
+              <FormControl>
+                <FormLabel htmlFor="sample_radius">Sample radius (m, optional)</FormLabel>
+                <Input
+                  id="sample_radius"
+                  type="number"
+                  step="0.01"
+                  placeholder="e.g. 0.05"
+                  {...register("sample_radius")}
+                />
+              </FormControl>
+              <FormControl>
+                <FormLabel htmlFor="colorization_image">Colorization raster (bucket key, optional)</FormLabel>
+                <Input
+                  id="colorization_image"
+                  placeholder="e.g. rasters/orthophoto.tif"
+                  fontFamily="mono"
+                  fontSize="sm"
+                  {...register("colorization_image")}
+                />
+              </FormControl>
+              <FormControl>
+                <Checkbox {...register("to_ellipsoidal_height")}>
+                  Convert to ellipsoidal height
+                </Checkbox>
+              </FormControl>
+              <FormControl>
+                <Checkbox {...register("ground_classification")}>
+                  Classify ground points
+                </Checkbox>
+              </FormControl>
+            </>
+          )}
         </ModalBody>
         <ModalFooter gap={3}>
           {edit ? (
@@ -253,4 +375,4 @@ const NewBatchModal = ({
 }
 
 export default NewBatchModal
-export type { BatchFormValues }
+export type { BatchFormValues, PipelineType }

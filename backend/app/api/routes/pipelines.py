@@ -9,6 +9,7 @@ from app.models.task import Pipeline, PipelinePublic, PipelinesPublic, PipelineP
 
 from app.worker.pipelines import run as run_pipeline
 from app.services.pipeline_config import validate_pipeline_config
+from app.services.file_classify import classify_bucket_file, SUPPORTED_EXTENSIONS
 from app.core.storage import get_storage, output_key
 from app.core.config import settings
 from app.worker.main import celery
@@ -69,8 +70,10 @@ def create_pipeline(
     session.refresh(pipeline)
     return pipeline
 
-_SOURCE_TASK = {"PointCloud": "create_point_cloud_3dtiles"}
-_SOURCE_EXTENSIONS = {"PointCloud": (".laz", ".las")}
+_SOURCE_TASK = {
+    "PointCloud": "create_point_cloud_3dtiles",
+    "Polygon": "create_polygon_3dtiles",
+}
 
 
 def _slug(value: str) -> str:
@@ -83,18 +86,17 @@ def create_pipeline_source(
     *, session: SessionDep, current_user: CurrentUser, source_in: PipelineSourceCreate
 ) -> Any:
     """Create and dispatch one pipeline from a single bucket file."""
-    dispatch_task = _SOURCE_TASK.get(source_in.pipeline)
-    if dispatch_task is None:
-        raise HTTPException(status_code=422, detail=f"Unsupported pipeline: {source_in.pipeline}")
-
-    exts = _SOURCE_EXTENSIONS[source_in.pipeline]
-    if not source_in.key.lower().endswith(exts):
-        raise HTTPException(status_code=422, detail=f"Unsupported file for {source_in.pipeline}: {source_in.key!r}")
-    if not get_storage().exists(source_in.key):
+    storage = get_storage()
+    if not storage.exists(source_in.key):
         raise HTTPException(status_code=404, detail=f"No such file: {source_in.key!r}")
 
+    pipeline_type = classify_bucket_file(storage, source_in.key)
+    dispatch_task = _SOURCE_TASK.get(pipeline_type)
+    if dispatch_task is None:
+        raise HTTPException(status_code=422, detail=f"Unsupported file: {source_in.key!r}")
+
     try:
-        data = validate_pipeline_config(source_in.pipeline, None, source_in.data)
+        data = validate_pipeline_config(pipeline_type, None, source_in.data)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=f"Invalid config: {e}")
 
@@ -111,7 +113,7 @@ def create_pipeline_source(
             "key": key,
             "extension": os.path.splitext(key)[1],
             "output_base": output_base,
-            "pipeline": source_in.pipeline,
+            "pipeline": pipeline_type,
         },
         batch_id=None,
         owner_id=current_user.id,
@@ -133,22 +135,15 @@ def create_pipeline_batch(
     *, session: SessionDep, current_user: CurrentUser, batch_in: PipelineBatchCreate
 ) -> Any:
     """
-    Create and dispatch one pipeline per matching file under a bucket prefix.
+    Create and dispatch one pipeline per supported file under a bucket prefix.
+    Each file's workflow is detected from its contents (zips are peeked).
     """
-    dispatch_task = _SOURCE_TASK.get(batch_in.pipeline)
-    if dispatch_task is None:
-        raise HTTPException(status_code=422, detail=f"Unsupported batch pipeline: {batch_in.pipeline}")
-
-    try:
-        data = validate_pipeline_config(batch_in.pipeline, None, batch_in.data)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=f"Invalid config: {e}")
-
     storage = get_storage()
-    exts = _SOURCE_EXTENSIONS[batch_in.pipeline]
-    keys = [k for k in storage.list(batch_in.prefix) if k.lower().endswith(exts)]
-    if not keys:
-        raise HTTPException(status_code=404, detail=f"No matching files under prefix {batch_in.prefix!r}")
+    candidates = [k for k in storage.list(batch_in.prefix) if k.lower().endswith(SUPPORTED_EXTENSIONS)]
+    classified = [(k, classify_bucket_file(storage, k)) for k in candidates]
+    classified = [(k, t) for k, t in classified if t in _SOURCE_TASK]
+    if not classified:
+        raise HTTPException(status_code=404, detail=f"No supported files under prefix {batch_in.prefix!r}")
 
     root = batch_in.prefix.strip("/")
     # name the output after the batch title (falls back to the input folder); keep it
@@ -163,7 +158,11 @@ def create_pipeline_batch(
 
     batch_id = uuid.uuid4()
     created = []
-    for key in keys:
+    for key, ptype in classified:
+        try:
+            data = validate_pipeline_config(ptype, None, batch_in.data)
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=f"Invalid config: {e}")
         name = os.path.basename(key)
         rel = key[len(root):].lstrip("/") if root else key
         rel_noext = os.path.splitext(rel)[0]
@@ -180,7 +179,7 @@ def create_pipeline_batch(
                 "extension": os.path.splitext(key)[1],
                 "output_base": output_base,
                 "batch_output_prefix": out_root,
-                "pipeline": batch_in.pipeline,
+                "pipeline": ptype,
             },
             batch_id=batch_id,
             owner_id=current_user.id,
@@ -189,7 +188,7 @@ def create_pipeline_batch(
         session.commit()
         session.refresh(pipeline)
         # dump while the row is fresh; a later commit would expire it and drop columns (incl. id)
-        task = celery.send_task(dispatch_task, kwargs={"pipeline_extended": pipeline.model_dump()})
+        task = celery.send_task(_SOURCE_TASK[ptype], kwargs={"pipeline_extended": pipeline.model_dump()})
         pipeline.sqlmodel_update({"task_id": task.id, "task_status": PENDING})
         session.add(pipeline)
         session.commit()
@@ -240,6 +239,29 @@ def update_pipeline_batch(
         session.add(pipeline)
     session.commit()
     return {"batch_id": str(batch_id), "count": len(pipelines)}
+
+
+@router.get("/vector-fields", response_model=Any)
+def vector_fields(
+    *, current_user: CurrentUser, key: str | None = None, prefix: str | None = None
+) -> Any:
+    """Attribute schema + first-feature sample for a bucket vector, for the
+    expression editor. A prefix resolves to the first polygon file under it."""
+    storage = get_storage()
+    target = key
+    if not target and prefix:
+        for k in storage.list(prefix):
+            if k.lower().endswith(SUPPORTED_EXTENSIONS) and classify_bucket_file(storage, k) == "Polygon":
+                target = k
+                break
+    if not target:
+        raise HTTPException(status_code=404, detail="No vector file found")
+    try:
+        return celery.send_task(
+            "read_vector_fields", kwargs={"options": {"key": target}}
+        ).get(timeout=30)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Could not read vector fields: {e}")
 
 
 @router.post("/{id}/task/{action_type}", response_model=Any)
