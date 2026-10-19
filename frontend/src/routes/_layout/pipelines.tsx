@@ -17,7 +17,6 @@ import {
   Container,
   Flex,
   HStack,
-  Heading,
   Icon,
   IconButton,
   Input,
@@ -41,7 +40,6 @@ import { Link, createFileRoute, useNavigate } from "@tanstack/react-router"
 import React from "react"
 import { useEffect } from "react"
 import { useForm } from "react-hook-form"
-import { FaPlus } from "react-icons/fa"
 import {
   FiChevronDown,
   FiChevronRight,
@@ -61,6 +59,7 @@ import useCustomToast from "../../hooks/useCustomToast"
 import NewBatchModal, {
   type BatchFormValues,
 } from "../../components/Pipelines/NewBatchModal"
+import PageHeader from "../../components/Common/PageHeader"
 import { finalizePipelineBatch } from "../../api/pipelineBatch"
 
 const pipelinesSearchSchema = z.object({
@@ -642,8 +641,10 @@ function PipelinesTable() {
   const rows = (pipelines?.data || []).filter((p) =>
     p.title.toLowerCase().includes(query.toLowerCase()),
   )
-  const hasNextPage = !isPlaceholderData && pipelines?.data.length === PER_PAGE
+  const total = pipelines?.count ?? 0
+  const hasNextPage = page * PER_PAGE < total
   const hasPreviousPage = page > 1
+  const showPager = hasNextPage || hasPreviousPage
   const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id))
 
   useEffect(() => {
@@ -828,15 +829,26 @@ function PipelinesTable() {
         </Table>
       </TableContainer>
 
-      <Flex gap={4} alignItems="center" mt={4} justifyContent="center">
-        <Button onClick={() => setPage(page - 1)} isDisabled={!hasPreviousPage}>
-          Previous
-        </Button>
-        <span>Page {page}</span>
-        <Button isDisabled={!hasNextPage} onClick={() => setPage(page + 1)}>
-          Next
-        </Button>
-      </Flex>
+      {showPager && (
+        <Flex
+          position="sticky"
+          bottom={0}
+          zIndex={10}
+          bg="chakra-body-bg"
+          gap={4}
+          alignItems="center"
+          py={4}
+          justifyContent="center"
+        >
+          <Button size="sm" onClick={() => setPage(page - 1)} isDisabled={!hasPreviousPage}>
+            Previous
+          </Button>
+          <span>Page {page}</span>
+          <Button size="sm" isDisabled={!hasNextPage} onClick={() => setPage(page + 1)}>
+            Next
+          </Button>
+        </Flex>
+      )}
 
       {selected.size > 0 && (
         <Flex
@@ -907,18 +919,9 @@ function PipelinesTable() {
 }
 
 function Pipelines() {
-  const batchModal = useDisclosure()
   return (
     <Container maxW="full">
-      <Heading size="lg" textAlign={{ base: "center", md: "left" }} pt={12}>
-        Pipelines
-      </Heading>
-      <Flex py={8} gap={4}>
-        <Button gap={1} onClick={batchModal.onOpen} variant="primary" size="sm">
-          <Icon as={FaPlus} /> New batch
-        </Button>
-        <NewBatchModal isOpen={batchModal.isOpen} onClose={batchModal.onClose} />
-      </Flex>
+      <PageHeader eyebrow="Processing" title="Pipelines" />
       <PipelinesTable />
     </Container>
   )

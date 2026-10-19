@@ -6,7 +6,6 @@ import {
   Flex,
   FormControl,
   FormLabel,
-  Heading,
   Icon,
   Input,
   Modal,
@@ -34,6 +33,7 @@ import { type SubmitHandler, useForm } from "react-hook-form"
 import { FiFile, FiFolder, FiPlay, FiPlus, FiUpload } from "react-icons/fi"
 import { listStorage, uploadToStorage } from "../../api/storageBrowser"
 import NewBatchModal from "../../components/Pipelines/NewBatchModal"
+import PageHeader from "../../components/Common/PageHeader"
 import useCustomToast from "../../hooks/useCustomToast"
 
 export const Route = createFileRoute("/_layout/assets")({
@@ -314,18 +314,22 @@ function Assets() {
   const uploadModal = useDisclosure()
   return (
     <Container maxW="full">
-      <Flex pt={12} pb={8} align="center" justify="space-between" gap={4}>
-        <Box>
-          <Text fontSize="xs" color="gray.500" textTransform="uppercase" letterSpacing="wide">
-            Bucket storage
-          </Text>
-          <Heading size="lg">Assets</Heading>
-        </Box>
-        <Button gap={1} onClick={uploadModal.onOpen} variant="outline" size="sm" leftIcon={<FiUpload />}>
-          Upload
-        </Button>
-        <UploadModal isOpen={uploadModal.isOpen} onClose={uploadModal.onClose} initialPrefix={cwd} />
-      </Flex>
+      <PageHeader
+        eyebrow="Bucket storage"
+        title="Assets"
+        actions={
+          <Button
+            gap={1}
+            onClick={uploadModal.onOpen}
+            variant="outline"
+            size="sm"
+            leftIcon={<FiUpload />}
+          >
+            Upload
+          </Button>
+        }
+      />
+      <UploadModal isOpen={uploadModal.isOpen} onClose={uploadModal.onClose} initialPrefix={cwd} />
       <BucketBrowser cwd={cwd} setCwd={setCwd} />
     </Container>
   )
