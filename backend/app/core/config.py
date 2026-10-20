@@ -72,11 +72,13 @@ class Settings(BaseSettings):
             query="options=-csearch_path=public"
         )
 
-    # Seeds the single implicit principal (see core/db.py:init_db). The app has no
-    # in-app auth; these are not login credentials.
+    # Seeds the single implicit principal (see core/db.py); not login credentials.
     # TODO: update type to EmailStr when sqlmodel supports it
     FIRST_SUPERUSER: str
     FIRST_SUPERUSER_PASSWORD: str
+
+    # Selects the auth provider (see app/auth); "standalone" = no in-app auth.
+    AUTH_PROVIDER: str = "standalone"
 
     def _check_default_secret(self, var_name: str, value: str | None) -> None:
         if value == "changethis":
