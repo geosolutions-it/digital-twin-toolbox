@@ -1,8 +1,8 @@
 """Object storage for assets and pipeline outputs.
 
 Keys are relative paths (e.g. "upload/<id>/index.laz", "output/<id>/tiles/tileset.json")
-mapped to objects in an S3-compatible bucket. Single-box/dev runs a bundled SeaweedFS;
-a cloud deploy points the S3_* settings at its own bucket. Workers download inputs to
+mapped to objects in an S3-compatible bucket. Single-box/dev runs a bundled Versity S3
+Gateway; a cloud deploy points the S3_* settings at its own bucket. Workers download inputs to
 local scratch and upload outputs back, so no shared filesystem is required. The Storage
 interface stays thin so other object-store backends can be added later.
 """

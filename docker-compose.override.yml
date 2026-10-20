@@ -69,18 +69,23 @@ services:
     ports:
       - "${DOZZLE_BIND_HOST:-127.0.0.1}:9999:8080"
 
-  seaweedfs:
-    image: chrislusf/seaweedfs:latest
+  # Local-dev S3: Versity S3 Gateway, POSIX backend serving a host folder as buckets.
+  # Keep the data dir on the Linux/WSL2 fs (not /mnt/c); metadata uses xattrs.
+  versitygw:
+    image: ghcr.io/versity/versitygw:latest
     restart: "no"
-    command: "server -s3 -dir=/data"
+    # Run as the host user so stored files are not root-owned.
+    user: "${STORAGE_UID:-1000}:${STORAGE_GID:-1000}"
+    command: "posix /data"
+    environment:
+      - VGW_PORT=:8333
+      - ROOT_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-dttadmin}
+      - ROOT_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:-dttadmin}
+      - VGW_REGION=${S3_REGION:-us-east-1}
     ports:
       - "8333:8333"
-      - "8889:8888"
     volumes:
-      - app-seaweedfs-data:/data
-
-volumes:
-  app-seaweedfs-data:
+      - ${STORAGE_DATA_DIR:-./data/versitygw}:/data
 
 networks:
   traefik-public:
