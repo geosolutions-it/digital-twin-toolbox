@@ -17,12 +17,7 @@ export interface PipelineBatchResponse {
 export async function createPipelineBatch(
   body: PipelineBatchRequest,
 ): Promise<PipelineBatchResponse> {
-  const token = localStorage.getItem("access_token") || ""
-  const res = await axios.post(
-    `${OpenAPI.BASE}/api/v1/pipelines/batch`,
-    body,
-    token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
-  )
+  const res = await axios.post(`${OpenAPI.BASE}/api/v1/pipelines/batch`, body)
   return res.data
 }
 
@@ -36,12 +31,7 @@ export interface PipelineSourceRequest {
 export async function createPipelineSource(
   body: PipelineSourceRequest,
 ): Promise<{ id: string }> {
-  const token = localStorage.getItem("access_token") || ""
-  const res = await axios.post(
-    `${OpenAPI.BASE}/api/v1/pipelines/source`,
-    body,
-    token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
-  )
+  const res = await axios.post(`${OpenAPI.BASE}/api/v1/pipelines/source`, body)
   return res.data
 }
 
@@ -49,12 +39,7 @@ export async function updatePipelineConfig(
   id: string,
   data: Record<string, unknown> | null,
 ): Promise<unknown> {
-  const token = localStorage.getItem("access_token") || ""
-  const res = await axios.put(
-    `${OpenAPI.BASE}/api/v1/pipelines/${id}`,
-    { data },
-    token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
-  )
+  const res = await axios.put(`${OpenAPI.BASE}/api/v1/pipelines/${id}`, { data })
   return res.data
 }
 
@@ -62,11 +47,9 @@ export async function updateBatchConfig(
   batchId: string,
   data: Record<string, unknown> | null,
 ): Promise<{ batch_id: string; count: number }> {
-  const token = localStorage.getItem("access_token") || ""
   const res = await axios.put(
     `${OpenAPI.BASE}/api/v1/pipelines/batch/${batchId}`,
     { data },
-    token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
   )
   return res.data
 }
@@ -81,23 +64,19 @@ export async function getVectorFields(params: {
   key?: string
   prefix?: string
 }): Promise<VectorFields> {
-  const token = localStorage.getItem("access_token") || ""
   const qs = new URLSearchParams()
   if (params.key) qs.set("key", params.key)
   if (params.prefix) qs.set("prefix", params.prefix)
   const res = await axios.get(
     `${OpenAPI.BASE}/api/v1/pipelines/vector-fields?${qs.toString()}`,
-    token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
   )
   return res.data
 }
 
 export async function finalizePipelineBatch(batchId: string): Promise<{ ok: boolean }> {
-  const token = localStorage.getItem("access_token") || ""
   const res = await axios.post(
     `${OpenAPI.BASE}/api/v1/pipelines/batch/${batchId}/finalize`,
     {},
-    token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
   )
   return res.data
 }

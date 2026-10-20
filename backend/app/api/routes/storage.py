@@ -1,7 +1,6 @@
 import os
 from typing import Any
 
-from app.api.deps import CurrentUser
 from app.core.storage import get_storage
 from fastapi import APIRouter, HTTPException, UploadFile
 
@@ -9,7 +8,7 @@ router = APIRouter()
 
 
 @router.get("/")
-def list_storage(current_user: CurrentUser, prefix: str = "") -> Any:
+def list_storage(prefix: str = "") -> Any:
     """List one level of the bucket under a prefix: folders and files."""
     prefix = prefix.lstrip("/")
     if ".." in prefix.split("/"):
@@ -29,7 +28,7 @@ def _unique_key(storage, key: str) -> str:
 
 @router.post("/upload")
 async def upload_to_storage(
-    current_user: CurrentUser, file: UploadFile, prefix: str = ""
+    file: UploadFile, prefix: str = ""
 ) -> Any:
     """Drop a file into the bucket at <prefix>/<name>, auto-suffixing on collision."""
     name = os.path.basename(file.filename or "")

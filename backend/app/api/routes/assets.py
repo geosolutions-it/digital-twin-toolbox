@@ -23,42 +23,21 @@ router = APIRouter()
 
 @router.get("/", response_model=AssetsPublic)
 def read_assets(
-    session: SessionDep, current_user: CurrentUser, skip: int = 0, limit: int = 100, extension: str = None, upload_status: str = None
+    session: SessionDep, skip: int = 0, limit: int = 100, extension: str = None, upload_status: str = None
 ) -> Any:
     """
     Retrieve assets.
     """
-    if current_user.is_superuser:
-        count_statement = select(func.count()).select_from(Asset)
-        if extension:
-            count_statement = count_statement.where(col(Asset.extension).in_(extension.split(',')))
-        count = session.exec(count_statement).one()
-        statement = select(Asset).offset(skip).limit(limit)
-        if extension:
-            statement = statement.where(col(Asset.extension).in_(extension.split(',')))
-        if upload_status:
-            statement = statement.where(col(Asset.upload_status).in_(upload_status.split(',')))
-        assets = session.exec(statement.order_by(Asset.filename.asc())).all()
-    else:
-        count_statement = (
-            select(func.count())
-            .select_from(Asset)
-            .where(Asset.owner_id == current_user.id)
-        )
-        if extension:
-            count_statement = count_statement.where(col(Asset.extension).in_(extension.split(',')))
-        count = session.exec(count_statement).one()
-        statement = (
-            select(Asset)
-            .where(Asset.owner_id == current_user.id)
-            .offset(skip)
-            .limit(limit)
-        )
-        if extension:
-            statement = statement.where(col(Asset.extension).in_(extension.split(',')))
-        if upload_status:
-            statement = statement.where(col(Asset.upload_status).in_(upload_status.split(',')))
-        assets = session.exec(statement.order_by(Asset.filename.asc())).all()
+    count_statement = select(func.count()).select_from(Asset)
+    if extension:
+        count_statement = count_statement.where(col(Asset.extension).in_(extension.split(',')))
+    count = session.exec(count_statement).one()
+    statement = select(Asset).offset(skip).limit(limit)
+    if extension:
+        statement = statement.where(col(Asset.extension).in_(extension.split(',')))
+    if upload_status:
+        statement = statement.where(col(Asset.upload_status).in_(upload_status.split(',')))
+    assets = session.exec(statement.order_by(Asset.filename.asc())).all()
 
     return AssetsPublic(data=assets, count=count)
 
@@ -69,9 +48,6 @@ async def create_asset(
     """
     Create new asset.
     """
-
-    if not current_user.id:
-        raise HTTPException(status_code=400, detail="Not enough permissions")
 
     filename = file.filename
     file_info = {
@@ -85,7 +61,7 @@ async def create_asset(
     return asset
 
 @router.get("/files/{filename}", response_model=None)
-async def get_asset_file(session: SessionDep, current_user: CurrentUser, filename: str) -> Any:
+async def get_asset_file(session: SessionDep, filename: str) -> Any:
     """
     Download asset by filename.
     """
@@ -94,8 +70,6 @@ async def get_asset_file(session: SessionDep, current_user: CurrentUser, filenam
     asset = results.first()
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
-    if not current_user.is_superuser and (asset.owner_id != current_user.id):
-        raise HTTPException(status_code=400, detail="Not enough permissions")
 
     key = upload_key(f"{asset.id}/index{asset.extension}")
     storage = get_storage()
@@ -105,15 +79,13 @@ async def get_asset_file(session: SessionDep, current_user: CurrentUser, filenam
                              headers={"Content-Disposition": f'attachment; filename="{asset.filename}"'})
 
 @router.get("/{id}/download", response_model=None)
-async def download_asset(session: SessionDep, current_user: CurrentUser, id: uuid.UUID) -> Any:
+async def download_asset(session: SessionDep, id: uuid.UUID) -> Any:
     """
     Download asset by id.
     """
     asset = session.get(Asset, id)
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
-    if not current_user.is_superuser and (asset.owner_id != current_user.id):
-        raise HTTPException(status_code=400, detail="Not enough permissions")
 
     key = upload_key(f"{asset.id}/index{asset.extension}")
     storage = get_storage()
@@ -123,15 +95,13 @@ async def download_asset(session: SessionDep, current_user: CurrentUser, id: uui
                              headers={"Content-Disposition": f'attachment; filename="{asset.filename}"'})
 
 @router.get("/{id}/sample", response_model=None)
-async def read_asset_sample(session: SessionDep, current_user: CurrentUser, id: uuid.UUID) -> Any:
+async def read_asset_sample(session: SessionDep, id: uuid.UUID) -> Any:
     """
     Get asset sample.
     """
     asset = session.get(Asset, id)
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
-    if not current_user.is_superuser and (asset.owner_id != current_user.id):
-        raise HTTPException(status_code=400, detail="Not enough permissions")
 
     if not asset.asset_type:
         raise HTTPException(status_code=500, detail="Asset does not support sample operation")
@@ -148,7 +118,7 @@ async def read_asset_sample(session: SessionDep, current_user: CurrentUser, id: 
 
 @router.delete("/{id}")
 def delete_asset(
-    session: SessionDep, current_user: CurrentUser, id: uuid.UUID
+    session: SessionDep, id: uuid.UUID
 ) -> Message:
     """
     Delete an asset.
@@ -156,9 +126,7 @@ def delete_asset(
     asset = session.get(Asset, id)
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
-    if not current_user.is_superuser and (asset.owner_id != current_user.id):
-        raise HTTPException(status_code=400, detail="Not enough permissions")
-    
+
     statement = select(Pipeline).where(Pipeline.asset_id == asset.id)
 
     pipelines = session.exec(statement).all()

@@ -12,10 +12,6 @@ import { enableHashHistory, getRouterBasePath, getViteApiUrl } from './utils'
 
 OpenAPI.BASE = getViteApiUrl()
 
-OpenAPI.TOKEN = async () => {
-  return localStorage.getItem("access_token") || ""
-}
-
 const queryClient = new QueryClient()
 
 const hashHistory = createHashHistory()

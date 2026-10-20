@@ -1,11 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic.networks import EmailStr
+from fastapi import APIRouter, HTTPException
 from sqlmodel import select
 
 from typing import Any
-from app.api.deps import get_current_active_superuser, CurrentUser, SessionDep
-from app.models.task import Message, Pipeline, Asset
-from app.utils import generate_test_email, send_email
+from app.api.deps import SessionDep
+from app.models.task import Pipeline, Asset
 from celery.states import PENDING, SUCCESS
 from app.core.config import settings
 import os
@@ -17,25 +15,8 @@ import zipfile
 router = APIRouter()
 
 
-@router.post(
-    "/test-email/",
-    dependencies=[Depends(get_current_active_superuser)],
-    status_code=201,
-)
-def test_email(email_to: EmailStr) -> Message:
-    """
-    Test emails.
-    """
-    email_data = generate_test_email(email_to=email_to)
-    send_email(
-        email_to=email_to,
-        subject=email_data.subject,
-        html_content=email_data.html_content,
-    )
-    return Message(message="Test email sent")
-
 @router.get("/map", response_model=None)
-async def create_map_config(session: SessionDep, current_user: CurrentUser) -> Any:
+async def create_map_config(session: SessionDep) -> Any:
     """
     MapStore map configuration
     """
@@ -146,17 +127,8 @@ async def create_map_config(session: SessionDep, current_user: CurrentUser) -> A
             'visibility': False
         }
     ]
-    pipelines = []
-    if current_user.is_superuser:
-        statement = select(Pipeline).where(Pipeline.task_status == SUCCESS)
-        pipelines = session.exec(statement.order_by(Pipeline.title.asc())).all()
-    else:
-        statement = (
-            select(Pipeline)
-            .where(Pipeline.owner_id == current_user.id)
-            .where(Pipeline.task_status == SUCCESS)
-        )
-        pipelines = session.exec(statement.order_by(Pipeline.title.asc())).all()
+    statement = select(Pipeline).where(Pipeline.task_status == SUCCESS)
+    pipelines = session.exec(statement.order_by(Pipeline.title.asc())).all()
 
     catalog_services = {}
     for pipeline in pipelines:

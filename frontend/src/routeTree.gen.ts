@@ -11,40 +11,14 @@
 // Import Routes
 
 import { Route as rootRoute } from './routes/__root'
-import { Route as SignupImport } from './routes/signup'
-import { Route as ResetPasswordImport } from './routes/reset-password'
-import { Route as RecoverPasswordImport } from './routes/recover-password'
-import { Route as LoginImport } from './routes/login'
 import { Route as LayoutImport } from './routes/_layout'
 import { Route as LayoutIndexImport } from './routes/_layout/index'
-import { Route as LayoutSettingsImport } from './routes/_layout/settings'
 import { Route as LayoutPipelinesImport } from './routes/_layout/pipelines'
 import { Route as LayoutMapImport } from './routes/_layout/map'
 import { Route as LayoutAssetsImport } from './routes/_layout/assets'
-import { Route as LayoutAdminImport } from './routes/_layout/admin'
 import { Route as LayoutPipelinePipelineIdImport } from './routes/_layout/pipeline/$pipelineId'
 
 // Create/Update Routes
-
-const SignupRoute = SignupImport.update({
-  path: '/signup',
-  getParentRoute: () => rootRoute,
-} as any)
-
-const ResetPasswordRoute = ResetPasswordImport.update({
-  path: '/reset-password',
-  getParentRoute: () => rootRoute,
-} as any)
-
-const RecoverPasswordRoute = RecoverPasswordImport.update({
-  path: '/recover-password',
-  getParentRoute: () => rootRoute,
-} as any)
-
-const LoginRoute = LoginImport.update({
-  path: '/login',
-  getParentRoute: () => rootRoute,
-} as any)
 
 const LayoutRoute = LayoutImport.update({
   id: '/_layout',
@@ -53,11 +27,6 @@ const LayoutRoute = LayoutImport.update({
 
 const LayoutIndexRoute = LayoutIndexImport.update({
   path: '/',
-  getParentRoute: () => LayoutRoute,
-} as any)
-
-const LayoutSettingsRoute = LayoutSettingsImport.update({
-  path: '/settings',
   getParentRoute: () => LayoutRoute,
 } as any)
 
@@ -76,11 +45,6 @@ const LayoutAssetsRoute = LayoutAssetsImport.update({
   getParentRoute: () => LayoutRoute,
 } as any)
 
-const LayoutAdminRoute = LayoutAdminImport.update({
-  path: '/admin',
-  getParentRoute: () => LayoutRoute,
-} as any)
-
 const LayoutPipelinePipelineIdRoute = LayoutPipelinePipelineIdImport.update({
   path: '/pipeline/$pipelineId',
   getParentRoute: () => LayoutRoute,
@@ -94,26 +58,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutImport
       parentRoute: typeof rootRoute
     }
-    '/login': {
-      preLoaderRoute: typeof LoginImport
-      parentRoute: typeof rootRoute
-    }
-    '/recover-password': {
-      preLoaderRoute: typeof RecoverPasswordImport
-      parentRoute: typeof rootRoute
-    }
-    '/reset-password': {
-      preLoaderRoute: typeof ResetPasswordImport
-      parentRoute: typeof rootRoute
-    }
-    '/signup': {
-      preLoaderRoute: typeof SignupImport
-      parentRoute: typeof rootRoute
-    }
-    '/_layout/admin': {
-      preLoaderRoute: typeof LayoutAdminImport
-      parentRoute: typeof LayoutImport
-    }
     '/_layout/assets': {
       preLoaderRoute: typeof LayoutAssetsImport
       parentRoute: typeof LayoutImport
@@ -124,10 +68,6 @@ declare module '@tanstack/react-router' {
     }
     '/_layout/pipelines': {
       preLoaderRoute: typeof LayoutPipelinesImport
-      parentRoute: typeof LayoutImport
-    }
-    '/_layout/settings': {
-      preLoaderRoute: typeof LayoutSettingsImport
       parentRoute: typeof LayoutImport
     }
     '/_layout/': {
@@ -145,18 +85,12 @@ declare module '@tanstack/react-router' {
 
 export const routeTree = rootRoute.addChildren([
   LayoutRoute.addChildren([
-    LayoutAdminRoute,
     LayoutAssetsRoute,
     LayoutMapRoute,
     LayoutPipelinesRoute,
-    LayoutSettingsRoute,
     LayoutIndexRoute,
     LayoutPipelinePipelineIdRoute,
   ]),
-  LoginRoute,
-  RecoverPasswordRoute,
-  ResetPasswordRoute,
-  SignupRoute,
 ])
 
 /* prettier-ignore-end */

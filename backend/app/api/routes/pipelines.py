@@ -30,30 +30,15 @@ def _collect_task_ids(result):
 
 @router.get("/", response_model=PipelinesPublic)
 def read_pipelines(
-    session: SessionDep, current_user: CurrentUser, skip: int = 0, limit: int = 100
+    session: SessionDep, skip: int = 0, limit: int = 100
 ) -> Any:
     """
     Retrieve pipelines.
     """
-    if current_user.is_superuser:
-        count_statement = select(func.count()).select_from(Pipeline)
-        count = session.exec(count_statement).one()
-        statement = select(Pipeline).offset(skip).limit(limit)
-        pipelines = session.exec(statement.order_by(Pipeline.title.asc())).all()
-    else:
-        count_statement = (
-            select(func.count())
-            .select_from(Pipeline)
-            .where(Pipeline.owner_id == current_user.id)
-        )
-        count = session.exec(count_statement).one()
-        statement = (
-            select(Pipeline)
-            .where(Pipeline.owner_id == current_user.id)
-            .offset(skip)
-            .limit(limit)
-        )
-        pipelines = session.exec(statement.order_by(Pipeline.title.asc())).all()
+    count_statement = select(func.count()).select_from(Pipeline)
+    count = session.exec(count_statement).one()
+    statement = select(Pipeline).offset(skip).limit(limit)
+    pipelines = session.exec(statement.order_by(Pipeline.title.asc())).all()
 
     return PipelinesPublic(data=pipelines, count=count)
 
@@ -219,7 +204,7 @@ def create_pipeline_batch(
 
 @router.post("/batch/{batch_id}/finalize", response_model=Any)
 def finalize_pipeline_batch(
-    *, session: SessionDep, current_user: CurrentUser, batch_id: uuid.UUID
+    *, session: SessionDep, batch_id: uuid.UUID
 ) -> Any:
     """Rebuild the combined tileset for a batch from whatever child tilesets exist."""
     pipeline = session.exec(
@@ -227,8 +212,6 @@ def finalize_pipeline_batch(
     ).first()
     if not pipeline:
         raise HTTPException(status_code=404, detail="Batch not found")
-    if not current_user.is_superuser and (pipeline.owner_id != current_user.id):
-        raise HTTPException(status_code=400, detail="Not enough permissions")
     prefix = (pipeline.source or {}).get('batch_output_prefix')
     if not prefix:
         raise HTTPException(status_code=422, detail="Batch has no output prefix")
@@ -241,7 +224,7 @@ def finalize_pipeline_batch(
 
 @router.put("/batch/{batch_id}", response_model=Any)
 def update_pipeline_batch(
-    *, session: SessionDep, current_user: CurrentUser, batch_id: uuid.UUID, pipeline_in: PipelineUpdate
+    *, session: SessionDep, batch_id: uuid.UUID, pipeline_in: PipelineUpdate
 ) -> Any:
     """Apply one config to every pipeline in a batch."""
     pipelines = session.exec(select(Pipeline).where(Pipeline.batch_id == batch_id)).all()
@@ -249,8 +232,6 @@ def update_pipeline_batch(
         raise HTTPException(status_code=404, detail="Batch not found")
     update_dict = pipeline_in.model_dump(exclude_unset=True)
     for pipeline in pipelines:
-        if not current_user.is_superuser and (pipeline.owner_id != current_user.id):
-            raise HTTPException(status_code=400, detail="Not enough permissions")
         pipeline.sqlmodel_update(update_dict)
         session.add(pipeline)
     session.commit()
@@ -259,7 +240,7 @@ def update_pipeline_batch(
 
 @router.get("/vector-fields", response_model=Any)
 def vector_fields(
-    *, current_user: CurrentUser, key: str | None = None, prefix: str | None = None
+    *, key: str | None = None, prefix: str | None = None
 ) -> Any:
     """Attribute schema + first-feature sample for a bucket vector, for the
     expression editor. A prefix resolves to the first polygon file under it."""
@@ -282,7 +263,7 @@ def vector_fields(
 
 @router.post("/{id}/task/{action_type}", response_model=Any)
 async def process_pipeline_task(
-    *, session: SessionDep, current_user: CurrentUser, id: uuid.UUID, action_type: PipelinesActionTypes
+    *, session: SessionDep, id: uuid.UUID, action_type: PipelinesActionTypes
 ) -> Any:
     """
     Run/cancel the pipeline task.
@@ -290,8 +271,6 @@ async def process_pipeline_task(
     pipeline = session.get(Pipeline, id)
     if not pipeline:
         raise HTTPException(status_code=404, detail="Pipeline not found")
-    if not current_user.is_superuser and (pipeline.owner_id != current_user.id):
-        raise HTTPException(status_code=400, detail="Not enough permissions")
 
     source = pipeline.source or {}
     is_source = not pipeline.asset_id
@@ -301,8 +280,6 @@ async def process_pipeline_task(
         asset = session.get(Asset, pipeline.asset_id)
         if not asset:
             raise HTTPException(status_code=404, detail="There is not asset associated with this pipeline")
-        if not current_user.is_superuser and (asset.owner_id != current_user.id):
-            raise HTTPException(status_code=400, detail="Not enough permissions for linked asset")
 
     pipeline_out = {}
     try:
@@ -371,7 +348,6 @@ async def process_pipeline_task(
 def update_pipeline(
     *,
     session: SessionDep,
-    current_user: CurrentUser,
     id: uuid.UUID,
     pipeline_in: PipelineUpdate,
 ) -> Any:
@@ -381,8 +357,6 @@ def update_pipeline(
     pipeline = session.get(Pipeline, id)
     if not pipeline:
         raise HTTPException(status_code=404, detail="Pipeline not found")
-    if not current_user.is_superuser and (pipeline.owner_id != current_user.id):
-        raise HTTPException(status_code=400, detail="Not enough permissions")
     update_dict = pipeline_in.model_dump(exclude_unset=True)
     pipeline.sqlmodel_update(update_dict)
     session.add(pipeline)
@@ -391,20 +365,16 @@ def update_pipeline(
     return pipeline
 
 @router.get("/{id}", response_model=PipelinePublicExtended)
-def read_pipeline(session: SessionDep, current_user: CurrentUser, id: uuid.UUID) -> Any:
+def read_pipeline(session: SessionDep, id: uuid.UUID) -> Any:
     """
     Get pipeline by ID.
     """
     pipeline = session.get(Pipeline, id)
     if not pipeline:
         raise HTTPException(status_code=404, detail="Pipeline not found")
-    if not current_user.is_superuser and (pipeline.owner_id != current_user.id):
-        raise HTTPException(status_code=400, detail="Not enough permissions")
     asset = session.get(Asset, pipeline.asset_id)
     if not asset:
         raise HTTPException(status_code=404, detail="There is not asset associated with this pipeline")
-    if not current_user.is_superuser and (asset.owner_id != current_user.id):
-        raise HTTPException(status_code=400, detail="Not enough permissions for linked asset")
     pipeline_in = pipeline.model_dump()
     pipeline_extended = PipelinePublicExtended.model_validate(
         {**pipeline_in, "asset": asset},
@@ -433,7 +403,7 @@ def read_pipeline(session: SessionDep, current_user: CurrentUser, id: uuid.UUID)
 
 @router.delete("/{id}")
 def delete_pipeline(
-    session: SessionDep, current_user: CurrentUser, id: uuid.UUID
+    session: SessionDep, id: uuid.UUID
 ) -> Message:
     """
     Delete an pipeline.
@@ -441,8 +411,6 @@ def delete_pipeline(
     pipeline = session.get(Pipeline, id)
     if not pipeline:
         raise HTTPException(status_code=404, detail="Pipeline not found")
-    if not current_user.is_superuser and (pipeline.owner_id != current_user.id):
-        raise HTTPException(status_code=400, detail="Not enough permissions")
 
     source = pipeline.source or {}
     output_prefix = source.get('output_base') or output_key(str(pipeline.id))

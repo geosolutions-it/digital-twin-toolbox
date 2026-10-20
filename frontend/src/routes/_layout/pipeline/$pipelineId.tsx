@@ -2,7 +2,6 @@ import { Box, Divider, Flex } from "@chakra-ui/react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import { PipelinesService } from "../../../client"
-import { hideUserSections } from "../../../utils"
 import PointCloudCanvas from "../../../components/Viewer/PointCloudCanvas"
 // Other pipeline viewers hidden for now (point-cloud focus):
 // import PointGeometryCanvas from "../../../components/Viewer/PointGeometryCanvas"
@@ -69,7 +68,7 @@ function Pipeline() {
     <Box w="100%" pos="relative" h="calc(var(--dtt-vh))" m="0">
       <Flex pos="absolute" w="100%" h="100%">
         <Box
-          w={hideUserSections() ? "100%" : "calc(100% - 74px)"}
+          w="100%"
           pos="relative"
         >
           <Flex pos="absolute" w="100%" h="100%">
