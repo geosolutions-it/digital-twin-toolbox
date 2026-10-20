@@ -33,17 +33,10 @@ WORKDIR /app/
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         libgdal36 \
-        wget \
-        unzip \
         ca-certificates && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/.venv /app/.venv
-
-RUN cd /bin && \
-    wget https://github.com/Geodan/i3dm.export/releases/download/v2.11.0/i3dm.export-linux-x64.zip && \
-    unzip ./i3dm.export-linux-x64.zip && \
-    rm -rf ./i3dm.export-linux-x64.zip
 
 COPY ./scripts/ /app/
 COPY ./alembic.ini /app/

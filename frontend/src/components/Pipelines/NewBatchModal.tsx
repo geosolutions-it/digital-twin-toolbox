@@ -29,7 +29,7 @@ import { PipelinesService } from "../../client"
 import useCustomToast from "../../hooks/useCustomToast"
 import InputExpression from "../Viewer/InputExpression"
 
-type PipelineType = "PointCloud" | "Polygon" | "Terrain"
+type PipelineType = "PointCloud" | "Polygon" | "Terrain" | "Instance"
 
 interface NewBatchModalProps {
   isOpen: boolean
@@ -63,6 +63,11 @@ interface BatchFormValues {
   max_zoom?: string
   vertex_normals?: boolean
   water_key?: string
+  model?: any
+  models_prefix?: string
+  scale?: any
+  rotation?: any
+  translate_z?: any
 }
 
 function heightValue(v: any): number | any[] | undefined {
@@ -89,6 +94,11 @@ const EMPTY: BatchFormValues = {
   max_zoom: "",
   vertex_normals: true,
   water_key: "",
+  model: "",
+  models_prefix: "",
+  scale: "",
+  rotation: "",
+  translate_z: "",
 }
 
 function buildData(values: BatchFormValues, type: PipelineType): Record<string, unknown> {
@@ -98,6 +108,20 @@ function buildData(values: BatchFormValues, type: PipelineType): Record<string, 
     if (values.max_zoom) data.max_zoom = Number(values.max_zoom)
     data.vertex_normals = !!values.vertex_normals
     if (values.water_key) data.water_key = values.water_key
+    return data
+  }
+  if (type === "Instance") {
+    if (values.model) data.model = values.model
+    if (values.models_prefix) data.models_prefix = values.models_prefix
+    const scale = heightValue(values.scale)
+    const rotation = heightValue(values.rotation)
+    const tz = heightValue(values.translate_z)
+    if (scale !== undefined) data.scale = scale
+    if (rotation !== undefined) data.rotation = rotation
+    if (tz !== undefined) data.translate_z = tz
+    if (values.to_ellipsoidal_height) data.to_ellipsoidal_height = true
+    if (values.max_features_per_tile) data.max_features_per_tile = Number(values.max_features_per_tile)
+    if (values.max_geometric_error) data.max_geometric_error = Number(values.max_geometric_error)
     return data
   }
   if (type === "Polygon") {
@@ -158,7 +182,7 @@ const NewBatchModal = ({
   }, [isOpen, initialPrefix, initialValues, pipelineType, edit, reset])
 
   const watchedType = watch("pipelineType")
-  const type: PipelineType = pipelineType ?? watchedType ?? "PointCloud"
+  const baseType: PipelineType = pipelineType ?? watchedType ?? "PointCloud"
 
   const fieldsParam: { key?: string; prefix?: string } | null = fileKey
     ? { key: fileKey }
@@ -167,13 +191,17 @@ const NewBatchModal = ({
       : !edit
         ? { prefix: initialPrefix }
         : null
+  const vectorLike = baseType === "Polygon" || baseType === "Instance"
   const { data: vectorFields } = useQuery({
     queryKey: ["vector-fields", fieldsParam],
     queryFn: () => getVectorFields(fieldsParam!),
-    enabled: isOpen && type === "Polygon" && !!(fieldsParam?.key || fieldsParam?.prefix),
+    enabled: isOpen && vectorLike && !!(fieldsParam?.key || fieldsParam?.prefix),
     staleTime: 60000,
   })
   const properties = vectorFields?.properties ?? {}
+  // a point layer can only be instanced, never extruded; upgrade Polygon -> Instance
+  const type: PipelineType =
+    baseType === "Polygon" && (vectorFields as any)?.geometry_type === "Point" ? "Instance" : baseType
 
   const mutation = useMutation({
     mutationFn: async ({ values, run }: { values: BatchFormValues; run: boolean }) => {
@@ -268,6 +296,7 @@ const NewBatchModal = ({
               <Select id="pipelineType" {...register("pipelineType")}>
                 <option value="PointCloud">Point cloud</option>
                 <option value="Polygon">Polygon</option>
+                <option value="Instance">Point instance</option>
                 <option value="Terrain">Terrain</option>
               </Select>
             </FormControl>
@@ -279,7 +308,70 @@ const NewBatchModal = ({
             </FormControl>
           )}
 
-          {type === "Terrain" ? (
+          {type === "Instance" ? (
+            <>
+              <Text fontSize="xs" color="gray.500">
+                Point layer: each point places a glb model, instanced in 3D Tiles.
+              </Text>
+              <FormControl>
+                <FormLabel>Model (bucket key or attribute)</FormLabel>
+                <Controller
+                  control={control}
+                  name="model"
+                  render={({ field }) => (
+                    <InputExpression id="model" type="string" properties={properties} value={field.value} onChange={field.onChange} />
+                  )}
+                />
+              </FormControl>
+              <FormControl>
+                <FormLabel htmlFor="models_prefix">Models prefix (optional)</FormLabel>
+                <Input id="models_prefix" placeholder="e.g. models/" fontFamily="mono" fontSize="sm" {...register("models_prefix")} />
+              </FormControl>
+              <FormControl>
+                <FormLabel>Scale (optional)</FormLabel>
+                <Controller
+                  control={control}
+                  name="scale"
+                  render={({ field }) => (
+                    <InputExpression id="scale" type="number" properties={properties} value={field.value} onChange={field.onChange} />
+                  )}
+                />
+              </FormControl>
+              <FormControl>
+                <FormLabel>Rotation (deg, optional)</FormLabel>
+                <Controller
+                  control={control}
+                  name="rotation"
+                  render={({ field }) => (
+                    <InputExpression id="rotation" type="number" properties={properties} value={field.value} onChange={field.onChange} />
+                  )}
+                />
+              </FormControl>
+              <FormControl>
+                <FormLabel>Height offset (m, optional)</FormLabel>
+                <Controller
+                  control={control}
+                  name="translate_z"
+                  render={({ field }) => (
+                    <InputExpression id="translate_z" type="number" properties={properties} value={field.value} onChange={field.onChange} />
+                  )}
+                />
+              </FormControl>
+              <FormControl>
+                <Checkbox {...register("to_ellipsoidal_height")}>
+                  Convert heights to ellipsoidal (EGM2008)
+                </Checkbox>
+              </FormControl>
+              <FormControl>
+                <FormLabel htmlFor="max_features_per_tile">Max instances per tile (optional)</FormLabel>
+                <Input id="max_features_per_tile" type="number" placeholder="25000" {...register("max_features_per_tile")} />
+              </FormControl>
+              <FormControl>
+                <FormLabel htmlFor="max_geometric_error">Max geometric error (optional)</FormLabel>
+                <Input id="max_geometric_error" type="number" placeholder="500" {...register("max_geometric_error")} />
+              </FormControl>
+            </>
+          ) : type === "Terrain" ? (
             <>
               <FormControl>
                 <FormLabel htmlFor="max_zoom">Max zoom (optional)</FormLabel>

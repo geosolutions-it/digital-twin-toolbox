@@ -400,4 +400,9 @@ def read_vector_fields(options):
         if feat is not None:
             for f in fields:
                 properties[f['name']] = _coerce(feat.GetField(f['name']))
-        return {'count': layer.GetFeatureCount(), 'fields': fields, 'properties': properties}
+        name = ogr.GeometryTypeToName(layer.GetGeomType())
+        if 'Unknown' in name and feat is not None and feat.GetGeometryRef() is not None:
+            name = feat.GetGeometryRef().GetGeometryName()
+        geometry_type = 'Point' if 'Point' in name else 'Polygon' if 'Polygon' in name else name
+        return {'count': layer.GetFeatureCount(), 'fields': fields,
+                'properties': properties, 'geometry_type': geometry_type}

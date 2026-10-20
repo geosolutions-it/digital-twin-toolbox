@@ -225,7 +225,7 @@ type EditTarget =
 
 function pipelineType(p: Pipeline): PipelineType {
   const t = p?.source?.pipeline
-  if (t === "Polygon" || t === "Terrain") return t
+  if (t === "Polygon" || t === "Terrain" || t === "Instance") return t
   return "PointCloud"
 }
 
@@ -247,6 +247,11 @@ function dataToValues(d: any): Partial<BatchFormValues> {
     max_zoom: num(d?.max_zoom),
     vertex_normals: d?.vertex_normals !== false,
     water_key: d?.water_key || "",
+    model: expr(d?.model) || (typeof d?.model === "string" ? d.model : ""),
+    models_prefix: d?.models_prefix || "",
+    scale: expr(d?.scale),
+    rotation: expr(d?.rotation),
+    translate_z: expr(d?.translate_z),
   }
 }
 

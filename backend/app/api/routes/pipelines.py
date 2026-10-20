@@ -74,6 +74,7 @@ _SOURCE_TASK = {
     "PointCloud": "create_point_cloud_3dtiles",
     "Polygon": "create_polygon_3dtiles",
     "Terrain": "create_terrain_tiles",
+    "Instance": "create_point_instance_3dtiles",
 }
 
 
@@ -92,6 +93,8 @@ def create_pipeline_source(
         raise HTTPException(status_code=404, detail=f"No such file: {source_in.key!r}")
 
     pipeline_type = classify_bucket_file(storage, source_in.key)
+    if source_in.pipeline == "Instance" and pipeline_type == "Polygon":
+        pipeline_type = "Instance"
     dispatch_task = _SOURCE_TASK.get(pipeline_type)
     if dispatch_task is None:
         raise HTTPException(status_code=422, detail=f"Unsupported file: {source_in.key!r}")
@@ -151,7 +154,10 @@ def create_pipeline_batch(
     storage = get_storage()
     candidates = [k for k in storage.list(batch_in.prefix) if k.lower().endswith(SUPPORTED_EXTENSIONS)]
     classified = [(k, classify_bucket_file(storage, k)) for k in candidates]
-    classified = [(k, t) for k, t in classified if t in _SOURCE_TASK]
+    if batch_in.pipeline == "Instance":
+        classified = [(k, "Instance") for k, t in classified if t == "Polygon"]
+    else:
+        classified = [(k, t) for k, t in classified if t in _SOURCE_TASK]
     if not classified:
         raise HTTPException(status_code=404, detail=f"No supported files under prefix {batch_in.prefix!r}")
 
