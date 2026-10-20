@@ -39,7 +39,7 @@ vector = [
     "quantized-mesh-tile>=0.7.0,<1.0.0",
 ]
 pointcloud = [
-    "py3dtiles[las,ply,postgres]>=8.0.2,<9.0.0",
+    "py3dtiles[las,ply]>=8.0.2,<9.0.0",
     "laspy[laszip]>=2.5.4,<3.0.0",
 ]
 mesh = [

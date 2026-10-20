@@ -1,7 +1,7 @@
 
 services:
   db:
-    image: postgis/postgis:12-3.4
+    image: postgres:12
     restart: always
     platform: linux/amd64 # Patch for M1 Mac
     volumes:
@@ -13,7 +13,6 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD?Variable not set}
       - POSTGRES_USER=${POSTGRES_USER?Variable not set}
       - POSTGRES_DB=${POSTGRES_DB?Variable not set}
-      - POSTGRES_TASKS_DB=${POSTGRES_TASKS_DB?Variable not set}
 
 
   backend:

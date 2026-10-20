@@ -11,9 +11,6 @@ from pyproj import CRS
 from app.core.config import settings
 from app.core.storage import get_storage, output_key
 from app.worker.common.expression import parse_expression
-from app.worker.common.processes import (
-    export_geojson_from_postgres, import_vector_to_postgres,
-)
 from app.worker.common.utils import get_asset_upload_path
 from app.worker.main import celery, AssetDatabaseTask, PipelineDatabaseTask
 from app.worker.tasks.vector.gltf.geo import LocalFrame
@@ -23,6 +20,27 @@ from app.worker.tasks.vector.polygon.polyhedron import geometry_to_polyhedral_su
 
 def _empty_payload():
     return {'metadata': False, 'stats': False, 'sample': False, 'epsg': None, 'horizontal_epsg': None, 'vertical_epsg': None}
+
+
+def _write_vector_sample(source_path, output_path, epsg, to_ellipsoidal_height, limit):
+    kwargs = dict(format='GeoJSON', dstSRS='EPSG:4326', dim='XYZ')
+    if to_ellipsoidal_height:
+        kwargs['srcSRS'] = f'EPSG:{epsg}+3855'
+        kwargs['dstSRS'] = 'EPSG:4326+4979'
+    if limit is not None:
+        kwargs['limit'] = limit
+
+    if os.path.isfile(output_path):
+        os.remove(output_path)
+
+    gdal.VectorTranslate(
+        output_path,
+        source_path,
+        options=gdal.VectorTranslateOptions(**kwargs),
+    )
+
+    if not os.path.isfile(output_path):
+        raise Exception("Sample not created")
 
 
 @celery.task(name="inspect_vector", base=AssetDatabaseTask)
@@ -94,17 +112,13 @@ def inspect_vector(options):
     with open(get_asset_upload_path(f"{asset_id}/metadata.json"), 'w') as f:
         json.dump(info, f)
 
-    table_name = f'asset_{asset_id}'.replace('-', '_')
-    geometry_column_name = 'geom'
-    fid_column_name = 'gid'
     size_kb = asset['content_size'] / 1024
     feature_count = layers[0]['featureCount']
     limit = None
     if size_kb > 1000:
-        limit = (feature_count * 1000) / size_kb
+        limit = round((feature_count * 1000) / size_kb)
 
-    import_vector_to_postgres(asset_file_path, table_name, geometry_column_name, fid_column_name, epsg, to_ellipsoidal_height)
-    export_geojson_from_postgres(get_asset_upload_path(f"{asset_id}/sample.json"), table_name, limit)
+    _write_vector_sample(asset_file_path, get_asset_upload_path(f"{asset_id}/sample.json"), epsg, to_ellipsoidal_height, limit)
 
     return {
         'asset_type': asset_type,

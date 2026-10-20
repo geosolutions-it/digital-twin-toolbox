@@ -64,16 +64,6 @@ def get_asset_upload_path(pathname):
     return os.path.join(settings.ASSETS_DATA, "upload", pathname)
 
 
-def get_asset_table_name(asset_id):
-    id = f"{asset_id}".replace('-', '_')
-    return f'asset_{id}'
-
-
-def get_pipeline_table_name(pipeline_id):
-    id = f"{pipeline_id}".replace('-', '_')
-    return f'pipeline_{id}'
-
-
 def get_process_dir(pipeline_id):
     """Path of the shared per-pipeline process dir (no side effects, unlike setup_output_directory)."""
     return os.path.join(settings.ASSETS_DATA, "output", f"{pipeline_id}", "process")
