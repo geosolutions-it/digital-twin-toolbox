@@ -8,6 +8,10 @@ import {
   IconButton,
   Radio,
   RadioGroup,
+  Slider,
+  SliderFilledTrack,
+  SliderThumb,
+  SliderTrack,
   Stack,
   Text,
   Tooltip,
@@ -109,6 +113,60 @@ function buildLayers(items: any[]): Layer[] {
   return layers
 }
 
+// Rendering options for point-cloud tilesets, tweakable live to inspect refinement.
+type PcSettings = {
+  attenuation: boolean
+  eyeDome: boolean
+  classification: boolean
+  sse: number
+  boundingVolume: boolean
+  geometricError: boolean
+  statistics: boolean
+  memory: boolean
+}
+
+const DEFAULT_PC: PcSettings = {
+  attenuation: true,
+  eyeDome: true,
+  classification: false,
+  sse: 16,
+  boundingVolume: false,
+  geometricError: false,
+  statistics: false,
+  memory: false,
+}
+
+// Classification palette mirrors frontend/public/preview.html: ground/wheat, veg greens, buildings red.
+function classificationStyle(C: Cesium) {
+  return new C.Cesium3DTileStyle({
+    color: {
+      conditions: [
+        ["${Classification} === 1", "color('#FFDEAD')"],
+        ["${Classification} === 2", "color('#FFDEAD')"],
+        ["${Classification} === 3", "color('#63FF7E')"],
+        ["${Classification} === 4", "color('#63FF7E')"],
+        ["${Classification} === 5", "color('#22B33A')"],
+        ["${Classification} === 6", "color('#ff0000')"],
+        ["${Classification} === 7", "color('#808080')"],
+        ["${Classification} === 8", "color('#808080')"],
+        [true, "color('#808080')"],
+      ],
+    },
+  })
+}
+
+function applyPcSettings(C: Cesium, ts: CesiumNS.Cesium3DTileset, s: PcSettings) {
+  ts.maximumScreenSpaceError = s.sse
+  ts.pointCloudShading.attenuation = s.attenuation
+  ts.pointCloudShading.maximumAttenuation = 4
+  ts.pointCloudShading.eyeDomeLighting = s.eyeDome
+  ts.style = s.classification ? classificationStyle(C) : undefined
+  ts.debugShowBoundingVolume = s.boundingVolume
+  ts.debugShowGeometricError = s.geometricError
+  ts.debugShowRenderingStatistics = s.statistics
+  ts.debugShowMemoryUsage = s.memory
+}
+
 export default function CesiumMap() {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const viewerRef = useRef<CesiumNS.Viewer | null>(null)
@@ -116,6 +174,8 @@ export default function CesiumMap() {
   const tilesetsRef = useRef<Map<string, CesiumNS.Cesium3DTileset>>(new Map())
   const pendingZoom = useRef<string | null>(null)
   const flewRef = useRef(false)
+  // Mirror of pcSettings so the async tileset-load effect reads the latest without re-running.
+  const pcRef = useRef<PcSettings>(DEFAULT_PC)
 
   const [Cesium, setCesium] = useState<Cesium | null>(null)
   const [loadError, setLoadError] = useState(false)
@@ -131,6 +191,12 @@ export default function CesiumMap() {
   const [visible, setVisible] = useState<Record<string, boolean>>({})
   const [activeTerrain, setActiveTerrain] = useState("")
   const [basemap, setBasemap] = useState(true)
+  const [pc, setPc] = useState<PcSettings>(DEFAULT_PC)
+  const [debugOpen, setDebugOpen] = useState(false)
+
+  const hasPointCloud = tileLayers.some((l) => l.type === "PointCloud")
+  const setPcField = <K extends keyof PcSettings>(k: K, v: PcSettings[K]) =>
+    setPc((s) => ({ ...s, [k]: v }))
 
   useEffect(() => {
     loadCesium()
@@ -192,8 +258,7 @@ export default function CesiumMap() {
             tilesetsRef.current.set(layer.id, ts)
             viewer.scene.primitives.add(ts)
             if (layer.type === "PointCloud") {
-              ts.pointCloudShading.attenuation = true
-              ts.pointCloudShading.maximumAttenuation = 4
+              applyPcSettings(Cesium, ts, pcRef.current)
             }
             if (pendingZoom.current === layer.id) {
               pendingZoom.current = null
@@ -253,6 +318,18 @@ export default function CesiumMap() {
     imagery.show = basemap
     viewer.scene.requestRender()
   }, [basemap])
+
+  useEffect(() => {
+    pcRef.current = pc
+    const viewer = viewerRef.current
+    if (!Cesium || !viewer) return
+    for (const layer of tileLayers) {
+      if (layer.type !== "PointCloud") continue
+      const ts = tilesetsRef.current.get(layer.id)
+      if (ts) applyPcSettings(Cesium, ts, pc)
+    }
+    viewer.scene.requestRender()
+  }, [Cesium, pc, tileLayers])
 
   const zoomTo = (layer: Layer) => {
     const ts = tilesetsRef.current.get(layer.id)
@@ -342,6 +419,106 @@ export default function CesiumMap() {
               </Flex>
             ))}
           </Stack>
+        )}
+
+        {hasPointCloud && (
+          <>
+            <Divider my={3} borderColor="whiteAlpha.300" />
+            <Text fontSize="xs" opacity={0.7} mb={1}>
+              Point clouds
+            </Text>
+            <Stack spacing={1}>
+              <Checkbox
+                isChecked={pc.attenuation}
+                onChange={(e) => setPcField("attenuation", e.target.checked)}
+                size="sm"
+              >
+                Shading (attenuation)
+              </Checkbox>
+              <Checkbox
+                isChecked={pc.eyeDome}
+                onChange={(e) => setPcField("eyeDome", e.target.checked)}
+                size="sm"
+              >
+                Eye-dome lighting
+              </Checkbox>
+              <Checkbox
+                isChecked={pc.classification}
+                onChange={(e) => setPcField("classification", e.target.checked)}
+                size="sm"
+              >
+                Classification colors
+              </Checkbox>
+
+              <Flex align="center" justify="space-between" mt={1}>
+                <Text fontSize="xs" opacity={0.8}>
+                  Screen-space error
+                </Text>
+                <Text fontSize="xs" fontFamily="mono">
+                  {pc.sse}
+                </Text>
+              </Flex>
+              <Slider
+                aria-label="Maximum screen-space error"
+                min={1}
+                max={32}
+                step={1}
+                value={pc.sse}
+                onChange={(v) => setPcField("sse", v)}
+              >
+                <SliderTrack bg="whiteAlpha.300">
+                  <SliderFilledTrack bg="teal.300" />
+                </SliderTrack>
+                <SliderThumb boxSize={3} />
+              </Slider>
+              <Text fontSize="0.65rem" opacity={0.5}>
+                Lower = denser (more refinement), higher = sparser.
+              </Text>
+            </Stack>
+
+            <Flex align="center" justify="space-between" mt={2}>
+              <Text fontSize="xs" opacity={0.7}>
+                Debug
+              </Text>
+              <Checkbox
+                isChecked={debugOpen}
+                onChange={(e) => setDebugOpen(e.target.checked)}
+                size="sm"
+              />
+            </Flex>
+            {debugOpen && (
+              <Stack spacing={1} mt={1} pl={1}>
+                <Checkbox
+                  isChecked={pc.statistics}
+                  onChange={(e) => setPcField("statistics", e.target.checked)}
+                  size="sm"
+                >
+                  Rendering statistics
+                </Checkbox>
+                <Checkbox
+                  isChecked={pc.memory}
+                  onChange={(e) => setPcField("memory", e.target.checked)}
+                  size="sm"
+                >
+                  Memory usage
+                </Checkbox>
+                <Checkbox
+                  isChecked={pc.boundingVolume}
+                  onChange={(e) => setPcField("boundingVolume", e.target.checked)}
+                  size="sm"
+                >
+                  Bounding volumes
+                </Checkbox>
+                <Checkbox
+                  isChecked={pc.geometricError}
+                  onChange={(e) => setPcField("geometricError", e.target.checked)}
+                  size="sm"
+                >
+                  Geometric error
+                </Checkbox>
+              </Stack>
+            )}
+          </>
         )}
 
         <Divider my={3} borderColor="whiteAlpha.300" />

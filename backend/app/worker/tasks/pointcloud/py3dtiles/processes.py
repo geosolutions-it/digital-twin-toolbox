@@ -5,6 +5,10 @@ import struct
 
 from app.worker.common.utils import run_subprocess
 
+# Scale each node's geometricError up so tiles refine earlier; worst-case on-screen
+# spacing becomes about 16/GE_SPACING_SCALE px at Cesium's default MSSE. Higher is denser.
+GE_SPACING_SCALE = 2.0
+
 
 def _pnts_point_count(pnts_path):
     try:
@@ -43,8 +47,8 @@ def _node_spacing(node, base_dir):
 
 
 def _recompute_geometric_error(tileset_path):
-    """Set each node's geometricError to its real point spacing (leaves 0), so the
-    tileset refines correctly at Cesium's default maximumScreenSpaceError. Recurses
+    """Set each node's geometricError from its real point spacing, scaled by
+    GE_SPACING_SCALE so tiles refine before they look sparse (leaves 0). Recurses
     into external sub-tilesets. Returns the root's geometricError."""
     base_dir = os.path.dirname(tileset_path)
     with open(tileset_path) as f:
@@ -60,7 +64,7 @@ def _recompute_geometric_error(tileset_path):
             node["geometricError"] = sub if sub is not None else node.get("geometricError", 0.0)
         elif node.get("children"):
             sp = _node_spacing(node, base_dir)
-            node["geometricError"] = sp if sp is not None else node.get("geometricError", 0.0)
+            node["geometricError"] = sp * GE_SPACING_SCALE if sp is not None else node.get("geometricError", 0.0)
         else:
             node["geometricError"] = 0.0
 

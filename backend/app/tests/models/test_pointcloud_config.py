@@ -20,6 +20,18 @@ def test_coercion_and_extra_ignored():
     assert not hasattr(c, "geometric_error_scale_factor")
 
 
+def test_blank_sample_radius_is_auto():
+    assert PointCloudConfig(sample_radius="").sample_radius is None
+    assert PointCloudConfig(sample_radius="  ").sample_radius is None
+
+
+def test_fallback_epsg():
+    assert PointCloudConfig().horizontal_epsg is None
+    assert PointCloudConfig(horizontal_epsg="").horizontal_epsg is None
+    c = PointCloudConfig(horizontal_epsg="25833", vertical_epsg="5773")
+    assert c.horizontal_epsg == 25833 and c.vertical_epsg == 5773
+
+
 def test_invalid_raises():
     with pytest.raises(ValidationError):
         PointCloudConfig(sample_radius="not-a-number")

@@ -6,6 +6,10 @@ from pyproj import CRS
 from app.worker.tasks.pointcloud.crs import resolve_epsg_codes_from_pdal_metadata
 from app.worker.common.utils import run_subprocess
 
+# With no radius given, auto-pick this percentile of per-point nearest-neighbor distance,
+# thinning only the densest excess (near-duplicate points) down to the typical spacing.
+AUTO_SAMPLE_PERCENTILE = 90
+
 
 def pdal_metadata(file_path):
     result = run_subprocess(
@@ -147,3 +151,40 @@ def process_las(work_dir, input_path, sample_radius=None, to_ellipsoidal_height=
         raise Exception("Processed LAS not created")
 
     return output_processed_laz_path
+
+
+def compute_auto_sample_radius(work_dir, input_path):
+    """Estimate a sample radius from the cloud's nearest-neighbor spacing (computed on the
+    full cloud, output decimated for the percentile). Returns a radius in CRS units or None."""
+    nn_csv = os.path.join(work_dir, 'nndistance.csv')
+    pipeline = [
+        {"filename": input_path, "type": 'readers.las'},
+        {"type": 'filters.nndistance', "mode": 'kth', "k": 1},
+        {"type": 'filters.decimation', "step": 25},
+        {"type": 'writers.text', "format": 'csv', "order": 'NNDistance', "keep_unspecified": False, "filename": nn_csv},
+    ]
+    pipeline_path = os.path.join(work_dir, 'nndistance.pipeline.json')
+    with open(pipeline_path, "w") as f:
+        json.dump(pipeline, f)
+
+    run_subprocess(['pdal', 'pipeline', pipeline_path], capture_output=True, text=True)
+    if not os.path.isfile(nn_csv):
+        return None
+
+    values = []
+    with open(nn_csv) as f:
+        next(f, None)
+        for line in f:
+            try:
+                v = float(line.strip())
+            except ValueError:
+                continue
+            if v > 0 and math.isfinite(v):
+                values.append(v)
+    if not values:
+        return None
+
+    values.sort()
+    rank = int(round((AUTO_SAMPLE_PERCENTILE / 100.0) * (len(values) - 1)))
+    rank = max(0, min(len(values) - 1, rank))
+    return values[rank]

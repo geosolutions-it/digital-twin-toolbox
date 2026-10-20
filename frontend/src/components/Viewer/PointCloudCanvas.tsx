@@ -175,7 +175,8 @@ function PointCloudCanvas({
     to_ellipsoidal_height: false,
     ground_classification: false,
     sample_radius: undefined,
-    geometric_error_scale_factor: 1,
+    horizontal_epsg: undefined,
+    vertical_epsg: undefined,
     ...pipeline.data,
   })
 
@@ -279,7 +280,7 @@ function PointCloudCanvas({
           )}
           <FormControl mt={2} mb={2}>
             <FormLabel fontSize="xs" htmlFor="sample_radius">
-              Sample radius
+              Sample radius (empty = auto)
             </FormLabel>
             <Input
               id="sample_radius"
@@ -288,6 +289,36 @@ function PointCloudCanvas({
               defaultValue={data?.sample_radius}
               onChange={(event) =>
                 handleOnChange("sample_radius", event.target.value)
+              }
+            />
+          </FormControl>
+          <FormControl mt={2} mb={2}>
+            <FormLabel fontSize="xs" htmlFor="horizontal_epsg">
+              CRS EPSG (only if the cloud has none)
+            </FormLabel>
+            <Input
+              id="horizontal_epsg"
+              size="xs"
+              type="number"
+              placeholder="e.g. 25833"
+              defaultValue={data?.horizontal_epsg}
+              onChange={(event) =>
+                handleOnChange("horizontal_epsg", event.target.value)
+              }
+            />
+          </FormControl>
+          <FormControl mt={2} mb={2}>
+            <FormLabel fontSize="xs" htmlFor="vertical_epsg">
+              Vertical EPSG (optional)
+            </FormLabel>
+            <Input
+              id="vertical_epsg"
+              size="xs"
+              type="number"
+              placeholder="e.g. 5773"
+              defaultValue={data?.vertical_epsg}
+              onChange={(event) =>
+                handleOnChange("vertical_epsg", event.target.value)
               }
             />
           </FormControl>
@@ -323,24 +354,6 @@ function PointCloudCanvas({
               Ground classification
             </Checkbox>
           </Flex>
-          <Divider />
-          <FormControl mt={2} mb={2}>
-            <FormLabel fontSize="xs" htmlFor="geometric_error_scale_factor">
-              Geometric error scale factor
-            </FormLabel>
-            <Input
-              id="geometric_error_scale_factor"
-              size="xs"
-              type="number"
-              value={data?.geometric_error_scale_factor}
-              onChange={(event) =>
-                handleOnChange(
-                  "geometric_error_scale_factor",
-                  event.target.value,
-                )
-              }
-            />
-          </FormControl>
           <Divider />
           <Text fontSize="sm" fontWeight="bold" mb={2} mt={2}>
             Preview

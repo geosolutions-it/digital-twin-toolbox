@@ -435,12 +435,12 @@ const NewBatchModal = ({
           ) : (
             <>
               <FormControl>
-                <FormLabel htmlFor="sample_radius">Sample radius (m, optional)</FormLabel>
+                <FormLabel htmlFor="sample_radius">Sample radius (m, empty = auto)</FormLabel>
                 <Input
                   id="sample_radius"
                   type="number"
                   step="0.01"
-                  placeholder="e.g. 0.05"
+                  placeholder="auto"
                   {...register("sample_radius")}
                 />
               </FormControl>

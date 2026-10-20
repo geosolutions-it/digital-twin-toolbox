@@ -12,7 +12,7 @@ from app.worker.main import celery, PipelineDatabaseTask, AssetDatabaseTask
 from app.worker.tasks.pointcloud.crs import resolve_epsg_codes_from_pdal_metadata
 from app.worker.tasks.pointcloud.pdal.processes import (
     pdal_metadata, pdal_stats, point_cloud_preview, process_las, resolve_asset_crs,
-    detect_point_attributes, resolve_crs_from_file,
+    detect_point_attributes, resolve_crs_from_file, compute_auto_sample_radius,
 )
 from app.worker.tasks.pointcloud.py3dtiles.processes import py3dtiles_convert
 
@@ -117,8 +117,12 @@ def create_point_cloud_3dtiles(pipeline_extended):
         input_file = _materialize(storage, input_key, scratch, f"index{extension}")
 
         horizontal_epsg, vertical_epsg = _resolve_crs(pipeline_extended, input_file)
+        # some clouds ship without a CRS in the header: fall back to the one set in the config
+        if not horizontal_epsg and config.horizontal_epsg:
+            horizontal_epsg = config.horizontal_epsg
+            vertical_epsg = vertical_epsg or config.vertical_epsg
         if not horizontal_epsg:
-            raise Exception('Not recognized Point Cloud CRS')
+            raise Exception('Point cloud has no CRS. Set its EPSG code in the config and re-run.')
 
         colorization_image_path = None
         if config.colorization_image:
@@ -128,9 +132,14 @@ def create_point_cloud_3dtiles(pipeline_extended):
             if not colorization_image_path:
                 raise Exception(f"Colorization raster not found: {config.colorization_image!r}")
 
+        # no radius given: auto-pick one from the cloud's spacing to drop redundant points
+        sample_radius = config.sample_radius
+        if sample_radius is None:
+            sample_radius = compute_auto_sample_radius(scratch, input_file)
+
         processed_file = process_las(
             scratch, input_file,
-            sample_radius=config.sample_radius,
+            sample_radius=sample_radius,
             to_ellipsoidal_height=config.to_ellipsoidal_height,
             horizontal_epsg=horizontal_epsg, vertical_epsg=vertical_epsg,
             colorization_image=colorization_image_path,
@@ -159,4 +168,6 @@ def create_point_cloud_3dtiles(pipeline_extended):
         'output': out_base,
         'tileset': f"{base}/{out_base}/tiles/tileset.json",
         'download': f"{base}/{out_base}/download.zip",
+        'sample_radius': sample_radius,
+        'sample_radius_auto': config.sample_radius is None,
     }
