@@ -25,8 +25,8 @@ import {
   Points,
   SRGBColorSpace,
 } from "three"
-import { AssetsService } from "../../client"
-import type { PipelinePublicExtended } from "../../client"
+import { readAssetSample, readAssets } from "../../api"
+import type { PipelinePublicExtended } from "../../api"
 import {
   celeryTaskStatusColor,
   celeryTaskStatusLabel,
@@ -54,7 +54,7 @@ const mapValue = (
 const SelectImage = React.forwardRef((props: any, ref) => {
   const { data: images } = useQuery({
     queryFn: () =>
-      AssetsService.readAssets({
+      readAssets({
         skip: 0,
         limit: 9999,
         extension: ".tif,.tiff",
@@ -93,7 +93,7 @@ function PointCloudCanvas({
   assetId,
 }: PolygonGeometryCanvasProps) {
   const { data: text, isPending } = useQuery({
-    queryFn: () => AssetsService.readAssetSample({ id: assetId }),
+    queryFn: () => readAssetSample(assetId),
     queryKey: ["pipeline-asset-sample", assetId],
   })
 

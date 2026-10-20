@@ -20,15 +20,13 @@ import React from "react"
 import { FiDownload } from "react-icons/fi"
 import { InstancedMesh, MathUtils, Object3D } from "three"
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
-import { AssetsService } from "../../client"
-import type { PipelinePublicExtended } from "../../client"
+import { API_BASE, readAssetSample, readAssets } from "../../api"
+import type { PipelinePublicExtended } from "../../api"
 import {
   celeryTaskStatusColor,
   celeryTaskStatusLabel,
   isCeleryTaskInProgress,
 } from "../../utils/celeryStatus"
-import { OpenAPI } from "../../client/core/OpenAPI"
-import { getHeaders } from "../../client/core/request.js"
 import {
   convertToCartesian,
   translateAndRotate,
@@ -83,25 +81,20 @@ const dummy = new Object3D()
 const loader = new GLTFLoader()
 
 const loadGLB = (model: string) => {
-  return getHeaders(OpenAPI, { method: "GET", url: "" }).then((headers) => {
-    loader.requestHeader = {
-      Authorization: headers.Authorization,
-    }
-    return new Promise((resolve, reject) => {
-      loader.load(
-        `${OpenAPI.BASE}/api/v1/assets/files/${model}`,
-        (glb) => {
-          resolve(glb)
-        },
-        (xhr) => {
-          // progress
-          console.log(`${(xhr.loaded / xhr.total) * 100}% glb loaded`)
-        },
-        (error) => {
-          reject(error)
-        },
-      )
-    })
+  return new Promise((resolve, reject) => {
+    loader.load(
+      `${API_BASE}/api/v1/assets/files/${model}`,
+      (glb) => {
+        resolve(glb)
+      },
+      (xhr) => {
+        // progress
+        console.log(`${(xhr.loaded / xhr.total) * 100}% glb loaded`)
+      },
+      (error) => {
+        reject(error)
+      },
+    )
   })
 }
 
@@ -121,13 +114,13 @@ function PointGeometryCanvas({
   assetId,
 }: PointGeometryCanvasProps) {
   const { data: collection, isPending } = useQuery({
-    queryFn: () => AssetsService.readAssetSample({ id: assetId }),
+    queryFn: () => readAssetSample(assetId),
     queryKey: ["pipeline-asset-sample", assetId],
   })
 
   const { data: models, isPending: isModelPending } = useQuery({
     queryFn: () =>
-      AssetsService.readAssets({
+      readAssets({
         skip: 0,
         limit: 9999,
         extension: ".glb",

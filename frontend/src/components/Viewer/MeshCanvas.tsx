@@ -16,7 +16,7 @@ import {
 } from "@chakra-ui/react"
 import { useMemo, useRef, useState } from "react"
 import { FiDownload } from "react-icons/fi"
-import type { PipelinePublicExtended } from "../../client"
+import type { PipelinePublicExtended } from "../../api"
 import MeshMapPicker from "./MeshMapPicker"
 import { getPublicBasePath } from "../../utils"
 import {

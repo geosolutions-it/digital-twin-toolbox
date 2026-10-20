@@ -7,8 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "lint": "biome check --apply-unsafe --no-errors-on-unmatched --files-ignore-unknown=true ./",
-    "preview": "vite preview",
-    "generate-client": "node ./modify-openapi-operationids.js && openapi-ts --input ./openapi.json --output ./src/client --client axios --exportSchemas true && biome format --write ./src/client"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@chakra-ui/icons": "2.1.1",
@@ -33,7 +32,6 @@
   },
   "devDependencies": {
     "@biomejs/biome": "1.6.1",
-    "@hey-api/openapi-ts": "0.97.0",
     "@playwright/test": "^1.45.2",
     "@tanstack/router-devtools": "1.19.1",
     "@tanstack/router-vite-plugin": "1.19.0",

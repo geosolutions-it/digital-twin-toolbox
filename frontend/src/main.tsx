@@ -5,12 +5,9 @@ import ReactDOM from "react-dom/client"
 import { routeTree } from "./routeTree.gen"
 
 import { StrictMode } from "react"
-import { OpenAPI } from "./client"
 import './main.css'
 import theme from "./theme"
-import { enableHashHistory, getRouterBasePath, getViteApiUrl } from './utils'
-
-OpenAPI.BASE = getViteApiUrl()
+import { enableHashHistory, getRouterBasePath } from './utils'
 
 const queryClient = new QueryClient()
 

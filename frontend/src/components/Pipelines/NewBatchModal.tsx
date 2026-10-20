@@ -25,7 +25,7 @@ import {
   updateBatchConfig,
   updatePipelineConfig,
 } from "../../api/pipelineBatch"
-import { PipelinesService } from "../../client"
+import { processPipelineTask } from "../../api/pipelines"
 import useCustomToast from "../../hooks/useCustomToast"
 import InputExpression from "../Viewer/InputExpression"
 
@@ -213,7 +213,7 @@ const NewBatchModal = ({
           const ids = targetIds && targetIds.length ? targetIds : editPipelineId ? [editPipelineId] : []
           for (const id of ids) {
             try {
-              await PipelinesService.processPipelineTask({ id, actionType: "run" })
+              await processPipelineTask(id, "run")
             } catch {
               // skip rows the run does not apply to (already running)
             }

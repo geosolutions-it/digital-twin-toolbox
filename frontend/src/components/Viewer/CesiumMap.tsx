@@ -16,7 +16,7 @@ import { useQuery } from "@tanstack/react-query"
 import type * as CesiumNS from "cesium"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { FiCrosshair } from "react-icons/fi"
-import { OpenAPI, PipelinesService } from "../../client"
+import { API_BASE, readPipelines } from "../../api"
 
 // Cesium loads from the CDN at runtime; the `cesium` package is a type-only dev dep.
 type Cesium = typeof CesiumNS
@@ -66,7 +66,7 @@ function soloLayer(p: any): Layer {
     id: p.id,
     title: p.title || p.id,
     type,
-    url: `${OpenAPI.BASE}${tileset}`,
+    url: `${API_BASE}${tileset}`,
     isTerrain: tileset.endsWith("layer.json") || type === "Terrain",
     extent: Array.isArray(p.task_result.extent) ? p.task_result.extent : undefined,
   }
@@ -102,7 +102,7 @@ function buildLayers(items: any[]): Layer[] {
       id: `batch:${bid}`,
       title: t.includes(" / ") ? t.split(" / ")[0] : `Batch ${bid.slice(0, 8)}`,
       type: group[0]?.source?.pipeline || "PointCloud",
-      url: `${OpenAPI.BASE}${child.slice(0, idx)}${prefix}/tileset.json`,
+      url: `${API_BASE}${child.slice(0, idx)}${prefix}/tileset.json`,
       isTerrain: false,
     })
   }
@@ -122,7 +122,7 @@ export default function CesiumMap() {
 
   const { data } = useQuery({
     queryKey: ["pipelines", "map"],
-    queryFn: () => PipelinesService.readPipelines({ skip: 0, limit: 1000 }),
+    queryFn: () => readPipelines({ skip: 0, limit: 1000 }),
   })
   const layers = useMemo(() => buildLayers((data as any)?.data || []), [data])
   const tileLayers = layers.filter((l) => !l.isTerrain)

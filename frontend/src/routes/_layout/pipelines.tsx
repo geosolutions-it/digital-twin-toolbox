@@ -54,7 +54,7 @@ import {
   FiTrash,
 } from "react-icons/fi"
 import { z } from "zod"
-import { OpenAPI, PipelinesService } from "../../client"
+import { API_BASE, deletePipeline, processPipelineTask, readPipelines } from "../../api"
 import useCustomToast from "../../hooks/useCustomToast"
 import NewBatchModal, {
   type BatchFormValues,
@@ -88,7 +88,7 @@ const DeleteDialog = ({ id, isOpen, onClose }: DeleteProps) => {
   } = useForm()
 
   const deleteEntity = async (id: string) => {
-    await PipelinesService.deletePipeline({ id: id })
+    await deletePipeline(id)
   }
 
   const mutation = useMutation({
@@ -191,7 +191,7 @@ const PER_PAGE = 10
 function getPipelinesQueryOptions({ page }: { page: number }) {
   return {
     queryFn: () =>
-      PipelinesService.readPipelines({
+      readPipelines({
         skip: (page - 1) * PER_PAGE,
         limit: PER_PAGE,
       }),
@@ -392,7 +392,7 @@ function PipelineRow({ pipeline, selected, onToggle, onAction, onEdit, dim, inde
             <Tooltip label="Open tileset">
               <IconButton
                 as="a"
-                href={`${OpenAPI.BASE}${pipeline.task_result.tileset}`}
+                href={`${API_BASE}${pipeline.task_result.tileset}`}
                 target="_blank"
                 rel="noreferrer"
                 aria-label="Open tileset"
@@ -495,7 +495,7 @@ function BatchGroup({
   let parentUrl = ""
   if (allDone && prefix && childUrl) {
     const idx = childUrl.indexOf(prefix)
-    if (idx >= 0) parentUrl = `${OpenAPI.BASE}${childUrl.slice(0, idx)}${prefix}/tileset.json`
+    if (idx >= 0) parentUrl = `${API_BASE}${childUrl.slice(0, idx)}${prefix}/tileset.json`
   }
   return (
     <>
@@ -713,7 +713,7 @@ function PipelinesTable() {
   const bulkDelete = useMutation({
     mutationFn: async () => {
       for (const id of Array.from(selected)) {
-        await PipelinesService.deletePipeline({ id })
+        await deletePipeline(id)
       }
     },
     onSuccess: () => {
@@ -736,8 +736,8 @@ function PipelinesTable() {
       }
       for (const id of ids) {
         try {
-          if (action === "delete") await PipelinesService.deletePipeline({ id })
-          else await PipelinesService.processPipelineTask({ id, actionType: action })
+          if (action === "delete") await deletePipeline(id)
+          else await processPipelineTask(id, action)
         } catch {
           // skip rows the action does not apply to
         }
@@ -769,7 +769,7 @@ function PipelinesTable() {
     mutationFn: async (actionType: "run" | "cancel") => {
       for (const id of Array.from(selected)) {
         try {
-          await PipelinesService.processPipelineTask({ id, actionType })
+          await processPipelineTask(id, actionType)
         } catch {
           // skip rows the action does not apply to (already running, nothing to cancel)
         }

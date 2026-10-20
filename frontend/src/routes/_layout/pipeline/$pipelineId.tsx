@@ -1,7 +1,7 @@
 import { Box, Divider, Flex } from "@chakra-ui/react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { PipelinesService } from "../../../client"
+import { processPipelineTask, readPipeline, updatePipelineConfig } from "../../../api"
 import PointCloudCanvas from "../../../components/Viewer/PointCloudCanvas"
 // Other pipeline viewers hidden for now (point-cloud focus):
 // import PointGeometryCanvas from "../../../components/Viewer/PointGeometryCanvas"
@@ -18,7 +18,7 @@ function Pipeline() {
   const { pipelineId } = Route.useParams()
   const queryClient = useQueryClient()
   const { data } = useQuery({
-    queryFn: () => PipelinesService.readPipeline({ id: pipelineId }),
+    queryFn: () => readPipeline(pipelineId),
     queryKey: ["pipeline", pipelineId],
     refetchInterval: (options) => {
       return isCeleryTaskInProgress(options?.state?.data?.task_status)
@@ -28,32 +28,21 @@ function Pipeline() {
   })
 
   function handleOnUpdate(data: any) {
-    PipelinesService.updatePipeline({
-      id: pipelineId,
-      requestBody: { data },
-    }).then(() =>
+    updatePipelineConfig(pipelineId, data).then(() =>
       queryClient.invalidateQueries({ queryKey: ["pipeline", pipelineId] }),
     )
   }
 
   function handleOnRun(data: any) {
-    PipelinesService.updatePipeline({ id: pipelineId, requestBody: { data } })
-      .then(() =>
-        PipelinesService.processPipelineTask({
-          id: pipelineId,
-          actionType: "run",
-        }),
-      )
+    updatePipelineConfig(pipelineId, data)
+      .then(() => processPipelineTask(pipelineId, "run"))
       .then(() =>
         queryClient.invalidateQueries({ queryKey: ["pipeline", pipelineId] }),
       )
   }
 
   function handleOnCancel() {
-    PipelinesService.processPipelineTask({
-      id: pipelineId,
-      actionType: "cancel",
-    }).then(() =>
+    processPipelineTask(pipelineId, "cancel").then(() =>
       queryClient.invalidateQueries({ queryKey: ["pipeline", pipelineId] }),
     )
   }

@@ -19,8 +19,8 @@ import turfBbox from "@turf/bbox"
 import React from "react"
 import { FiDownload } from "react-icons/fi"
 import { BufferAttribute, BufferGeometry, Mesh } from "three"
-import { AssetsService } from "../../client"
-import type { PipelinePublicExtended } from "../../client"
+import { readAssetSample } from "../../api"
+import type { PipelinePublicExtended } from "../../api"
 import {
   celeryTaskStatusColor,
   celeryTaskStatusLabel,
@@ -52,7 +52,7 @@ function PolygonGeometryCanvas({
   assetId,
 }: PolygonGeometryCanvasProps) {
   const { data: collection, isPending } = useQuery({
-    queryFn: () => AssetsService.readAssetSample({ id: assetId }),
+    queryFn: () => readAssetSample(assetId),
     queryKey: ["pipeline-asset-sample", assetId],
   })
 

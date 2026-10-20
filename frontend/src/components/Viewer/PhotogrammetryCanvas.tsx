@@ -23,7 +23,7 @@ import { useRef, useState /*, useCallback */ } from "react"
 // @ts-ignore
 // import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader"
 import { FiDownload /*, FiX */ } from "react-icons/fi"
-import type { PipelinePublicExtended } from "../../client"
+import type { PipelinePublicExtended } from "../../api"
 import {
   celeryTaskStatusColor,
   celeryTaskStatusLabel,

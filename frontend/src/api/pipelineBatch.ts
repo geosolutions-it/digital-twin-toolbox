@@ -1,5 +1,5 @@
 import axios from "axios"
-import { OpenAPI } from "../client"
+import { API_BASE } from "./config"
 
 export interface PipelineBatchRequest {
   prefix: string
@@ -17,7 +17,7 @@ export interface PipelineBatchResponse {
 export async function createPipelineBatch(
   body: PipelineBatchRequest,
 ): Promise<PipelineBatchResponse> {
-  const res = await axios.post(`${OpenAPI.BASE}/api/v1/pipelines/batch`, body)
+  const res = await axios.post(`${API_BASE}/api/v1/pipelines/batch`, body)
   return res.data
 }
 
@@ -31,7 +31,7 @@ export interface PipelineSourceRequest {
 export async function createPipelineSource(
   body: PipelineSourceRequest,
 ): Promise<{ id: string }> {
-  const res = await axios.post(`${OpenAPI.BASE}/api/v1/pipelines/source`, body)
+  const res = await axios.post(`${API_BASE}/api/v1/pipelines/source`, body)
   return res.data
 }
 
@@ -39,7 +39,7 @@ export async function updatePipelineConfig(
   id: string,
   data: Record<string, unknown> | null,
 ): Promise<unknown> {
-  const res = await axios.put(`${OpenAPI.BASE}/api/v1/pipelines/${id}`, { data })
+  const res = await axios.put(`${API_BASE}/api/v1/pipelines/${id}`, { data })
   return res.data
 }
 
@@ -48,7 +48,7 @@ export async function updateBatchConfig(
   data: Record<string, unknown> | null,
 ): Promise<{ batch_id: string; count: number }> {
   const res = await axios.put(
-    `${OpenAPI.BASE}/api/v1/pipelines/batch/${batchId}`,
+    `${API_BASE}/api/v1/pipelines/batch/${batchId}`,
     { data },
   )
   return res.data
@@ -68,14 +68,14 @@ export async function getVectorFields(params: {
   if (params.key) qs.set("key", params.key)
   if (params.prefix) qs.set("prefix", params.prefix)
   const res = await axios.get(
-    `${OpenAPI.BASE}/api/v1/pipelines/vector-fields?${qs.toString()}`,
+    `${API_BASE}/api/v1/pipelines/vector-fields?${qs.toString()}`,
   )
   return res.data
 }
 
 export async function finalizePipelineBatch(batchId: string): Promise<{ ok: boolean }> {
   const res = await axios.post(
-    `${OpenAPI.BASE}/api/v1/pipelines/batch/${batchId}/finalize`,
+    `${API_BASE}/api/v1/pipelines/batch/${batchId}/finalize`,
     {},
   )
   return res.data
