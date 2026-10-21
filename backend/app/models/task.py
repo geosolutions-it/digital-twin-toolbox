@@ -85,6 +85,37 @@ class PipelinesPublic(SQLModel):
     count: int
 
 
+class PipelineBatchCounts(SQLModel):
+    success: int = 0
+    running: int = 0
+    ready: int = 0
+    failed: int = 0
+
+
+class PipelineBatchSummary(SQLModel):
+    batch_id: uuid.UUID
+    label: str
+    source: str | None = None
+    output_prefix: str | None = None
+    pipeline: str | None = None
+    sample_key: str | None = None
+    data: Optional[dict] = None
+    total: int
+    counts: PipelineBatchCounts
+
+
+class PipelineOverviewEntry(SQLModel):
+    # kind is "batch" (folder) or "pipeline" (standalone row)
+    kind: str
+    batch: PipelineBatchSummary | None = None
+    pipeline: PipelinePublic | None = None
+
+
+class PipelinesOverview(SQLModel):
+    data: list[PipelineOverviewEntry]
+    count: int
+
+
 class PipelineUpdate(SQLModel):
     data: Optional[dict] = Field(nullable=True, sa_type=JSONB)
 

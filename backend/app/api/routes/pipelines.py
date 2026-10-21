@@ -5,7 +5,7 @@ from sqlmodel import func, select
 import os
 import re
 import uuid
-from app.models.task import Pipeline, PipelinePublic, PipelinesPublic, PipelinePublicExtended, PipelineCreate, PipelineBatchCreate, PipelineSourceCreate, Message, Asset, PipelinesActionTypes, PipelineUpdate
+from app.models.task import Pipeline, PipelinePublic, PipelinesPublic, PipelinePublicExtended, PipelineCreate, PipelineBatchCreate, PipelineSourceCreate, Message, Asset, PipelinesActionTypes, PipelineUpdate, PipelineBatchCounts, PipelineBatchSummary, PipelineOverviewEntry, PipelinesOverview
 
 from app.worker.pipelines import run as run_pipeline
 from app.services.pipeline_config import validate_pipeline_config
@@ -30,17 +30,136 @@ def _collect_task_ids(result):
 
 @router.get("/", response_model=PipelinesPublic)
 def read_pipelines(
-    session: SessionDep, skip: int = 0, limit: int = 100
+    session: SessionDep, skip: int = 0, limit: int = 100, batch_id: uuid.UUID | None = None
 ) -> Any:
     """
-    Retrieve pipelines.
+    Retrieve pipelines. Pass batch_id to page through one batch's members.
     """
     count_statement = select(func.count()).select_from(Pipeline)
+    statement = select(Pipeline)
+    if batch_id is not None:
+        count_statement = count_statement.where(Pipeline.batch_id == batch_id)
+        statement = statement.where(Pipeline.batch_id == batch_id)
     count = session.exec(count_statement).one()
-    statement = select(Pipeline).offset(skip).limit(limit)
-    pipelines = session.exec(statement.order_by(Pipeline.title.asc())).all()
+    statement = statement.order_by(Pipeline.title.asc()).offset(skip).limit(limit)
+    pipelines = session.exec(statement).all()
 
     return PipelinesPublic(data=pipelines, count=count)
+
+
+# in-progress (PENDING/STARTED) mirrors the frontend's isCeleryTaskInProgress
+_IN_PROGRESS = (PENDING, STARTED)
+
+
+def _classify_status(status: str | None) -> str:
+    if status == SUCCESS:
+        return "success"
+    if status in _IN_PROGRESS:
+        return "running"
+    if not status:
+        return "ready"
+    return "failed"
+
+
+def _batch_label(title: str | None, batch_id) -> str:
+    if title and " / " in title:
+        return title.split(" / ")[0]
+    return f"Batch {str(batch_id)[:8]}"
+
+
+@router.get("/overview", response_model=PipelinesOverview)
+def read_pipelines_overview(
+    session: SessionDep, skip: int = 0, limit: int = 10
+) -> Any:
+    """
+    Top-level list for the pipelines screen: each batch is one folder entry with
+    a rollup over all its members, standalone pipelines are their own entries.
+    Paginates over entries (folders + solo), not raw pipeline rows.
+    """
+    rows = session.exec(
+        select(
+            Pipeline.id,
+            Pipeline.title,
+            Pipeline.task_status,
+            Pipeline.batch_id,
+            Pipeline.source,
+            Pipeline.data,
+        )
+    ).all()
+
+    batches: dict[str, dict] = {}
+    solo: list[dict] = []
+    for r in rows:
+        if r.batch_id:
+            key = str(r.batch_id)
+            b = batches.get(key)
+            if b is None:
+                b = {
+                    "batch_id": r.batch_id,
+                    "rep_title": r.title,
+                    "rep_source": r.source,
+                    "rep_data": r.data,
+                    "counts": {"success": 0, "running": 0, "ready": 0, "failed": 0},
+                    "total": 0,
+                }
+                batches[key] = b
+            # representative = smallest title, matching the members' title ordering
+            if r.title is not None and (b["rep_title"] is None or r.title < b["rep_title"]):
+                b["rep_title"] = r.title
+                b["rep_source"] = r.source
+                b["rep_data"] = r.data
+            b["counts"][_classify_status(r.task_status)] += 1
+            b["total"] += 1
+        else:
+            solo.append({"id": r.id, "title": r.title or ""})
+
+    entries: list[dict] = []
+    for b in batches.values():
+        label = _batch_label(b["rep_title"], b["batch_id"])
+        src = b["rep_source"] or {}
+        key = src.get("key") or ""
+        src_dir = key[: key.rfind("/")] if "/" in key else ""
+        entries.append(
+            {
+                "sort": label.lower(),
+                "summary": PipelineBatchSummary(
+                    batch_id=b["batch_id"],
+                    label=label,
+                    source=f"s3://…/{src_dir}/" if src_dir else None,
+                    output_prefix=src.get("batch_output_prefix"),
+                    pipeline=src.get("pipeline") or "PointCloud",
+                    sample_key=key or None,
+                    data=b["rep_data"],
+                    total=b["total"],
+                    counts=PipelineBatchCounts(**b["counts"]),
+                ),
+            }
+        )
+    for s in solo:
+        entries.append({"sort": s["title"].lower(), "solo_id": s["id"]})
+
+    entries.sort(key=lambda e: e["sort"])
+    count = len(entries)
+    page = entries[skip : skip + limit]
+
+    solo_ids = [e["solo_id"] for e in page if "solo_id" in e]
+    full = {}
+    if solo_ids:
+        full = {
+            p.id: p
+            for p in session.exec(select(Pipeline).where(Pipeline.id.in_(solo_ids))).all()
+        }
+
+    data = []
+    for e in page:
+        if "summary" in e:
+            data.append(PipelineOverviewEntry(kind="batch", batch=e["summary"]))
+        else:
+            pipeline = full.get(e["solo_id"])
+            if pipeline is not None:
+                data.append(PipelineOverviewEntry(kind="pipeline", pipeline=pipeline))
+
+    return PipelinesOverview(data=data, count=count)
 
 @router.post("/", response_model=PipelinePublic)
 def create_pipeline(
@@ -261,17 +380,9 @@ def vector_fields(
         raise HTTPException(status_code=422, detail=f"Could not read vector fields: {e}")
 
 
-@router.post("/{id}/task/{action_type}", response_model=Any)
-async def process_pipeline_task(
-    *, session: SessionDep, id: uuid.UUID, action_type: PipelinesActionTypes
-) -> Any:
-    """
-    Run/cancel the pipeline task.
-    """
-    pipeline = session.get(Pipeline, id)
-    if not pipeline:
-        raise HTTPException(status_code=404, detail="Pipeline not found")
-
+def _apply_pipeline_action(session, pipeline: Pipeline, action_type: PipelinesActionTypes) -> dict:
+    """Run/cancel one pipeline, persisting the new task state. Returns the applied fields.
+    Raises ValueError for unsupported configs; callers decide how to surface it."""
     source = pipeline.source or {}
     is_source = not pipeline.asset_id
 
@@ -282,67 +393,132 @@ async def process_pipeline_task(
             raise HTTPException(status_code=404, detail="There is not asset associated with this pipeline")
 
     pipeline_out = {}
-    try:
-        if action_type == 'run' and pipeline.task_status not in (PENDING, STARTED):
-            if is_source:
-                ptype = source.get('pipeline') or 'PointCloud'
-                task_name = _SOURCE_TASK.get(ptype)
-                if not task_name:
-                    raise ValueError(f"Unsupported source pipeline: {ptype}")
-                pipeline_extended_dict = pipeline.model_dump()
-                pipeline_extended_dict['data'] = validate_pipeline_config(
-                    ptype, None, pipeline_extended_dict.get('data')
-                )
-                task = celery.send_task(task_name, kwargs={"pipeline_extended": pipeline_extended_dict})
-                pipeline_out = {"task_id": task.id, "task_status": PENDING, "task_result": None}
-            else:
-                pipeline_in = pipeline.model_dump()
-                pipeline_extended = PipelinePublicExtended.model_validate(
-                    {**pipeline_in, 'asset': asset}, update={"owner_id": pipeline.owner_id}
-                )
-                pipeline_extended_dict = pipeline_extended.model_dump()
-                pipeline_extended_dict['data'] = validate_pipeline_config(
-                    asset.geometry_type, asset.asset_type, pipeline_extended_dict.get('data')
-                )
-                task = run_pipeline(pipeline_extended_dict)
-                task_ids = _collect_task_ids(task)
-                pipeline_out = {
-                    "task_id": task.id,
-                    "task_status": PENDING,
-                    # store all chain ids so cancel can revoke the running step, not just the tail
-                    "task_result": {"task_ids": task_ids} if len(task_ids) > 1 else None,
-                }
-            pipeline.sqlmodel_update(pipeline_out)
-            session.add(pipeline)
-            session.commit()
-            session.refresh(pipeline)
-
-        if action_type == 'cancel' and pipeline.task_id and pipeline.task_status in (PENDING, STARTED):
-            # revoke every chain task (running one terminated); single id for non-chains
-            task_ids = []
-            if isinstance(pipeline.task_result, dict):
-                task_ids = pipeline.task_result.get('task_ids') or []
-            if not task_ids:
-                task_ids = [pipeline.task_id]
-            for tid in task_ids:
-                AsyncResult(tid, app=celery).revoke(terminate=True)
+    if action_type == 'run' and pipeline.task_status not in (PENDING, STARTED):
+        if is_source:
+            ptype = source.get('pipeline') or 'PointCloud'
+            task_name = _SOURCE_TASK.get(ptype)
+            if not task_name:
+                raise ValueError(f"Unsupported source pipeline: {ptype}")
+            pipeline_extended_dict = pipeline.model_dump()
+            pipeline_extended_dict['data'] = validate_pipeline_config(
+                ptype, None, pipeline_extended_dict.get('data')
+            )
+            task = celery.send_task(task_name, kwargs={"pipeline_extended": pipeline_extended_dict})
+            pipeline_out = {"task_id": task.id, "task_status": PENDING, "task_result": None}
+        else:
+            pipeline_in = pipeline.model_dump()
+            pipeline_extended = PipelinePublicExtended.model_validate(
+                {**pipeline_in, 'asset': asset}, update={"owner_id": pipeline.owner_id}
+            )
+            pipeline_extended_dict = pipeline_extended.model_dump()
+            pipeline_extended_dict['data'] = validate_pipeline_config(
+                asset.geometry_type, asset.asset_type, pipeline_extended_dict.get('data')
+            )
+            task = run_pipeline(pipeline_extended_dict)
+            task_ids = _collect_task_ids(task)
             pipeline_out = {
-                "task_id": pipeline.task_id,
-                "task_status": REVOKED,
-                "task_result": None
+                "task_id": task.id,
+                "task_status": PENDING,
+                # store all chain ids so cancel can revoke the running step, not just the tail
+                "task_result": {"task_ids": task_ids} if len(task_ids) > 1 else None,
             }
-            pipeline.sqlmodel_update(pipeline_out)
-            session.add(pipeline)
-            session.commit()
-            session.refresh(pipeline)
+        pipeline.sqlmodel_update(pipeline_out)
+        session.add(pipeline)
+        session.commit()
+        session.refresh(pipeline)
+
+    if action_type == 'cancel' and pipeline.task_id and pipeline.task_status in (PENDING, STARTED):
+        # revoke every chain task (running one terminated); single id for non-chains
+        task_ids = []
+        if isinstance(pipeline.task_result, dict):
+            task_ids = pipeline.task_result.get('task_ids') or []
+        if not task_ids:
+            task_ids = [pipeline.task_id]
+        for tid in task_ids:
+            AsyncResult(tid, app=celery).revoke(terminate=True)
+        pipeline_out = {
+            "task_id": pipeline.task_id,
+            "task_status": REVOKED,
+            "task_result": None
+        }
+        pipeline.sqlmodel_update(pipeline_out)
+        session.add(pipeline)
+        session.commit()
+        session.refresh(pipeline)
+    return pipeline_out
+
+
+@router.post("/{id}/task/{action_type}", response_model=Any)
+async def process_pipeline_task(
+    *, session: SessionDep, id: uuid.UUID, action_type: PipelinesActionTypes
+) -> Any:
+    """
+    Run/cancel the pipeline task.
+    """
+    pipeline = session.get(Pipeline, id)
+    if not pipeline:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+    try:
+        pipeline_out = _apply_pipeline_action(session, pipeline, action_type)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=f"Unsupported asset for this pipeline: {e}")
-    except Exception as e:
+    except HTTPException:
+        raise
+    except Exception:
         raise HTTPException(status_code=500, detail="It was not possible to initialize the requested task")
     return {
         **pipeline_out,
         'action_type': action_type
     }
+
+
+@router.post("/batch/{batch_id}/task/{action_type}", response_model=Any)
+def process_pipeline_batch_task(
+    *, session: SessionDep, batch_id: uuid.UUID, action_type: PipelinesActionTypes
+) -> Any:
+    """Run/cancel every member of a batch, skipping rows the action does not apply to."""
+    pipelines = session.exec(select(Pipeline).where(Pipeline.batch_id == batch_id)).all()
+    if not pipelines:
+        raise HTTPException(status_code=404, detail="Batch not found")
+    affected = 0
+    for pipeline in pipelines:
+        try:
+            if _apply_pipeline_action(session, pipeline, action_type):
+                affected += 1
+        except Exception:
+            # skip members the action cannot apply to (already running, nothing to cancel, bad config)
+            session.rollback()
+    return {"batch_id": str(batch_id), "count": len(pipelines), "affected": affected, "action_type": action_type}
+
+
+@router.delete("/batch/{batch_id}")
+def delete_pipeline_batch(
+    session: SessionDep, batch_id: uuid.UUID
+) -> Message:
+    """Delete every member of a batch and its combined output tree."""
+    pipelines = session.exec(select(Pipeline).where(Pipeline.batch_id == batch_id)).all()
+    if not pipelines:
+        raise HTTPException(status_code=404, detail="Batch not found")
+    batch_prefix = None
+    payloads = []
+    for pipeline in pipelines:
+        source = pipeline.source or {}
+        batch_prefix = batch_prefix or source.get('batch_output_prefix')
+        payloads.append(pipeline.model_dump())
+        session.delete(pipeline)
+    session.commit()
+
+    # drop the whole batch output tree in one shot (no per-member finalize needed)
+    if batch_prefix:
+        try:
+            get_storage().delete_prefix(batch_prefix)
+        except Exception:
+            pass
+    for payload in payloads:
+        celery.send_task('complete_pipeline_remove_process', args=[{'pipeline': payload}])
+
+    return Message(message=f"Deleted {len(payloads)} pipelines")
+
 
 @router.put("/{id}", response_model=PipelinePublic)
 def update_pipeline(

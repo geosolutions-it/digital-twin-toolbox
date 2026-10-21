@@ -22,6 +22,7 @@ import {
   createPipelineBatch,
   createPipelineSource,
   getVectorFields,
+  processPipelineBatchTask,
   updateBatchConfig,
   updatePipelineConfig,
 } from "../../api/pipelineBatch"
@@ -210,12 +211,17 @@ const NewBatchModal = ({
         if (editBatchId) await updateBatchConfig(editBatchId, data)
         else await updatePipelineConfig(editPipelineId!, data)
         if (run) {
-          const ids = targetIds && targetIds.length ? targetIds : editPipelineId ? [editPipelineId] : []
-          for (const id of ids) {
-            try {
-              await processPipelineTask(id, "run")
-            } catch {
-              // skip rows the run does not apply to (already running)
+          if (editBatchId) {
+            // run every member server-side, not just the ids currently loaded in the UI
+            await processPipelineBatchTask(editBatchId, "run")
+          } else {
+            const ids = targetIds && targetIds.length ? targetIds : editPipelineId ? [editPipelineId] : []
+            for (const id of ids) {
+              try {
+                await processPipelineTask(id, "run")
+              } catch {
+                // skip rows the run does not apply to (already running)
+              }
             }
           }
         }

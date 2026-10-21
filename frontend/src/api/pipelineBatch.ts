@@ -80,3 +80,22 @@ export async function finalizePipelineBatch(batchId: string): Promise<{ ok: bool
   )
   return res.data
 }
+
+export async function processPipelineBatchTask(
+  batchId: string,
+  actionType: "run" | "cancel",
+): Promise<{ batch_id: string; count: number; affected: number }> {
+  const res = await axios.post(
+    `${API_BASE}/api/v1/pipelines/batch/${batchId}/task/${actionType}`,
+  )
+  return res.data
+}
+
+export async function deletePipelineBatch(
+  batchId: string,
+): Promise<{ message: string }> {
+  const res = await axios.delete(
+    `${API_BASE}/api/v1/pipelines/batch/${batchId}`,
+  )
+  return res.data
+}
