@@ -19,7 +19,7 @@
     "@tanstack/react-query-devtools": "^5.28.14",
     "@tanstack/react-router": "1.19.1",
     "@turf/turf": "^7.1.0",
-    "axios": "1.7.5",
+    "axios": "1.20.0",
     "earcut": "^3.0.0",
     "form-data": "4.0.0",
     "framer-motion": "10.16.16",
