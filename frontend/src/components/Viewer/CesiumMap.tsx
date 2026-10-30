@@ -17,41 +17,24 @@ import {
   Tooltip,
 } from "@chakra-ui/react"
 import { useQuery } from "@tanstack/react-query"
-import type * as CesiumNS from "cesium"
+import * as Cesium from "cesium"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { FiCrosshair } from "react-icons/fi"
 import { API_BASE, readPipelines } from "../../api"
+import "cesium/Source/Widgets/widgets.css"
 
-// Cesium loads from the CDN at runtime; the `cesium` package is a type-only dev dep.
-type Cesium = typeof CesiumNS
+// Workers, shaders and images are copied to public/cesium by scripts/copy-cesium-assets.mjs.
+// Absolute because Cesium resolves this against document.baseURI and routes can be nested.
+window.CESIUM_BASE_URL = "/cesium/"
+
 declare global {
   interface Window {
-    Cesium?: Cesium
+    CESIUM_BASE_URL?: string
   }
 }
 
-const CESIUM_VERSION = "1.120"
-const CDN = `https://cesium.com/downloads/cesiumjs/releases/${CESIUM_VERSION}/Build/Cesium`
 const WMS_URL = "https://maps1.geosolutionsgroup.com/geoserver/wms"
 const OSM_CREDIT = "© OpenStreetMap contributors"
-
-let cesiumLoader: Promise<Cesium> | null = null
-function loadCesium(): Promise<Cesium> {
-  if (window.Cesium) return Promise.resolve(window.Cesium)
-  if (cesiumLoader) return cesiumLoader
-  cesiumLoader = new Promise((resolve, reject) => {
-    const link = document.createElement("link")
-    link.rel = "stylesheet"
-    link.href = `${CDN}/Widgets/widgets.css`
-    document.head.appendChild(link)
-    const script = document.createElement("script")
-    script.src = `${CDN}/Cesium.js`
-    script.onload = () => (window.Cesium ? resolve(window.Cesium) : reject(new Error("Cesium missing")))
-    script.onerror = () => reject(new Error("Failed to load Cesium from CDN"))
-    document.head.appendChild(script)
-  })
-  return cesiumLoader
-}
 
 type Layer = {
   id: string
@@ -137,8 +120,8 @@ const DEFAULT_PC: PcSettings = {
 }
 
 // Classification palette mirrors frontend/public/preview.html: ground/wheat, veg greens, buildings red.
-function classificationStyle(C: Cesium) {
-  return new C.Cesium3DTileStyle({
+function classificationStyle() {
+  return new Cesium.Cesium3DTileStyle({
     color: {
       conditions: [
         ["${Classification} === 1", "color('#FFDEAD')"],
@@ -155,12 +138,12 @@ function classificationStyle(C: Cesium) {
   })
 }
 
-function applyPcSettings(C: Cesium, ts: CesiumNS.Cesium3DTileset, s: PcSettings) {
+function applyPcSettings(ts: Cesium.Cesium3DTileset, s: PcSettings) {
   ts.maximumScreenSpaceError = s.sse
   ts.pointCloudShading.attenuation = s.attenuation
   ts.pointCloudShading.maximumAttenuation = 4
   ts.pointCloudShading.eyeDomeLighting = s.eyeDome
-  ts.style = s.classification ? classificationStyle(C) : undefined
+  ts.style = s.classification ? classificationStyle() : undefined
   ts.debugShowBoundingVolume = s.boundingVolume
   ts.debugShowGeometricError = s.geometricError
   ts.debugShowRenderingStatistics = s.statistics
@@ -169,16 +152,13 @@ function applyPcSettings(C: Cesium, ts: CesiumNS.Cesium3DTileset, s: PcSettings)
 
 export default function CesiumMap() {
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const viewerRef = useRef<CesiumNS.Viewer | null>(null)
-  const imageryRef = useRef<CesiumNS.ImageryLayer | null>(null)
-  const tilesetsRef = useRef<Map<string, CesiumNS.Cesium3DTileset>>(new Map())
+  const viewerRef = useRef<Cesium.Viewer | null>(null)
+  const imageryRef = useRef<Cesium.ImageryLayer | null>(null)
+  const tilesetsRef = useRef<Map<string, Cesium.Cesium3DTileset>>(new Map())
   const pendingZoom = useRef<string | null>(null)
   const flewRef = useRef(false)
   // Mirror of pcSettings so the async tileset-load effect reads the latest without re-running.
   const pcRef = useRef<PcSettings>(DEFAULT_PC)
-
-  const [Cesium, setCesium] = useState<Cesium | null>(null)
-  const [loadError, setLoadError] = useState(false)
 
   const { data } = useQuery({
     queryKey: ["pipelines", "map"],
@@ -199,13 +179,7 @@ export default function CesiumMap() {
     setPc((s) => ({ ...s, [k]: v }))
 
   useEffect(() => {
-    loadCesium()
-      .then(setCesium)
-      .catch(() => setLoadError(true))
-  }, [])
-
-  useEffect(() => {
-    if (!Cesium || !containerRef.current || viewerRef.current) return
+    if (!containerRef.current || viewerRef.current) return
     const provider = new Cesium.WebMapServiceImageryProvider({
       url: WMS_URL,
       layers: "osm:osm",
@@ -243,11 +217,11 @@ export default function CesiumMap() {
       tilesetsRef.current.clear()
       flewRef.current = false
     }
-  }, [Cesium])
+  }, [])
 
   useEffect(() => {
     const viewer = viewerRef.current
-    if (!Cesium || !viewer) return
+    if (!viewer) return
     for (const layer of tileLayers) {
       const on = !!visible[layer.id]
       const existing = tilesetsRef.current.get(layer.id)
@@ -258,7 +232,7 @@ export default function CesiumMap() {
             tilesetsRef.current.set(layer.id, ts)
             viewer.scene.primitives.add(ts)
             if (layer.type === "PointCloud") {
-              applyPcSettings(Cesium, ts, pcRef.current)
+              applyPcSettings(ts, pcRef.current)
             }
             if (pendingZoom.current === layer.id) {
               pendingZoom.current = null
@@ -276,11 +250,11 @@ export default function CesiumMap() {
         viewer.scene.requestRender()
       }
     }
-  }, [Cesium, visible, tileLayers])
+  }, [visible, tileLayers])
 
   useEffect(() => {
     const viewer = viewerRef.current
-    if (!Cesium || !viewer) return
+    if (!viewer) return
     let cancelled = false
     ;(async () => {
       if (!activeTerrain) {
@@ -309,7 +283,7 @@ export default function CesiumMap() {
     return () => {
       cancelled = true
     }
-  }, [Cesium, activeTerrain, terrainLayers])
+  }, [activeTerrain, terrainLayers])
 
   useEffect(() => {
     const viewer = viewerRef.current
@@ -322,14 +296,14 @@ export default function CesiumMap() {
   useEffect(() => {
     pcRef.current = pc
     const viewer = viewerRef.current
-    if (!Cesium || !viewer) return
+    if (!viewer) return
     for (const layer of tileLayers) {
       if (layer.type !== "PointCloud") continue
       const ts = tilesetsRef.current.get(layer.id)
-      if (ts) applyPcSettings(Cesium, ts, pc)
+      if (ts) applyPcSettings(ts, pc)
     }
     viewer.scene.requestRender()
-  }, [Cesium, pc, tileLayers])
+  }, [pc, tileLayers])
 
   const zoomTo = (layer: Layer) => {
     const ts = tilesetsRef.current.get(layer.id)
@@ -345,12 +319,6 @@ export default function CesiumMap() {
     <Box pos="relative" w="100%" h="100%">
       <style>{".cesium-credit-logoContainer{display:none!important}"}</style>
       <Box ref={containerRef} pos="absolute" inset={0} />
-
-      {loadError && (
-        <Flex pos="absolute" inset={0} align="center" justify="center">
-          <Text color="red.400">Could not load Cesium from the CDN.</Text>
-        </Flex>
-      )}
 
       <Box
         pos="absolute"
