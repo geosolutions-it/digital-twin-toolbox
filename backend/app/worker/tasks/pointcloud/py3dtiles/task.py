@@ -1,5 +1,4 @@
 import os
-import shutil
 import tempfile
 
 from sqlmodel import Session, select
@@ -156,18 +155,14 @@ def create_point_cloud_3dtiles(pipeline_extended):
             include_classification=has_classification, include_intensity=has_intensity,
         )
 
-        zip_base = os.path.join(scratch, 'download')
-        shutil.make_archive(zip_base, 'zip', tiles_dir)
-
         storage.delete_prefix(f"{out_base}/tiles")
         storage.upload_dir(tiles_dir, f"{out_base}/tiles")
-        storage.upload_file(zip_base + '.zip', f"{out_base}/download.zip")
 
     base = settings.API_V1_STR
     return {
         'output': out_base,
         'tileset': f"{base}/{out_base}/tiles/tileset.json",
-        'download': f"{base}/{out_base}/download.zip",
+        'download': f"{base}/{out_base}/tiles/download.zip",
         'sample_radius': sample_radius,
         'sample_radius_auto': config.sample_radius is None,
     }

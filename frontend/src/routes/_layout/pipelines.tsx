@@ -302,6 +302,12 @@ function RollupBar({ counts }: { counts: PipelineBatchCounts }) {
 type RowAction = "run" | "cancel" | "delete" | "rebuild"
 type BatchAction = "run" | "cancel" | "delete" | "rebuild"
 
+// the backend names the attachment after the requested .zip
+function zipHref(url: string, name: string) {
+  const safe = (name || "").replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^[._]+|[._]+$/g, "")
+  return url.replace(/[^/]+\.zip$/, `${safe.slice(0, 100) || "download"}.zip`)
+}
+
 interface RowProps {
   pipeline: Pipeline
   selected: Set<string>
@@ -314,7 +320,7 @@ interface RowProps {
 
 function PipelineRow({ pipeline, selected, onToggle, onAction, onEdit, dim, indent }: RowProps) {
   const running = isCeleryTaskInProgress(pipeline.task_status)
-  const download = `${pipeline?.task_result?.download}`
+  const download = zipHref(`${pipeline?.task_result?.download}`, pipeline.title)
   const source = pipeline.source
   const subtitle = source?.key
     ? `s3://…/${source.key}`
@@ -463,6 +469,11 @@ function BatchGroup({
     allDone && summary.output_prefix
       ? `${API_BASE}/api/v1/${summary.output_prefix}/tileset.json`
       : ""
+  // download.zip is zipped on demand from the combined output tree
+  const parentDownload =
+    allDone && summary.output_prefix
+      ? `${API_BASE}/api/v1/${summary.output_prefix}/${zipHref("download.zip", summary.label)}`
+      : ""
 
   // members load lazily and page on their own, so a big folder never floods the top list
   const [innerPage, setInnerPage] = React.useState(1)
@@ -548,6 +559,19 @@ function BatchGroup({
                   rel="noreferrer"
                   aria-label="Open combined tileset"
                   icon={<FiExternalLink />}
+                  size="xs"
+                  variant="ghost"
+                />
+              </Tooltip>
+            )}
+            {parentDownload && (
+              <Tooltip label="Download combined 3D Tiles">
+                <IconButton
+                  as="a"
+                  href={parentDownload}
+                  download={`${summary.label}.zip`}
+                  aria-label="Download combined 3D Tiles"
+                  icon={<FiDownload />}
                   size="xs"
                   variant="ghost"
                 />
