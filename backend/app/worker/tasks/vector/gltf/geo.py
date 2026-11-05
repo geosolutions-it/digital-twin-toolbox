@@ -42,6 +42,11 @@ class LocalFrame:
         self.origin_ecef = lonlath_to_ecef(origin_lon, origin_lat, origin_h)
         self.east, self.north, self.up = enu_basis(origin_lon, origin_lat)
 
+    @classmethod
+    def from_bounds(cls, lo, hi):
+        """Origin at the centre of lon/lat/h bounds."""
+        return cls((lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0, (lo[2] + hi[2]) / 2.0)
+
     def to_enu(self, lonlath):
         """(N,3) lon,lat,h -> (N,3) float64 east,north,up metres."""
         lonlath = np.asarray(lonlath, dtype=np.float64)

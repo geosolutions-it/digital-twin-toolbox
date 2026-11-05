@@ -1,18 +1,17 @@
 import json
 import os
-import shutil
 import tempfile
 
 import numpy as np
 
-from app.core.config import settings
 from app.core.storage import get_storage, output_key
 from app.worker.common.expression import parse_expression
 from app.worker.main import celery, PipelineDatabaseTask
 from app.worker.tasks.vector.gltf.geo import LocalFrame
 from app.worker.tasks.vector.polygon.tiler import build_tileset
-from app.worker.tasks.vector.polygon.polyhedron import geometry_to_polyhedral_surface
+from app.worker.tasks.vector.polygon.extrude import extrude
 from app.worker.tasks.vector.source import coerce, field_names, open_layer, resolve_input, wgs84_transform
+from app.worker.tasks.vector.output import publish_tiles
 
 
 def _ensure_z(coords):
@@ -74,10 +73,6 @@ def _read_raw_features(path, config, default_config):
     return features, (lo, hi)
 
 
-def _rings_to_coords(rings, ground_z):
-    return [[[float(x), float(y), ground_z] for x, y in ring] for ring in rings]
-
-
 def _height_to_enu(h, part):
     # absolute height -> ENU up, relative to the footprint so origin and curvature cancel
     if h is None:
@@ -87,22 +82,16 @@ def _height_to_enu(h, part):
 
 def _extrude_feature(payload):
     """Full-detail extrusion of one feature -> (N,3) ENU triangle soup, or None."""
-    parts_tris = []
-    for part in payload['parts']:
-        geom = {'type': 'Polygon', 'coordinates': _rings_to_coords(part['rings'], part['ground_z'])}
-        options = {
-            'lower_limit': _height_to_enu(payload['lower'], part),
-            'upper_limit': _height_to_enu(payload['upper'], part),
-            'translate_z': payload['translate_z'],
-            'remove_bottom_surface': payload['remove_bottom'],
-        }
-        surface = geometry_to_polyhedral_surface(geom, options)
-        if surface:
-            tris = np.asarray(surface, dtype=np.float64)
-            parts_tris.append(tris[:, :3, :].reshape(-1, 3))
-    if not parts_tris:
-        return None
-    return np.concatenate(parts_tris, axis=0)
+    meshes = [
+        extrude(part['rings'], part['ground_z'],
+                lower=_height_to_enu(payload['lower'], part),
+                upper=_height_to_enu(payload['upper'], part),
+                translate_z=payload['translate_z'],
+                remove_bottom=payload['remove_bottom'])
+        for part in payload['parts']
+    ]
+    meshes = [m for m in meshes if m is not None]
+    return np.concatenate(meshes, axis=0) if meshes else None
 
 
 def _build_meshes(raw, frame):
@@ -158,7 +147,7 @@ def create_polygon_3dtiles(pipeline_extended):
         if not raw:
             raise Exception("No polygon features to tile")
 
-        frame = LocalFrame((lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0, (lo[2] + hi[2]) / 2.0)
+        frame = LocalFrame.from_bounds(lo, hi)
 
         features = _build_meshes(raw, frame)
 
@@ -166,16 +155,4 @@ def create_polygon_3dtiles(pipeline_extended):
         max_kb = float(parse_expression('number', config['max_tile_size_kb'], {}, default_config['max_tile_size_kb']))
         build_tileset(features, tiles_dir, frame.transform(), max_tile_bytes=max_kb * 1024)
 
-        zip_base = os.path.join(scratch, 'download')
-        shutil.make_archive(zip_base, 'zip', tiles_dir)
-
-        storage.delete_prefix(f"{out_base}/tiles")
-        storage.upload_dir(tiles_dir, f"{out_base}/tiles")
-        storage.upload_file(zip_base + '.zip', f"{out_base}/download.zip")
-
-    base = settings.API_V1_STR
-    return {
-        'output': out_base,
-        'tileset': f"{base}/{out_base}/tiles/tileset.json",
-        'download': f"{base}/{out_base}/download.zip",
-    }
+        return publish_tiles(storage, tiles_dir, out_base, 'tileset.json', scratch)

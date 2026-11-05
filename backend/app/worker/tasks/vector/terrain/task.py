@@ -1,14 +1,13 @@
 """Bucket-first terrain: a .tif or .vrt -> quantized-mesh pyramid uploaded as a
 Cesium terrain layer. No external binary, no PostGIS."""
 import os
-import shutil
 import tempfile
 
-from app.core.config import settings
 from app.core.storage import get_storage, output_key
 from app.worker.main import celery, PipelineDatabaseTask
 from app.worker.tasks.vector.terrain import preprocess
 from app.worker.tasks.vector.terrain.qmesh.tiler import build_terrain
+from app.worker.tasks.vector.output import publish_tiles
 
 
 @celery.task(name="create_terrain_tiles", base=PipelineDatabaseTask)
@@ -46,17 +45,6 @@ def create_terrain_tiles(pipeline_extended):
         tiles_dir = os.path.join(scratch, 'tiles')
         info = build_terrain(dem, tiles_dir, config)
 
-        zip_base = os.path.join(scratch, 'download')
-        shutil.make_archive(zip_base, 'zip', tiles_dir)
+        result = publish_tiles(storage, tiles_dir, out_base, 'layer.json', scratch)
 
-        storage.delete_prefix(f"{out_base}/tiles")
-        storage.upload_dir(tiles_dir, f"{out_base}/tiles")
-        storage.upload_file(zip_base + '.zip', f"{out_base}/download.zip")
-
-    base = settings.API_V1_STR
-    return {
-        'output': out_base,
-        'tileset': f"{base}/{out_base}/tiles/layer.json",
-        'download': f"{base}/{out_base}/download.zip",
-        **info,
-    }
+    return {**result, **info}

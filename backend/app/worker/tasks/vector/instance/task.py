@@ -1,10 +1,8 @@
 """Bucket-first point instances: a point vector + uploaded model glbs -> 3D Tiles
 1.1 with EXT_mesh_gpu_instancing. No PostGIS, no i3dm.export binary."""
 import os
-import shutil
 import tempfile
 
-from app.core.config import settings
 from app.core.storage import get_storage, output_key
 from app.worker.common.expression import parse_expression
 from app.worker.main import celery, PipelineDatabaseTask
@@ -13,6 +11,7 @@ from app.worker.tasks.vector.gltf.glb import infer_schema
 from app.worker.tasks.vector.instance import reader
 from app.worker.tasks.vector.instance.tiler import build_instance_tileset
 from app.worker.tasks.vector.source import resolve_input
+from app.worker.tasks.vector.output import publish_tiles
 
 
 def _load_model(storage, name, config, scratch, cache):
@@ -56,7 +55,7 @@ def create_point_instance_3dtiles(pipeline_extended):
         if not features:
             raise Exception("No point features to tile")
 
-        frame = LocalFrame((lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0, (lo[2] + hi[2]) / 2.0)
+        frame = LocalFrame.from_bounds(lo, hi)
         model_cache = {}
         records = []
         for feat in features:
@@ -81,16 +80,4 @@ def create_point_instance_3dtiles(pipeline_extended):
         build_instance_tileset(records, tiles_dir, frame.transform(), model_cache, schema,
                                max_features_per_tile=max_features, max_geometric_error=max_ge)
 
-        zip_base = os.path.join(scratch, 'download')
-        shutil.make_archive(zip_base, 'zip', tiles_dir)
-
-        storage.delete_prefix(f"{out_base}/tiles")
-        storage.upload_dir(tiles_dir, f"{out_base}/tiles")
-        storage.upload_file(zip_base + '.zip', f"{out_base}/download.zip")
-
-    base = settings.API_V1_STR
-    return {
-        'output': out_base,
-        'tileset': f"{base}/{out_base}/tiles/tileset.json",
-        'download': f"{base}/{out_base}/download.zip",
-    }
+        return publish_tiles(storage, tiles_dir, out_base, 'tileset.json', scratch)
