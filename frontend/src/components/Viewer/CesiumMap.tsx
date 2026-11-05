@@ -19,7 +19,7 @@ import {
 import { useQuery } from "@tanstack/react-query"
 import * as Cesium from "cesium"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { FiCrosshair } from "react-icons/fi"
+import { FiCrosshair, FiX } from "react-icons/fi"
 import { API_BASE, readPipelines } from "../../api"
 import "cesium/Source/Widgets/widgets.css"
 
@@ -96,7 +96,7 @@ function buildLayers(items: any[]): Layer[] {
   return layers
 }
 
-// Rendering options for point-cloud tilesets, tweakable live to inspect refinement.
+// SSE and debug apply to every tileset, shading and classification only to point clouds.
 type PcSettings = {
   attenuation: boolean
   eyeDome: boolean
@@ -138,16 +138,29 @@ function classificationStyle() {
   })
 }
 
-function applyPcSettings(ts: Cesium.Cesium3DTileset, s: PcSettings) {
+function applySettings(ts: Cesium.Cesium3DTileset, s: PcSettings, isPointCloud: boolean) {
   ts.maximumScreenSpaceError = s.sse
-  ts.pointCloudShading.attenuation = s.attenuation
-  ts.pointCloudShading.maximumAttenuation = 4
-  ts.pointCloudShading.eyeDomeLighting = s.eyeDome
-  ts.style = s.classification ? classificationStyle() : undefined
+  if (isPointCloud) {
+    ts.pointCloudShading.attenuation = s.attenuation
+    ts.pointCloudShading.maximumAttenuation = 4
+    ts.pointCloudShading.eyeDomeLighting = s.eyeDome
+    ts.style = s.classification ? classificationStyle() : undefined
+  }
   ts.debugShowBoundingVolume = s.boundingVolume
   ts.debugShowGeometricError = s.geometricError
   ts.debugShowRenderingStatistics = s.statistics
   ts.debugShowMemoryUsage = s.memory
+}
+
+type Picked = {
+  props: [string, unknown][]
+  tile: string
+  geometricError: number
+}
+
+function formatValue(v: unknown) {
+  if (typeof v === "number") return Number.isInteger(v) ? String(v) : v.toFixed(3)
+  return v == null ? "" : String(v)
 }
 
 export default function CesiumMap() {
@@ -165,14 +178,16 @@ export default function CesiumMap() {
     queryFn: () => readPipelines({ skip: 0, limit: 1000 }),
   })
   const layers = useMemo(() => buildLayers((data as any)?.data || []), [data])
-  const tileLayers = layers.filter((l) => !l.isTerrain)
-  const terrainLayers = layers.filter((l) => l.isTerrain)
+  // memoized so effects don't rerun (and reset terrain) on every render
+  const tileLayers = useMemo(() => layers.filter((l) => !l.isTerrain), [layers])
+  const terrainLayers = useMemo(() => layers.filter((l) => l.isTerrain), [layers])
 
   const [visible, setVisible] = useState<Record<string, boolean>>({})
   const [activeTerrain, setActiveTerrain] = useState("")
   const [basemap, setBasemap] = useState(true)
   const [pc, setPc] = useState<PcSettings>(DEFAULT_PC)
   const [debugOpen, setDebugOpen] = useState(false)
+  const [picked, setPicked] = useState<Picked | null>(null)
 
   const hasPointCloud = tileLayers.some((l) => l.type === "PointCloud")
   const setPcField = <K extends keyof PcSettings>(k: K, v: PcSettings[K]) =>
@@ -210,7 +225,37 @@ export default function CesiumMap() {
     viewer.imageryLayers.add(imagery)
     imageryRef.current = imagery
     viewerRef.current = viewer
+
+    let highlighted: { feature: Cesium.Cesium3DTileFeature; color: Cesium.Color } | null = null
+    const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas)
+    handler.setInputAction((e: Cesium.ScreenSpaceEventHandler.PositionedEvent) => {
+      if (highlighted) {
+        try {
+          highlighted.feature.color = highlighted.color
+        } catch {
+          // tile unloaded
+        }
+        highlighted = null
+      }
+      const obj = viewer.scene.pick(e.position)
+      if (obj instanceof Cesium.Cesium3DTileFeature) {
+        highlighted = { feature: obj, color: Cesium.Color.clone(obj.color) }
+        obj.color = Cesium.Color.YELLOW
+        // content is untyped but public
+        const content = (obj as unknown as { content: Cesium.Cesium3DTileContent }).content
+        setPicked({
+          props: obj.getPropertyIds().map((id) => [id, obj.getProperty(id)] as [string, unknown]),
+          tile: content.url.split("/").pop()?.split("?")[0] || "",
+          geometricError: content.tile.geometricError,
+        })
+      } else {
+        setPicked(null)
+      }
+      viewer.scene.requestRender()
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK)
+
     return () => {
+      handler.destroy()
       viewer.destroy()
       viewerRef.current = null
       imageryRef.current = null
@@ -231,9 +276,7 @@ export default function CesiumMap() {
             if (!viewerRef.current) return
             tilesetsRef.current.set(layer.id, ts)
             viewer.scene.primitives.add(ts)
-            if (layer.type === "PointCloud") {
-              applyPcSettings(ts, pcRef.current)
-            }
+            applySettings(ts, pcRef.current, layer.type === "PointCloud")
             if (pendingZoom.current === layer.id) {
               pendingZoom.current = null
               flewRef.current = true
@@ -298,9 +341,8 @@ export default function CesiumMap() {
     const viewer = viewerRef.current
     if (!viewer) return
     for (const layer of tileLayers) {
-      if (layer.type !== "PointCloud") continue
       const ts = tilesetsRef.current.get(layer.id)
-      if (ts) applyPcSettings(ts, pc)
+      if (ts) applySettings(ts, pc, layer.type === "PointCloud")
     }
     viewer.scene.requestRender()
   }, [pc, tileLayers])
@@ -389,34 +431,38 @@ export default function CesiumMap() {
           </Stack>
         )}
 
-        {hasPointCloud && (
+        {tileLayers.length > 0 && (
           <>
             <Divider my={3} borderColor="whiteAlpha.300" />
-            <Text fontSize="xs" opacity={0.7} mb={1}>
-              Point clouds
-            </Text>
             <Stack spacing={1}>
-              <Checkbox
-                isChecked={pc.attenuation}
-                onChange={(e) => setPcField("attenuation", e.target.checked)}
-                size="sm"
-              >
-                Shading (attenuation)
-              </Checkbox>
-              <Checkbox
-                isChecked={pc.eyeDome}
-                onChange={(e) => setPcField("eyeDome", e.target.checked)}
-                size="sm"
-              >
-                Eye-dome lighting
-              </Checkbox>
-              <Checkbox
-                isChecked={pc.classification}
-                onChange={(e) => setPcField("classification", e.target.checked)}
-                size="sm"
-              >
-                Classification colors
-              </Checkbox>
+              {hasPointCloud && (
+                <>
+                  <Text fontSize="xs" opacity={0.7} mb={1}>
+                    Point clouds
+                  </Text>
+                  <Checkbox
+                    isChecked={pc.attenuation}
+                    onChange={(e) => setPcField("attenuation", e.target.checked)}
+                    size="sm"
+                  >
+                    Shading (attenuation)
+                  </Checkbox>
+                  <Checkbox
+                    isChecked={pc.eyeDome}
+                    onChange={(e) => setPcField("eyeDome", e.target.checked)}
+                    size="sm"
+                  >
+                    Eye-dome lighting
+                  </Checkbox>
+                  <Checkbox
+                    isChecked={pc.classification}
+                    onChange={(e) => setPcField("classification", e.target.checked)}
+                    size="sm"
+                  >
+                    Classification colors
+                  </Checkbox>
+                </>
+              )}
 
               <Flex align="center" justify="space-between" mt={1}>
                 <Text fontSize="xs" opacity={0.8}>
@@ -509,6 +555,55 @@ export default function CesiumMap() {
           </Stack>
         </RadioGroup>
       </Box>
+
+      {picked && (
+        <Box
+          pos="absolute"
+          top={4}
+          right={4}
+          w="300px"
+          maxH="calc(100% - 32px)"
+          overflowY="auto"
+          bg="blackAlpha.700"
+          color="white"
+          borderRadius="md"
+          p={3}
+          fontSize="xs"
+        >
+          <Flex align="center" justify="space-between" mb={1}>
+            <Heading size="xs" textTransform="uppercase" letterSpacing="wide">
+              Feature
+            </Heading>
+            <IconButton
+              aria-label="Close"
+              icon={<FiX />}
+              size="xs"
+              variant="ghost"
+              colorScheme="whiteAlpha"
+              onClick={() => setPicked(null)}
+            />
+          </Flex>
+          <Text opacity={0.6} mb={2}>
+            tile {picked.tile} · geometric error {picked.geometricError.toFixed(1)} m
+          </Text>
+          {picked.props.length === 0 ? (
+            <Text opacity={0.5}>No properties on this feature.</Text>
+          ) : (
+            <Stack spacing={0}>
+              {picked.props.map(([k, v]) => (
+                <Flex key={k} gap={2}>
+                  <Text opacity={0.7} flexShrink={0} w="110px" isTruncated title={k}>
+                    {k}
+                  </Text>
+                  <Text fontFamily="mono" wordBreak="break-all">
+                    {formatValue(v)}
+                  </Text>
+                </Flex>
+              ))}
+            </Stack>
+          )}
+        </Box>
+      )}
     </Box>
   )
 }

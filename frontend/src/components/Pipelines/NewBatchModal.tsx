@@ -60,6 +60,7 @@ interface BatchFormValues {
   remove_bottom_surface?: boolean
   max_features_per_tile?: string
   max_geometric_error?: string
+  max_tile_size_kb?: string
   max_error?: string
   max_zoom?: string
   vertex_normals?: boolean
@@ -91,6 +92,7 @@ const EMPTY: BatchFormValues = {
   remove_bottom_surface: true,
   max_features_per_tile: "",
   max_geometric_error: "",
+  max_tile_size_kb: "",
   max_error: "",
   max_zoom: "",
   vertex_normals: true,
@@ -132,8 +134,7 @@ function buildData(values: BatchFormValues, type: PipelineType): Record<string, 
     if (lower !== undefined) data.lower_limit_height = lower
     if (values.to_ellipsoidal_height) data.to_ellipsoidal_height = true
     data.remove_bottom_surface = !!values.remove_bottom_surface
-    if (values.max_features_per_tile) data.max_features_per_tile = Number(values.max_features_per_tile)
-    if (values.max_geometric_error) data.max_geometric_error = Number(values.max_geometric_error)
+    if (values.max_tile_size_kb) data.max_tile_size_kb = Number(values.max_tile_size_kb)
     return data
   }
   if (values.sample_radius) data.sample_radius = Number(values.sample_radius)
@@ -430,12 +431,8 @@ const NewBatchModal = ({
                 <Checkbox {...register("remove_bottom_surface")}>Remove bottom surface</Checkbox>
               </FormControl>
               <FormControl>
-                <FormLabel htmlFor="max_features_per_tile">Max features per tile (optional)</FormLabel>
-                <Input id="max_features_per_tile" type="number" placeholder="1000" {...register("max_features_per_tile")} />
-              </FormControl>
-              <FormControl>
-                <FormLabel htmlFor="max_geometric_error">Max geometric error (optional)</FormLabel>
-                <Input id="max_geometric_error" type="number" placeholder="500" {...register("max_geometric_error")} />
+                <FormLabel htmlFor="max_tile_size_kb">Max tile size in KB (optional)</FormLabel>
+                <Input id="max_tile_size_kb" type="number" placeholder="400" {...register("max_tile_size_kb")} />
               </FormControl>
             </>
           ) : (

@@ -3,7 +3,7 @@ from app.worker.tasks.vector.polygon.processes import earcut
 
 def parse_coords(coords, z, translate_z):
     height = coords[2] if coords[2] else 0
-    if z:
+    if z is not None:
         height = z
     _translate_z = translate_z if translate_z else 0
     return [coords[0], coords[1], height + _translate_z]

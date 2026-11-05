@@ -5,16 +5,13 @@ glbs are parsed by hand (single-buffer, non-Draco, non-interleaved) into primiti
 so the mesh writer can embed and gpu-instance them. No gltf library.
 """
 import json
-import os
 import struct
 
 import numpy as np
-from osgeo import ogr, osr
-from pyproj import CRS
 
-_GLB_MAGIC = 0x46546C67
-_JSON_CHUNK = 0x4E4F534A
-_BIN_CHUNK = 0x004E4942
+from app.worker.tasks.vector.gltf.glb import BIN_CHUNK, GLB_MAGIC, JSON_CHUNK
+from app.worker.tasks.vector.source import coerce, field_names, open_layer, wgs84_transform
+
 _DTYPE = {5120: np.int8, 5121: np.uint8, 5122: np.int16, 5123: np.uint16,
           5125: np.uint32, 5126: np.float32}
 _NCOMP = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}
@@ -22,51 +19,12 @@ _NCOMP = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}
 
 # ---- point vector ---------------------------------------------------------
 
-def resolve_input(source, storage, scratch):
-    """Download the bucket vector to scratch; a .zip opens via /vsizip."""
-    key = source['key']
-    if key.lower().endswith('.zip'):
-        dest = os.path.join(scratch, 'index.zip')
-        storage.download_file(key, dest)
-        return f"/vsizip/{dest}"
-    dest = os.path.join(scratch, 'index' + (os.path.splitext(key)[1] or '.geojson'))
-    storage.download_file(key, dest)
-    return dest
-
-
-def _coerce(value):
-    from decimal import Decimal
-    return float(value) if isinstance(value, Decimal) else value
-
-
 def read_points(path, to_ellipsoidal=False):
     """(features, (lo, hi)) where each feature is {lonlath, properties}; bounds are
     lon/lat/h min/max for the local frame origin. Non-point geometries are skipped."""
-    ds = ogr.Open(path)
-    if ds is None:
-        raise Exception(f"Cannot open vector source {path}")
-    layer = ds.GetLayer(0)
-    src_srs = layer.GetSpatialRef()
-    if src_srs is None:
-        raise Exception("Missing spatial reference system")
-
-    dst_srs = osr.SpatialReference()
-    if to_ellipsoidal:
-        epsg = src_srs.GetAuthorityCode(None) or CRS(src_srs.ExportToWkt()).to_epsg()
-        if not epsg:
-            raise Exception("Source CRS EPSG is required for ellipsoidal height conversion")
-        src_for_transform = osr.SpatialReference()
-        src_for_transform.SetFromUserInput(f"EPSG:{epsg}+3855")
-        dst_srs.SetFromUserInput("EPSG:4326+4979")
-    else:
-        src_for_transform = src_srs
-        dst_srs.ImportFromEPSG(4326)
-    src_for_transform.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-    dst_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-    transform = osr.CoordinateTransformation(src_for_transform, dst_srs)
-
-    defn = layer.GetLayerDefn()
-    field_names = [defn.GetFieldDefn(i).GetName() for i in range(defn.GetFieldCount())]
+    ds, layer = open_layer(path)
+    transform = wgs84_transform(layer, to_ellipsoidal)
+    names = field_names(layer)
 
     lo = np.array([np.inf, np.inf, np.inf])
     hi = np.array([-np.inf, -np.inf, -np.inf])
@@ -83,7 +41,7 @@ def read_points(path, to_ellipsoidal=False):
             continue  # TODO: MultiPoint -> one instance per point
         c = g['coordinates']
         lonlath = [c[0], c[1], c[2] if len(c) > 2 and c[2] is not None else 0.0]
-        props = {name: _coerce(feat.GetField(name)) for name in field_names}
+        props = {name: coerce(feat.GetField(name)) for name in names}
         arr = np.asarray(lonlath, dtype=np.float64)
         lo = np.minimum(lo, arr)
         hi = np.maximum(hi, arr)
@@ -98,7 +56,7 @@ def _parse_glb(path):
     with open(path, 'rb') as f:
         data = f.read()
     magic, version, _ = struct.unpack_from('<III', data, 0)
-    if magic != _GLB_MAGIC:
+    if magic != GLB_MAGIC:
         raise ValueError(f"{path!r} is not a binary glTF")
     off = 12
     gltf = None
@@ -107,9 +65,9 @@ def _parse_glb(path):
         clen, ctype = struct.unpack_from('<II', data, off)
         off += 8
         chunk = data[off:off + clen]
-        if ctype == _JSON_CHUNK:
+        if ctype == JSON_CHUNK:
             gltf = json.loads(chunk)
-        elif ctype == _BIN_CHUNK:
+        elif ctype == BIN_CHUNK:
             bin_data = chunk
         off += clen
     if gltf is None:

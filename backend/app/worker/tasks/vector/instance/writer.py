@@ -1,21 +1,12 @@
 """Instanced .glb writer: embeds each model mesh once and replicates it with
 EXT_mesh_gpu_instancing; per-instance properties ride along via EXT_instance_features
-+ EXT_structural_metadata for picking. Reuses the mesh writer's blob + metadata helpers.
++ EXT_structural_metadata for picking.
 """
-import json
-import struct
-
 import numpy as np
 
-from app.worker.tasks.vector.gltf.writer import _Blob, _metadata, enu_to_gltf
-
-_GLB_MAGIC = 0x46546C67
-_JSON_CHUNK = 0x4E4F534A
-_BIN_CHUNK = 0x004E4942
-_FLOAT = 5126
-_UINT = 5125
-_ARRAY_BUFFER = 34962
-_ELEMENT_ARRAY_BUFFER = 34963
+from app.worker.tasks.vector.gltf.glb import (
+    ARRAY_BUFFER, ELEMENT_ARRAY_BUFFER, FLOAT, UNSIGNED_INT, Blob, enu_to_gltf, metadata, pack_glb,
+)
 
 
 def heading_to_quat(deg):
@@ -27,26 +18,10 @@ def heading_to_quat(deg):
     return q
 
 
-def _finalize(gltf, blob):
-    """Pack glTF JSON + bin into .glb bytes (mirrors gltf.writer.glb_bytes tail)."""
-    bin_chunk = bytes(blob.buf)
-    bin_chunk += b"\x00" * ((4 - len(bin_chunk) % 4) % 4)
-    gltf["bufferViews"] = blob.views
-    gltf["buffers"] = [{"byteLength": len(bin_chunk)}]
-    json_chunk = json.dumps(gltf, separators=(",", ":")).encode("utf-8")
-    json_chunk += b" " * ((4 - len(json_chunk) % 4) % 4)
-    total = 12 + 8 + len(json_chunk) + 8 + len(bin_chunk)
-    out = bytearray()
-    out += struct.pack("<III", _GLB_MAGIC, 2, total)
-    out += struct.pack("<II", len(json_chunk), _JSON_CHUNK) + json_chunk
-    out += struct.pack("<II", len(bin_chunk), _BIN_CHUNK) + bin_chunk
-    return bytes(out)
-
-
 def write_instanced_glb(path, groups, features, schema):
     """groups: list of {mesh, translations(K,3 enu), headings(K), scales(K)}; one gpu
     instanced node per group. features/schema build a single tile-wide property table."""
-    blob = _Blob()
+    blob = Blob()
     accessors, materials, meshes, nodes = [], [], [], []
 
     def accessor(arr, comp, atype, target=None, minmax=False):
@@ -62,9 +37,9 @@ def write_instanced_glb(path, groups, features, schema):
     for g in groups:
         primitives = []
         for prim in g["mesh"]["primitives"]:
-            pa = accessor(prim["positions"].astype(np.float32), _FLOAT, "VEC3", _ARRAY_BUFFER, minmax=True)
-            na = accessor(prim["normals"].astype(np.float32), _FLOAT, "VEC3", _ARRAY_BUFFER)
-            ia = accessor(prim["indices"].astype(np.uint32), _UINT, "SCALAR", _ELEMENT_ARRAY_BUFFER)
+            pa = accessor(prim["positions"].astype(np.float32), FLOAT, "VEC3", ARRAY_BUFFER, minmax=True)
+            na = accessor(prim["normals"].astype(np.float32), FLOAT, "VEC3", ARRAY_BUFFER)
+            ia = accessor(prim["indices"].astype(np.uint32), UNSIGNED_INT, "SCALAR", ELEMENT_ARRAY_BUFFER)
             materials.append({
                 "doubleSided": True,
                 "pbrMetallicRoughness": {
@@ -82,10 +57,10 @@ def write_instanced_glb(path, groups, features, schema):
         rot = heading_to_quat(g["headings"])
         sc = np.repeat(np.asarray(g["scales"], dtype=np.float32)[:, None], 3, axis=1)
         fid = np.arange(offset, offset + k, dtype=np.float32).reshape(-1, 1)
-        ta = accessor(tr, _FLOAT, "VEC3", minmax=True)
-        ra = accessor(rot, _FLOAT, "VEC4")
-        sa = accessor(sc, _FLOAT, "VEC3")
-        fa = accessor(fid, _FLOAT, "SCALAR")
+        ta = accessor(tr, FLOAT, "VEC3", minmax=True)
+        ra = accessor(rot, FLOAT, "VEC4")
+        sa = accessor(sc, FLOAT, "VEC3")
+        fa = accessor(fid, FLOAT, "SCALAR")
         nodes.append({
             "mesh": len(meshes) - 1,
             "extensions": {
@@ -110,9 +85,9 @@ def write_instanced_glb(path, groups, features, schema):
         "accessors": accessors,
     }
     if schema and features:
-        gltf["extensions"] = {"EXT_structural_metadata": _metadata(blob, features, schema)}
+        gltf["extensions"] = {"EXT_structural_metadata": metadata(blob, features, schema)}
         ext_used.append("EXT_structural_metadata")
     gltf["extensionsUsed"] = ext_used
 
     with open(path, "wb") as f:
-        f.write(_finalize(gltf, blob))
+        f.write(pack_glb(gltf, blob))

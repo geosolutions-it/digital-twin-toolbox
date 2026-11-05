@@ -5,20 +5,12 @@ quadtree: each node keeps a stride sample as its own content and pushes the rest
 quadrant children, so every instance renders exactly once and coarse levels thin
 out (no replacement, no holes).
 """
-import json
 import os
 
 import numpy as np
 
-from app.worker.tasks.vector.instance.glb import write_instanced_glb
-
-
-def _box(enu):
-    mn, mx = enu.min(axis=0), enu.max(axis=0)
-    c = (mn + mx) / 2.0
-    h = np.maximum((mx - mn) / 2.0, 1.0)  # avoid a zero-thickness box for one point
-    return [float(c[0]), float(c[1]), float(c[2]),
-            float(h[0]), 0.0, 0.0, 0.0, float(h[1]), 0.0, 0.0, 0.0, float(h[2])]
+from app.worker.tasks.vector.gltf.tileset import box, write_tileset
+from app.worker.tasks.vector.instance.writer import write_instanced_glb
 
 
 def _write_node(records, models, schema, out_dir, tile_id):
@@ -40,7 +32,7 @@ def _write_node(records, models, schema, out_dir, tile_id):
         features.extend(r["properties"] for r in chunk)
         i += len(chunk)
     write_instanced_glb(os.path.join(out_dir, f"{tile_id}.glb"), groups, features, schema)
-    return _box(enu)
+    return box(enu.min(axis=0), enu.max(axis=0), min_half=1.0)
 
 
 def _subdivide(records, depth, max_features, max_depth, max_ge, models, schema, out_dir, counter):
@@ -88,14 +80,6 @@ def build_instance_tileset(records, output_dir, transform, models, schema,
     counter = {"n": 0}
     root = _subdivide(records, 0, max_features_per_tile, max_depth,
                       float(max_geometric_error), models, schema, output_dir, counter)
-    root["transform"] = transform
     if root["geometricError"] == 0.0:
         root["geometricError"] = float(max_geometric_error)
-    tileset = {
-        "asset": {"version": "1.1"},
-        "geometricError": float(root["geometricError"]),
-        "root": root,
-    }
-    with open(os.path.join(output_dir, "tileset.json"), "w") as f:
-        json.dump(tileset, f, separators=(",", ":"))
-    return tileset
+    return write_tileset(output_dir, root, transform, root["geometricError"])

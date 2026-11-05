@@ -4,16 +4,15 @@ import os
 import shutil
 import tempfile
 
-import numpy as np
-
 from app.core.config import settings
 from app.core.storage import get_storage, output_key
 from app.worker.common.expression import parse_expression
 from app.worker.main import celery, PipelineDatabaseTask
 from app.worker.tasks.vector.gltf.geo import LocalFrame
-from app.worker.tasks.vector.gltf.writer import infer_schema
+from app.worker.tasks.vector.gltf.glb import infer_schema
 from app.worker.tasks.vector.instance import reader
 from app.worker.tasks.vector.instance.tiler import build_instance_tileset
+from app.worker.tasks.vector.source import resolve_input
 
 
 def _load_model(storage, name, config, scratch, cache):
@@ -52,7 +51,7 @@ def create_point_instance_3dtiles(pipeline_extended):
     out_base = source.get('output_base') or output_key(pipeline_id)
 
     with tempfile.TemporaryDirectory() as scratch:
-        input_path = reader.resolve_input(source, storage, scratch)
+        input_path = resolve_input(source, storage, scratch)
         features, (lo, hi) = reader.read_points(input_path, bool(config['to_ellipsoidal_height']))
         if not features:
             raise Exception("No point features to tile")
