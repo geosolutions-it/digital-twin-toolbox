@@ -41,11 +41,17 @@ interface ExpressionInputProps {
   /** undefined skips the unknown-attribute check */
   fields?: string[]
   features?: Feature[]
+  literals?: string[]
   placeholder?: string
   inputRef?: React.Ref<HTMLInputElement>
 }
 
-type Suggestion = { label: string; insert: string; hint?: string }
+type Suggestion = {
+  label: string
+  insert: string
+  hint?: string
+  literal?: boolean
+}
 
 const fmt = (n: number) =>
   Math.abs(n) >= 100 ? n.toFixed(0) : `${Number(n.toFixed(2))}`
@@ -93,6 +99,7 @@ const ExpressionInput = ({
   onChange,
   fields,
   features,
+  literals,
   placeholder,
   inputRef,
 }: ExpressionInputProps) => {
@@ -173,10 +180,15 @@ const ExpressionInput = ({
       list.push(
         { label: "lower()", insert: "lower(" },
         { label: "upper()", insert: "upper(" },
+        ...(literals ?? []).map((v) => ({
+          label: v,
+          insert: JSON.stringify(v),
+          literal: true,
+        })),
       )
     }
     return list
-  }, [fields, features, type])
+  }, [fields, features, type, literals])
 
   const partial =
     /[$\p{L}_][\p{L}\p{N}_]*$/u.exec(text.slice(0, cursor))?.[0] ?? ""
@@ -191,8 +203,9 @@ const ExpressionInput = ({
     : []
   const showSuggestions = open && suggestions.length > 0
 
-  function insert(token: string, replace = 0) {
-    const start = cursor - replace
+  function insert(token: string, replace = 0, literal = false) {
+    let start = cursor - replace
+    if (literal && text[start - 1] === '"') start -= 1
     commit(
       text.slice(0, start) + token + text.slice(cursor),
       start + token.length,
@@ -208,7 +221,8 @@ const ExpressionInput = ({
       setActive((active + step + suggestions.length) % suggestions.length)
     } else if (e.key === "Enter" || e.key === "Tab") {
       e.preventDefault()
-      insert(suggestions[active].insert, partial.length)
+      const s = suggestions[active]
+      insert(s.insert, partial.length, s.literal)
     } else if (e.key === "Escape") {
       e.stopPropagation()
       setOpen(false)
@@ -302,10 +316,28 @@ const ExpressionInput = ({
                   No attributes loaded
                 </Text>
               )}
+              {literals?.length ? (
+                <>
+                  <MenuDivider />
+                  <MenuGroup title="Values">
+                    {options
+                      .filter((o) => o.literal)
+                      .map((o) => (
+                        <MenuItem
+                          key={o.label}
+                          onClick={() => insert(o.insert)}
+                          fontFamily="mono"
+                        >
+                          {o.insert}
+                        </MenuItem>
+                      ))}
+                  </MenuGroup>
+                </>
+              ) : null}
               <MenuDivider />
               <MenuGroup title="Functions">
                 {options
-                  .filter((o) => !fields?.includes(o.label))
+                  .filter((o) => !o.literal && !fields?.includes(o.label))
                   .map((o) => (
                     <MenuItem
                       key={o.label}
@@ -351,7 +383,7 @@ const ExpressionInput = ({
               _dark={{ bg: i === active ? "gray.600" : undefined }}
               onMouseDown={(e) => {
                 e.preventDefault()
-                insert(s.insert, partial.length)
+                insert(s.insert, partial.length, s.literal)
               }}
             >
               <Text flex="1">{s.label}</Text>

@@ -10,13 +10,15 @@ router = APIRouter()
 
 
 @router.get("/")
-def list_storage(prefix: str = "") -> Any:
+def list_storage(prefix: str = "", classify: bool = True) -> Any:
     """List one level of the bucket under a prefix: folders and files."""
     prefix = prefix.lstrip("/")
     if ".." in prefix.split("/"):
         raise HTTPException(status_code=400, detail="Invalid prefix")
     storage = get_storage()
     listing = storage.list_dir(prefix)
+    if not classify:
+        return listing
     # zips are peeked, so the UI offers the right form
     for f in listing["files"]:
         try:

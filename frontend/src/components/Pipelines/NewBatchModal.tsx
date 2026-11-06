@@ -34,11 +34,16 @@ import {
 import { processPipelineTask } from "../../api/pipelines"
 import useCustomToast from "../../hooks/useCustomToast"
 import ExpressionInput, { isInvalidExpression } from "./ExpressionInput"
+import StorageKeyInput, { useStorageListing } from "./StorageKeyInput"
 import type { PreviewKind } from "./PreviewMap"
 
 const PreviewMap = lazy(() => import("./PreviewMap"))
 
 type PipelineType = "PointCloud" | "Polygon" | "Terrain" | "Instance" | "Mesh"
+
+// worker downloads water as a single file
+const VECTOR_EXTENSIONS = [".gpkg", ".geojson", ".json", ".fgb"]
+const RASTER_EXTENSIONS = [".tif", ".tiff", ".vrt", ".jp2"]
 
 const AXES = [
   { value: "X", label: "X" },
@@ -287,6 +292,19 @@ const NewBatchModal = ({
     baseType === "Polygon" && (vectorFields as any)?.geometry_type === "Point"
       ? "Instance"
       : baseType
+  const modelsPrefix = watch("models_prefix") ?? ""
+  const modelsDir = modelsPrefix.slice(0, modelsPrefix.lastIndexOf("/") + 1)
+  const modelListing = useStorageListing(
+    modelsDir,
+    isOpen && type === "Instance",
+  )
+  // worker key is models_prefix + model
+  const modelNames = modelListing.data?.files
+    .filter(
+      (f) =>
+        f.key.startsWith(modelsPrefix) && f.key.toLowerCase().endsWith(".glb"),
+    )
+    .map((f) => f.key.slice(modelsPrefix.length))
 
   const hasPreview =
     type === "Polygon" || type === "Instance" || type === "Mesh"
@@ -587,6 +605,25 @@ const NewBatchModal = ({
                   Tiles.
                 </Text>
                 <FormControl>
+                  <FormLabel htmlFor="models_prefix">
+                    Models prefix (optional)
+                  </FormLabel>
+                  <Controller
+                    control={control}
+                    name="models_prefix"
+                    render={({ field }) => (
+                      <StorageKeyInput
+                        id="models_prefix"
+                        value={field.value}
+                        onChange={field.onChange}
+                        inputRef={field.ref}
+                        placeholder="e.g. models/"
+                        foldersOnly
+                      />
+                    )}
+                  />
+                </FormControl>
+                <FormControl>
                   <FormLabel>Model (bucket key or attribute)</FormLabel>
                   <Controller
                     control={control}
@@ -604,21 +641,10 @@ const NewBatchModal = ({
                         inputRef={field.ref}
                         fields={fieldNames}
                         features={sampleFeatures}
+                        literals={modelNames}
                         placeholder={'e.g. "tree.glb" or lower(type) + ".glb"'}
                       />
                     )}
-                  />
-                </FormControl>
-                <FormControl>
-                  <FormLabel htmlFor="models_prefix">
-                    Models prefix (optional)
-                  </FormLabel>
-                  <Input
-                    id="models_prefix"
-                    placeholder="e.g. models/"
-                    fontFamily="mono"
-                    fontSize="sm"
-                    {...register("models_prefix")}
                   />
                 </FormControl>
                 <FormControl>
@@ -743,12 +769,19 @@ const NewBatchModal = ({
                   <FormLabel htmlFor="water_key">
                     Water layer (bucket key, optional)
                   </FormLabel>
-                  <Input
-                    id="water_key"
-                    placeholder="e.g. water/coastline.gpkg"
-                    fontFamily="mono"
-                    fontSize="sm"
-                    {...register("water_key")}
+                  <Controller
+                    control={control}
+                    name="water_key"
+                    render={({ field }) => (
+                      <StorageKeyInput
+                        id="water_key"
+                        value={field.value}
+                        onChange={field.onChange}
+                        inputRef={field.ref}
+                        placeholder="e.g. water/coastline.gpkg"
+                        extensions={VECTOR_EXTENSIONS}
+                      />
+                    )}
                   />
                 </FormControl>
               </>
@@ -840,12 +873,19 @@ const NewBatchModal = ({
                   <FormLabel htmlFor="colorization_image">
                     Colorization raster (bucket key, optional)
                   </FormLabel>
-                  <Input
-                    id="colorization_image"
-                    placeholder="e.g. rasters/orthophoto.tif"
-                    fontFamily="mono"
-                    fontSize="sm"
-                    {...register("colorization_image")}
+                  <Controller
+                    control={control}
+                    name="colorization_image"
+                    render={({ field }) => (
+                      <StorageKeyInput
+                        id="colorization_image"
+                        value={field.value}
+                        onChange={field.onChange}
+                        inputRef={field.ref}
+                        placeholder="e.g. rasters/orthophoto.tif"
+                        extensions={RASTER_EXTENSIONS}
+                      />
+                    )}
                   />
                 </FormControl>
                 <FormControl>

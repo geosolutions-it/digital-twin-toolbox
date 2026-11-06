@@ -14,9 +14,12 @@ export interface StorageListing {
   files: StorageFile[]
 }
 
-export async function listStorage(prefix = ""): Promise<StorageListing> {
+export async function listStorage(
+  prefix = "",
+  classify = true,
+): Promise<StorageListing> {
   const res = await axios.get(`${API_BASE}/api/v1/storage/`, {
-    params: { prefix },
+    params: { prefix, classify },
   })
   return res.data
 }
