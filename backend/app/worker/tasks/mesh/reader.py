@@ -83,11 +83,6 @@ def bbox_from_lines(lines, batch=500_000):
     return {"size": (hi - lo).tolist(), "offset": ((lo + hi) / 2).tolist()}
 
 
-def estimate_mesh_bbox_from_obj(filepath):
-    with open(filepath, "rb") as handle:
-        return bbox_from_lines(handle)
-
-
 def mesh_bbox_from_key(storage, key):
     """Bbox of a bucket .obj or zipped .obj; a zip is read in place, textures untouched."""
     from app.core.storage import open_range

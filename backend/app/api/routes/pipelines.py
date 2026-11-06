@@ -5,28 +5,17 @@ from sqlmodel import func, select
 import os
 import re
 import uuid
-from app.models.task import Pipeline, PipelinePublic, PipelinesPublic, PipelinePublicExtended, PipelineCreate, PipelineBatchCreate, PipelineSourceCreate, Message, Asset, PipelinesActionTypes, PipelineUpdate, PipelineBatchCounts, PipelineBatchSummary, PipelineOverviewEntry, PipelinesOverview
+from app.models.task import Pipeline, PipelinePublic, PipelinesPublic, PipelineBatchCreate, PipelineSourceCreate, Message, PipelinesActionTypes, PipelineUpdate, PipelineBatchCounts, PipelineBatchSummary, PipelineOverviewEntry, PipelinesOverview
 
-from app.worker.pipelines import run as run_pipeline
 from app.services.pipeline_config import validate_pipeline_config
 from app.services.file_classify import classify_bucket_file, SUPPORTED_EXTENSIONS
 from app.core.storage import get_storage, output_key
 from app.core.config import settings
 from app.worker.main import celery
 from celery.result import AsyncResult
-from celery.states import REVOKED, PENDING, SUCCESS, FAILURE, STARTED
+from celery.states import REVOKED, PENDING, SUCCESS, STARTED
 
 router = APIRouter()
-
-def _collect_task_ids(result):
-    """All task ids in the chain (walks result.parent); one id for single-task pipelines."""
-    ids = []
-    node = result
-    while node is not None:
-        if getattr(node, 'id', None):
-            ids.append(node.id)
-        node = getattr(node, 'parent', None)
-    return ids
 
 @router.get("/", response_model=PipelinesPublic)
 def read_pipelines(
@@ -161,19 +150,6 @@ def read_pipelines_overview(
 
     return PipelinesOverview(data=data, count=count)
 
-@router.post("/", response_model=PipelinePublic)
-def create_pipeline(
-    *, session: SessionDep, current_user: CurrentUser, pipeline_in: PipelineCreate
-) -> Any:
-    """
-    Create new pipeline.
-    """
-    pipeline = Pipeline.model_validate(pipeline_in, update={"owner_id": current_user.id})
-    session.add(pipeline)
-    session.commit()
-    session.refresh(pipeline)
-    return pipeline
-
 _SOURCE_TASK = {
     "PointCloud": "create_point_cloud_3dtiles",
     "Polygon": "create_polygon_3dtiles",
@@ -205,7 +181,7 @@ def create_pipeline_source(
         raise HTTPException(status_code=422, detail=f"Unsupported file: {source_in.key!r}")
 
     try:
-        data = validate_pipeline_config(pipeline_type, None, source_in.data)
+        data = validate_pipeline_config(pipeline_type, source_in.data)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=f"Invalid config: {e}")
 
@@ -222,7 +198,6 @@ def create_pipeline_source(
         output_base = f"output/{os.path.splitext(key)[0]}"
     pipeline = Pipeline(
         title=source_in.title or os.path.basename(key),
-        asset_id=None,
         data=data,
         task_id=None,
         task_status=None,
@@ -284,7 +259,7 @@ def create_pipeline_batch(
     created = []
     for key, ptype in classified:
         try:
-            data = validate_pipeline_config(ptype, None, batch_in.data)
+            data = validate_pipeline_config(ptype, batch_in.data)
         except ValueError as e:
             raise HTTPException(status_code=422, detail=f"Invalid config: {e}")
         name = os.path.basename(key)
@@ -293,8 +268,7 @@ def create_pipeline_batch(
         output_base = f"{out_root}/{rel_noext}"
         pipeline = Pipeline(
             title=f"{batch_in.title} / {name}" if batch_in.title else name,
-            asset_id=None,
-            data=data,
+                data=data,
             task_id=None,
             task_status=None,
             task_result=None,
@@ -417,59 +391,23 @@ def mesh_bbox(*, key: str | None = None, prefix: str | None = None) -> Any:
 def _apply_pipeline_action(session, pipeline: Pipeline, action_type: PipelinesActionTypes) -> dict:
     """Run/cancel one pipeline, persisting the new task state. Returns the applied fields.
     Raises ValueError for unsupported configs; callers decide how to surface it."""
-    source = pipeline.source or {}
-    is_source = not pipeline.asset_id
-
-    asset = None
-    if not is_source:
-        asset = session.get(Asset, pipeline.asset_id)
-        if not asset:
-            raise HTTPException(status_code=404, detail="There is not asset associated with this pipeline")
-
     pipeline_out = {}
     if action_type == 'run' and pipeline.task_status not in (PENDING, STARTED):
-        if is_source:
-            ptype = source.get('pipeline') or 'PointCloud'
-            task_name = _SOURCE_TASK.get(ptype)
-            if not task_name:
-                raise ValueError(f"Unsupported source pipeline: {ptype}")
-            pipeline_extended_dict = pipeline.model_dump()
-            pipeline_extended_dict['data'] = validate_pipeline_config(
-                ptype, None, pipeline_extended_dict.get('data')
-            )
-            task = celery.send_task(task_name, kwargs={"pipeline_extended": pipeline_extended_dict})
-            pipeline_out = {"task_id": task.id, "task_status": PENDING, "task_result": None}
-        else:
-            pipeline_in = pipeline.model_dump()
-            pipeline_extended = PipelinePublicExtended.model_validate(
-                {**pipeline_in, 'asset': asset}, update={"owner_id": pipeline.owner_id}
-            )
-            pipeline_extended_dict = pipeline_extended.model_dump()
-            pipeline_extended_dict['data'] = validate_pipeline_config(
-                asset.geometry_type, asset.asset_type, pipeline_extended_dict.get('data')
-            )
-            task = run_pipeline(pipeline_extended_dict)
-            task_ids = _collect_task_ids(task)
-            pipeline_out = {
-                "task_id": task.id,
-                "task_status": PENDING,
-                # store all chain ids so cancel can revoke the running step, not just the tail
-                "task_result": {"task_ids": task_ids} if len(task_ids) > 1 else None,
-            }
+        ptype = (pipeline.source or {}).get('pipeline') or 'PointCloud'
+        task_name = _SOURCE_TASK.get(ptype)
+        if not task_name:
+            raise ValueError(f"Unsupported source pipeline: {ptype}")
+        payload = pipeline.model_dump()
+        payload['data'] = validate_pipeline_config(ptype, payload.get('data'))
+        task = celery.send_task(task_name, kwargs={"pipeline_extended": payload})
+        pipeline_out = {"task_id": task.id, "task_status": PENDING, "task_result": None}
         pipeline.sqlmodel_update(pipeline_out)
         session.add(pipeline)
         session.commit()
         session.refresh(pipeline)
 
     if action_type == 'cancel' and pipeline.task_id and pipeline.task_status in (PENDING, STARTED):
-        # revoke every chain task (running one terminated); single id for non-chains
-        task_ids = []
-        if isinstance(pipeline.task_result, dict):
-            task_ids = pipeline.task_result.get('task_ids') or []
-        if not task_ids:
-            task_ids = [pipeline.task_id]
-        for tid in task_ids:
-            AsyncResult(tid, app=celery).revoke(terminate=True)
+        AsyncResult(pipeline.task_id, app=celery).revoke(terminate=True)
         pipeline_out = {
             "task_id": pipeline.task_id,
             "task_status": REVOKED,
@@ -495,7 +433,7 @@ async def process_pipeline_task(
     try:
         pipeline_out = _apply_pipeline_action(session, pipeline, action_type)
     except ValueError as e:
-        raise HTTPException(status_code=422, detail=f"Unsupported asset for this pipeline: {e}")
+        raise HTTPException(status_code=422, detail=f"Unsupported pipeline config: {e}")
     except HTTPException:
         raise
     except Exception:
@@ -574,7 +512,7 @@ def update_pipeline(
     session.refresh(pipeline)
     return pipeline
 
-@router.get("/{id}", response_model=PipelinePublicExtended)
+@router.get("/{id}", response_model=PipelinePublic)
 def read_pipeline(session: SessionDep, id: uuid.UUID) -> Any:
     """
     Get pipeline by ID.
@@ -582,34 +520,7 @@ def read_pipeline(session: SessionDep, id: uuid.UUID) -> Any:
     pipeline = session.get(Pipeline, id)
     if not pipeline:
         raise HTTPException(status_code=404, detail="Pipeline not found")
-    asset = session.get(Asset, pipeline.asset_id)
-    if not asset:
-        raise HTTPException(status_code=404, detail="There is not asset associated with this pipeline")
-    pipeline_in = pipeline.model_dump()
-    pipeline_extended = PipelinePublicExtended.model_validate(
-        {**pipeline_in, "asset": asset},
-        update={"owner_id": pipeline.owner_id},
-    )
-
-    if pipeline.task_id and pipeline.task_status == PENDING:
-        async_result = AsyncResult(pipeline.task_id, app=celery)
-        celery_status = async_result.state
-        if celery_status in (STARTED, 'PROGRESS'):
-            pipeline_extended = pipeline_extended.model_copy(
-                update={'task_status': STARTED},
-            )
-        elif celery_status == SUCCESS and async_result.ready():
-            result = async_result.result
-            if isinstance(result, dict):
-                pipeline_extended = pipeline_extended.model_copy(
-                    update={'task_status': SUCCESS, 'task_result': result},
-                )
-        elif celery_status == FAILURE and async_result.ready():
-            pipeline_extended = pipeline_extended.model_copy(
-                update={'task_status': FAILURE},
-            )
-
-    return pipeline_extended
+    return pipeline
 
 @router.delete("/{id}")
 def delete_pipeline(

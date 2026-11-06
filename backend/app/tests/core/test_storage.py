@@ -1,8 +1,4 @@
-from app.core.storage import upload_key, output_key
-
-
-def test_upload_key():
-    assert upload_key("a/index.laz") == "upload/a/index.laz"
+from app.core.storage import output_key
 
 
 def test_output_key():

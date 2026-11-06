@@ -3,12 +3,12 @@ import os
 import sys
 import tempfile
 
-from app.core.storage import get_storage, output_key, upload_key
+from app.core.storage import get_storage, output_key
 from app.models.config import MeshConfig
 from app.worker.common.output import publish_tiles
 from app.worker.common.utils import run_subprocess
-from app.worker.main import celery, PipelineDatabaseTask, AssetDatabaseTask
-from app.worker.tasks.mesh.reader import estimate_mesh_bbox_from_obj, mesh_bbox_from_key, resolve_obj
+from app.worker.main import celery, PipelineDatabaseTask
+from app.worker.tasks.mesh.reader import mesh_bbox_from_key, resolve_obj
 
 
 def _tiling_workers():
@@ -23,44 +23,16 @@ def _materialize(storage, key, scratch, name):
     return dest
 
 
-@celery.task(name="inspect_mesh", base=AssetDatabaseTask)
-def inspect_mesh(options):
-    asset = options['asset']
-    extension = asset['extension']
-    storage = get_storage()
-
-    with tempfile.TemporaryDirectory() as scratch:
-        local = _materialize(storage, upload_key(f"{asset['id']}/index{extension}"), scratch, f"index{extension}")
-        mesh_bbox = estimate_mesh_bbox_from_obj(resolve_obj(local, scratch))
-
-    payload = {
-        'metadata': False,
-        'stats': False,
-        'sample': False,
-        'epsg': None,
-        'horizontal_epsg': None,
-        'vertical_epsg': None,
-    }
-    if mesh_bbox:
-        payload['size'] = mesh_bbox['size']
-        payload['offset'] = mesh_bbox['offset']
-
-    return {'asset_type': 'Mesh', 'geometry_type': None, 'payload': payload}
-
-
 @celery.task(name="read_mesh_bbox")
 def read_mesh_bbox(options):
     return mesh_bbox_from_key(get_storage(), options['key'])
 
 
 def _resolve_input(pipeline_extended):
-    """Input is a direct bucket key (by-reference) or an uploaded asset."""
-    source = pipeline_extended.get('source')
-    if source and source.get('key'):
-        key = source['key']
-        return key, '.zip' if key.lower().endswith('.zip') else os.path.splitext(key)[1]
-    asset = pipeline_extended['asset']
-    return upload_key(f"{asset['id']}/index{asset['extension']}"), asset['extension']
+    key = (pipeline_extended.get('source') or {}).get('key')
+    if not key:
+        raise Exception("Mesh pipeline requires a bucket source")
+    return key, '.zip' if key.lower().endswith('.zip') else os.path.splitext(key)[1]
 
 
 @celery.task(name="create_mesh_3dtiles", base=PipelineDatabaseTask)

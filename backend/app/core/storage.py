@@ -1,6 +1,6 @@
-"""Object storage for assets and pipeline outputs.
+"""Object storage for bucket inputs and pipeline outputs.
 
-Keys are relative paths (e.g. "upload/<id>/index.laz", "output/<id>/tiles/tileset.json")
+Keys are relative paths (e.g. "city/tile.laz", "output/<id>/tiles/tileset.json")
 mapped to objects in an S3-compatible bucket. Single-box/dev runs a bundled Versity S3
 Gateway; a cloud deploy points the S3_* settings at its own bucket. Workers download inputs to
 local scratch and upload outputs back, so no shared filesystem is required. The Storage
@@ -11,10 +11,6 @@ import os
 from abc import ABC, abstractmethod
 
 from app.core.config import settings
-
-
-def upload_key(pathname: str) -> str:
-    return f"upload/{pathname}"
 
 
 def output_key(pipeline_id, *parts: str) -> str:

@@ -7,16 +7,11 @@ route's existing ValueError handler.
 from app.models.config import MeshConfig, PointCloudConfig
 
 
-def config_model_for(geometry_type: str | None, asset_type: str | None):
-    if geometry_type == "PointCloud":
-        return PointCloudConfig
-    if geometry_type == "Mesh" or asset_type == "Mesh":
-        return MeshConfig
-    return None
+_MODELS = {"PointCloud": PointCloudConfig, "Mesh": MeshConfig}
 
 
-def validate_pipeline_config(geometry_type, asset_type, data):
-    model = config_model_for(geometry_type, asset_type)
+def validate_pipeline_config(pipeline_type, data):
+    model = _MODELS.get(pipeline_type)
     if model is None:
         return data
     return model(**(data or {})).model_dump()

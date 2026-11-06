@@ -1,10 +1,9 @@
 import os
-import uuid
 from sqlmodel import Session, select
 from celery import Celery, Task
 from app.core.db import engine
 from app.core.config import settings
-from app.models.task import Pipeline, Asset
+from app.models.task import Pipeline
 from app.models.user_db import User  # noqa - registers user table for FK resolution
 from app.worker.tasks import TASK_QUEUES
 from celery.states import SUCCESS, FAILURE, REVOKED
@@ -26,10 +25,7 @@ class PipelineDatabaseTask(Task):
     abstract = True
 
     def after_return(self, status, retval, task_id, args, kwargs, einfo):
-        # pipeline_extended comes directly (single task) or in the forwarded payload (chain).
         pipeline_extended = kwargs.get('pipeline_extended')
-        if pipeline_extended is None and args and isinstance(args[0], dict):
-            pipeline_extended = args[0].get('pipeline_extended')
         if pipeline_extended is None:
             return
         with Session(engine) as session:
@@ -58,32 +54,3 @@ def _maybe_finalize_batch(session, pipeline):
         'finalize_tileset_batch',
         kwargs={'output_prefix': prefix, 'base': settings.API_V1_STR},
     )
-
-
-class AssetDatabaseTask(Task):
-    abstract = True
-
-    def after_return(self, status, retval, task_id, args, kwargs, einfo):
-        with Session(engine) as session:
-            options = kwargs.get('options')
-            asset_obj = options['asset']
-            asset_id = asset_obj['id']
-            if isinstance(asset_id, str):
-                asset_id = uuid.UUID(asset_id)
-            asset = session.get(Asset, asset_id)
-            if asset is None:
-                return
-            asset_in = {"upload_id": task_id, "upload_status": status}
-            if status == SUCCESS:
-                asset_in['asset_type'] = retval['asset_type']
-                asset_in['geometry_type'] = retval['geometry_type']
-                asset_in['upload_result'] = retval['payload']
-            elif einfo is not None:
-                asset_in['upload_result'] = {
-                    'error': str(einfo.exception),
-                    'traceback': einfo.traceback,
-                }
-            asset.sqlmodel_update(asset_in)
-            session.add(asset)
-            session.commit()
-            session.refresh(asset)

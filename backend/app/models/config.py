@@ -7,7 +7,7 @@ class PointCloudConfig(BaseModel):
 
     colorization_image: str | None = None
     sample_radius: float | None = None
-    # fallback CRS, used when the point cloud / asset / source carry none of their own
+    # fallback CRS, used when the point cloud or its source carry none of their own
     horizontal_epsg: int | None = None
     vertical_epsg: int | None = None
     to_ellipsoidal_height: bool = False

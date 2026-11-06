@@ -329,11 +329,7 @@ function PipelineRow({ pipeline, selected, onToggle, onAction, onEdit, dim, inde
   const running = isCeleryTaskInProgress(pipeline.task_status)
   const download = zipHref(`${pipeline?.task_result?.download}`, pipeline.title)
   const source = pipeline.source
-  const subtitle = source?.key
-    ? `s3://…/${source.key}`
-    : pipeline.asset_id
-      ? "uploaded asset"
-      : "no input"
+  const subtitle = source?.key ? `s3://…/${source.key}` : "no input"
   const isSel = selected.has(pipeline.id)
   return (
     <Tr
@@ -363,7 +359,7 @@ function PipelineRow({ pipeline, selected, onToggle, onAction, onEdit, dim, inde
       </Td>
       <Td textAlign="right">
         <HStack spacing={1} justify="flex-end">
-          {!pipeline.asset_id && pipeline.task_result?.tileset && (
+          {pipeline.task_result?.tileset && (
             <Tooltip label="Open tileset">
               <IconButton
                 as="a"
@@ -390,7 +386,7 @@ function PipelineRow({ pipeline, selected, onToggle, onAction, onEdit, dim, inde
               />
             </Tooltip>
           )}
-          {!pipeline.asset_id && onEdit && (
+          {onEdit && (
             <Tooltip label="Adjust parameters">
               <IconButton
                 aria-label="Adjust parameters"

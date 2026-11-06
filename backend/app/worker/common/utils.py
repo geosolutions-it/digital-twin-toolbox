@@ -60,10 +60,6 @@ def run_subprocess(cmd, check=False, capture_output=False, text=False):
     return subprocess.CompletedProcess(cmd, proc.returncode, stdout=out, stderr=err)
 
 
-def get_asset_upload_path(pathname):
-    return os.path.join(settings.ASSETS_DATA, "upload", pathname)
-
-
 def get_process_dir(pipeline_id):
     """Path of the shared per-pipeline process dir (no side effects, unlike setup_output_directory)."""
     return os.path.join(settings.ASSETS_DATA, "output", f"{pipeline_id}", "process")

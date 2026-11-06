@@ -52,57 +52,8 @@ def detect_point_attributes(file_path, force_classification=False):
     return attributes
 
 
-def point_cloud_preview(input_file_path, output_file_path, metadata, stats):
-    pipeline = [{"filename": input_file_path, "type": 'readers.las'}]
-
-    count = metadata['metadata']['count']
-    if count > 500000:
-        step = int(math.ceil(count / 500000))
-        pipeline += [{"type": 'filters.decimation', "step": step}]
-
-    statistic = stats['stats']['statistic']
-    x = y = z = red = None
-    for value in statistic:
-        if value['name'] == 'X':
-            x = value
-        if value['name'] == 'Y':
-            y = value
-        if value['name'] == 'Z':
-            z = value
-        if value['name'] == 'Red':
-            red = value
-
-    size = [x['maximum'] - x['minimum'], y['maximum'] - y['minimum'], z['maximum'] - z['minimum']]
-    center = [x['minimum'] + (size[0] / 2), y['minimum'] + (size[1] / 2), z['minimum'] + (size[2] / 2)]
-
-    pipeline += [{"type": "filters.transformation", "matrix": f"1  0  0  {-center[0]}  0  1  0  {-center[1]}  0  0  1  {-center[2]}  0  0  0  1"}]
-
-    if red:
-        pipeline += [{"type": 'writers.text', "format": 'csv', "order": 'X,Y,Z,Red:0,Green:0,Blue:0', "keep_unspecified": False, "filename": output_file_path}]
-    else:
-        pipeline += [{"type": 'writers.text', "format": 'csv', "order": 'X,Y,Z', "keep_unspecified": False, "filename": output_file_path}]
-
-    pipeline_sample_path = os.path.join(os.path.dirname(output_file_path), 'sample-pipeline.json')
-    with open(pipeline_sample_path, "w") as f:
-        json.dump(pipeline, f)
-
-    res = run_subprocess(['pdal', 'pipeline', pipeline_sample_path], capture_output=True, text=True)
-
-    if not os.path.isfile(output_file_path):
-        print(res.stderr)
-        raise Exception("Sample not created")
-
-
-def resolve_asset_crs(asset):
-    upload_result = asset.get('upload_result') or {}
-    horizontal_epsg = upload_result.get('horizontal_epsg') or upload_result.get('epsg')
-    vertical_epsg = upload_result.get('vertical_epsg')
-    return horizontal_epsg, vertical_epsg
-
-
 def resolve_crs_from_file(input_path):
-    """Read horizontal/vertical EPSG straight from the point cloud, so a job can
-    run from a bucket key with no pre-inspected Asset."""
+    """Horizontal/vertical EPSG read from the point cloud header."""
     try:
         metadata_json = pdal_metadata(input_path)
         codes = resolve_epsg_codes_from_pdal_metadata(metadata_json['metadata'])

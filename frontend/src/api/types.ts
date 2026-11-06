@@ -4,7 +4,6 @@ export type Message = {
 
 export type PipelinePublic = {
   title: string
-  asset_id: string | null
   data: Record<string, unknown> | null
   task_id: string | null
   task_status: string | null

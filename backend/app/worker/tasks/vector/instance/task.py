@@ -18,7 +18,7 @@ def _load_model(storage, name, config, scratch, cache):
     """Download a model glb from the bucket once and parse it; cached by name."""
     if name in cache:
         return cache[name]
-    key = (config.get('models_prefix') or '') + name  # TODO: confirm model source (bucket vs asset store)
+    key = (config.get('models_prefix') or '') + name
     dest = os.path.join(scratch, 'model_' + os.path.basename(name))
     storage.download_file(key, dest)
     mesh = reader.read_model_glb(dest)
