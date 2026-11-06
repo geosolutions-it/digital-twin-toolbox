@@ -39,6 +39,33 @@ def infer_schema(features):
     return [{"name": k, "kind": kinds[k]} for k in sorted(kinds)]
 
 
+def schema_json(schema):
+    """Metadata schema shared by the glb property tables and tileset.json."""
+    props = {
+        p["name"]: {"type": "SCALAR", "componentType": "FLOAT32"} if p["kind"] == "number" else {"type": "STRING"}
+        for p in schema
+    }
+    return {"id": "dtt", "classes": {"feature": {"properties": props}}}
+
+
+def tileset_metadata(features, schema):
+    """Top-level tileset.json keys: legacy properties ({} for text), 1.1 schema and statistics."""
+    properties, stats = {}, {}
+    for prop in schema:
+        name = prop["name"]
+        values = [float(f[name]) for f in features if isinstance(f.get(name), (int, float))]
+        if prop["kind"] == "number" and values:
+            properties[name] = {"minimum": min(values), "maximum": max(values)}
+            stats[name] = {"min": min(values), "max": max(values)}
+        else:
+            properties[name] = {}
+    return {
+        "properties": properties,
+        "schema": schema_json(schema),
+        "statistics": {"classes": {"feature": {"count": len(features), "properties": stats}}},
+    }
+
+
 class Blob:
     def __init__(self):
         self.buf = bytearray()
@@ -57,7 +84,6 @@ class Blob:
 
 def metadata(blob, features, schema):
     """Build EXT_structural_metadata schema + a single property table."""
-    classes_props = {}
     table_props = {}
     for prop in schema:
         name, kind = prop["name"], prop["kind"]
@@ -65,7 +91,6 @@ def metadata(blob, features, schema):
             arr = np.array(
                 [float(f.get(name) or 0) for f in features], dtype=np.float32
             )
-            classes_props[name] = {"type": "SCALAR", "componentType": "FLOAT32"}
             table_props[name] = {"values": blob.add(arr.tobytes())}
         else:
             strings = [
@@ -74,14 +99,13 @@ def metadata(blob, features, schema):
             encoded = [s.encode("utf-8") for s in strings]
             offsets = np.zeros(len(encoded) + 1, dtype=np.uint32)
             offsets[1:] = np.cumsum([len(e) for e in encoded])
-            classes_props[name] = {"type": "STRING"}
             table_props[name] = {
                 "values": blob.add(b"".join(encoded)),
                 "stringOffsets": blob.add(offsets.tobytes()),
             }
 
     return {
-        "schema": {"id": "dtt", "classes": {"feature": {"properties": classes_props}}},
+        "schema": schema_json(schema),
         "propertyTables": [
             {"class": "feature", "count": len(features), "properties": table_props}
         ],

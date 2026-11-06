@@ -1,20 +1,44 @@
-"""Combine several 3D Tiles tilesets into one parent that references them by uri.
-
-Content-agnostic: children just need a standard tileset.json in a shared global
-frame (ECEF/WGS84). No tiles are read or re-tiled.
-"""
+"""3D Tiles helpers: bounding box, tileset.json writing, and combining several tilesets
+into one parent that references them by uri (content-agnostic, no tiles are re-read)."""
 import io
 import json
+import os
 
 from app.core.storage import get_storage
 from app.worker.main import celery
 
 
-def _box_corners(box):
-    cx, cy, cz = box[0:3]
-    hx = box[3:6]
-    hy = box[6:9]
-    hz = box[9:12]
+def box(mn, mx, min_half=0.01):
+    """Axis-aligned bounds -> 3D Tiles box; min_half avoids zero-thickness boxes."""
+    c = [(float(mn[i]) + float(mx[i])) / 2.0 for i in range(3)]
+    h = [max((float(mx[i]) - float(mn[i])) / 2.0, min_half) for i in range(3)]
+    return [
+        c[0], c[1], c[2],
+        h[0], 0.0, 0.0,
+        0.0, h[1], 0.0,
+        0.0, 0.0, h[2],
+    ]
+
+
+def write_tileset(output_dir, root, transform, geometric_error, metadata=None):
+    """Attach the root transform and write tileset.json; metadata adds top-level keys (properties, schema, statistics)."""
+    root["transform"] = transform
+    tileset = {
+        "asset": {"version": "1.1"},
+        "geometricError": float(geometric_error),
+        "root": root,
+    }
+    tileset.update(metadata or {})
+    with open(os.path.join(output_dir, "tileset.json"), "w") as f:
+        json.dump(tileset, f, separators=(",", ":"))
+    return tileset
+
+
+def _box_corners(b):
+    cx, cy, cz = b[0:3]
+    hx = b[3:6]
+    hy = b[6:9]
+    hz = b[9:12]
     corners = []
     for sx in (-1, 1):
         for sy in (-1, 1):
@@ -39,16 +63,8 @@ def _apply_transform(tf, p):
 
 
 def _aabb_box(corners):
-    xs = [c[0] for c in corners]
-    ys = [c[1] for c in corners]
-    zs = [c[2] for c in corners]
-    cx = (min(xs) + max(xs)) / 2
-    cy = (min(ys) + max(ys)) / 2
-    cz = (min(zs) + max(zs)) / 2
-    hx = (max(xs) - min(xs)) / 2
-    hy = (max(ys) - min(ys)) / 2
-    hz = (max(zs) - min(zs)) / 2
-    return [cx, cy, cz, hx, 0, 0, 0, hy, 0, 0, 0, hz]
+    return box([min(c[i] for c in corners) for i in range(3)],
+               [max(c[i] for c in corners) for i in range(3)], min_half=0.0)
 
 
 def build_parent_tileset(children):

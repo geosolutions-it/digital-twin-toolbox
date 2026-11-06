@@ -9,7 +9,8 @@ import os
 
 import numpy as np
 
-from app.worker.tasks.vector.gltf.tileset import box, write_tileset
+from app.worker.tasks.common.tiles3d import box, write_tileset
+from app.worker.tasks.vector.gltf.glb import tileset_metadata
 from app.worker.tasks.vector.instance.writer import write_instanced_glb
 
 
@@ -82,4 +83,5 @@ def build_instance_tileset(records, output_dir, transform, models, schema,
                       float(max_geometric_error), models, schema, output_dir, counter)
     if root["geometricError"] == 0.0:
         root["geometricError"] = float(max_geometric_error)
-    return write_tileset(output_dir, root, transform, root["geometricError"])
+    metadata = tileset_metadata([r["properties"] for r in records], schema)
+    return write_tileset(output_dir, root, transform, root["geometricError"], metadata)

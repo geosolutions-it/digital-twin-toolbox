@@ -4,8 +4,8 @@ import os
 
 import numpy as np
 
-from app.worker.tasks.vector.gltf.glb import infer_schema
-from app.worker.tasks.vector.gltf.tileset import box, write_tileset
+from app.worker.tasks.vector.gltf.glb import infer_schema, tileset_metadata
+from app.worker.tasks.common.tiles3d import box, write_tileset
 from app.worker.tasks.vector.polygon.writer import glb_bytes
 
 _EST_BYTES_PER_VERTEX = 12
@@ -144,5 +144,6 @@ def build_tileset(features, output_dir, transform, max_tile_bytes=400 * 1024, ma
     builder = _Builder(output_dir, schema, int(max_tile_bytes), max_depth)
     root = builder.node(items, 0)[0]
     root["refine"] = "REPLACE"
-    tileset = write_tileset(output_dir, root, transform, float(root["geometricError"]) * 2.0 or 1.0)
+    metadata = tileset_metadata([it["properties"] for it in items], schema)
+    tileset = write_tileset(output_dir, root, transform, float(root["geometricError"]) * 2.0 or 1.0, metadata)
     return tileset, builder.stats
