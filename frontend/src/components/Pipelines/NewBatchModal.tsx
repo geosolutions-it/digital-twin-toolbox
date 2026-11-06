@@ -43,7 +43,7 @@ type PipelineType = "PointCloud" | "Polygon" | "Terrain" | "Instance" | "Mesh"
 
 // worker downloads water as a single file
 const VECTOR_EXTENSIONS = [".gpkg", ".geojson", ".json", ".fgb"]
-const RASTER_EXTENSIONS = [".tif", ".tiff", ".vrt", ".jp2"]
+const RASTER_EXTENSIONS = [".tif", ".tiff", ".jp2"]
 
 const AXES = [
   { value: "X", label: "X" },

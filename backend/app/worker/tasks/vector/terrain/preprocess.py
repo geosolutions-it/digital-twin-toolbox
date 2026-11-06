@@ -8,20 +8,8 @@ gdal.UseExceptions()
 
 
 def resolve_input(source, storage, scratch):
-    """Local DEM path. A .vrt pulls its sibling rasters too (flat folder assumed)
-    so relative refs resolve; a single .tif is downloaded alone."""
+    """Local DEM path, a single GeoTIFF."""
     key = source['key']
-    if key.lower().endswith('.vrt'):
-        prefix = key.rsplit('/', 1)[0] + '/' if '/' in key else ''
-        local_vrt = None
-        for k in storage.list(prefix):
-            dest = os.path.join(scratch, os.path.basename(k))
-            storage.download_file(k, dest)
-            if k.lower().endswith('.vrt'):
-                local_vrt = dest
-        if not local_vrt:
-            raise Exception(f"No .vrt found next to {key!r}")
-        return local_vrt
     dest = os.path.join(scratch, os.path.basename(key))
     storage.download_file(key, dest)
     return dest

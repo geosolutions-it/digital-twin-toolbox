@@ -10,7 +10,6 @@ _EXT_WORKFLOW = {
     ".geojson": "Polygon",
     ".tif": "Terrain",
     ".tiff": "Terrain",
-    ".vrt": "Terrain",
 }
 
 # inner-file suffix -> workflow, checked in order

@@ -1,4 +1,4 @@
-"""Bucket-first terrain: a .tif or .vrt -> quantized-mesh pyramid uploaded as a
+"""Bucket-first terrain: a GeoTIFF -> quantized-mesh pyramid uploaded as a
 Cesium terrain layer. No external binary, no PostGIS."""
 import os
 import tempfile
