@@ -45,6 +45,6 @@ def create_terrain_tiles(pipeline_extended):
         tiles_dir = os.path.join(scratch, 'tiles')
         info = build_terrain(dem, tiles_dir, config)
 
-        result = publish_tiles(storage, tiles_dir, out_base, 'layer.json', scratch)
+        result = publish_tiles(storage, tiles_dir, out_base, 'layer.json')
 
     return {**result, **info}

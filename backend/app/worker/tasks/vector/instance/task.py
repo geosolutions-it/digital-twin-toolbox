@@ -80,4 +80,4 @@ def create_point_instance_3dtiles(pipeline_extended):
         build_instance_tileset(records, tiles_dir, frame.transform(), model_cache, schema,
                                max_features_per_tile=max_features, max_geometric_error=max_ge)
 
-        return publish_tiles(storage, tiles_dir, out_base, 'tileset.json', scratch)
+        return publish_tiles(storage, tiles_dir, out_base, 'tileset.json')

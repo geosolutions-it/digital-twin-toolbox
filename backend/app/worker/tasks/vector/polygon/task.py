@@ -155,4 +155,4 @@ def create_polygon_3dtiles(pipeline_extended):
         max_kb = float(parse_expression('number', config['max_tile_size_kb'], {}, default_config['max_tile_size_kb']))
         build_tileset(features, tiles_dir, frame.transform(), max_tile_bytes=max_kb * 1024)
 
-        return publish_tiles(storage, tiles_dir, out_base, 'tileset.json', scratch)
+        return publish_tiles(storage, tiles_dir, out_base, 'tileset.json')
