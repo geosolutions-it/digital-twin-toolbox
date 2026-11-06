@@ -11,8 +11,6 @@ node_modules
 dist
 dist-ssr
 *.local
-openapi.json
-public/mapstore
 
 # Editor directories and files
 .vscode/*
@@ -24,10 +22,6 @@ public/mapstore
 *.njsproj
 *.sln
 *.sw?
-/test-results/
-/playwright-report/
-/blob-report/
-/playwright/.cache/
 
 # Cesium runtime assets, copied from node_modules by scripts/copy-cesium-assets.mjs
 public/cesium/

@@ -16,7 +16,6 @@ const theme = extendTheme({
       light: "#FAFAFA",
       dark: "#1A202C",
       darkSlate: "#252D3D",
-      dim: "#A0AEC0",
     },
   },
   components: {
@@ -32,24 +31,6 @@ const theme = extendTheme({
             ...disabledStyles,
             _hover: {
               ...disabledStyles,
-            },
-          },
-        },
-        danger: {
-          backgroundColor: "ui.danger",
-          color: "ui.light",
-          _hover: {
-            backgroundColor: "#E32727",
-          },
-        },
-      },
-    },
-    Tabs: {
-      variants: {
-        enclosed: {
-          tab: {
-            _selected: {
-              // color: "ui.main",
             },
           },
         },

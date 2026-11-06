@@ -16,7 +16,6 @@ import { Route as LayoutIndexImport } from './routes/_layout/index'
 import { Route as LayoutPipelinesImport } from './routes/_layout/pipelines'
 import { Route as LayoutMapImport } from './routes/_layout/map'
 import { Route as LayoutAssetsImport } from './routes/_layout/assets'
-import { Route as LayoutPipelinePipelineIdImport } from './routes/_layout/pipeline/$pipelineId'
 
 // Create/Update Routes
 
@@ -45,11 +44,6 @@ const LayoutAssetsRoute = LayoutAssetsImport.update({
   getParentRoute: () => LayoutRoute,
 } as any)
 
-const LayoutPipelinePipelineIdRoute = LayoutPipelinePipelineIdImport.update({
-  path: '/pipeline/$pipelineId',
-  getParentRoute: () => LayoutRoute,
-} as any)
-
 // Populate the FileRoutesByPath interface
 
 declare module '@tanstack/react-router' {
@@ -74,10 +68,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutIndexImport
       parentRoute: typeof LayoutImport
     }
-    '/_layout/pipeline/$pipelineId': {
-      preLoaderRoute: typeof LayoutPipelinePipelineIdImport
-      parentRoute: typeof LayoutImport
-    }
   }
 }
 
@@ -89,7 +79,6 @@ export const routeTree = rootRoute.addChildren([
     LayoutMapRoute,
     LayoutPipelinesRoute,
     LayoutIndexRoute,
-    LayoutPipelinePipelineIdRoute,
   ]),
 ])
 

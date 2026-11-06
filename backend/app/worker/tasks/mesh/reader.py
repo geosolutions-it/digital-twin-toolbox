@@ -1,3 +1,4 @@
+import io
 import os
 import zipfile
 from dataclasses import dataclass
@@ -57,26 +58,50 @@ def axis_matrix(forward_axis="Y", up_axis="Z"):
     return np.stack([np.cross(forward, up), forward, up])
 
 
-def estimate_mesh_bbox_from_obj(filepath):
-    """size [w, d, h] and offset (bbox center vs model origin) [x, y, z] in file axes."""
+def bbox_from_lines(lines, batch=500_000):
+    """{size, offset (bbox centre vs origin)} in file axes, or None."""
     lo = np.full(3, np.inf)
     hi = np.full(3, -np.inf)
-    count = 0
-    with open(filepath, encoding="utf-8", errors="ignore") as obj_file:
-        for line in obj_file:
-            if not line.startswith("v "):
-                continue
-            parts = line.split()
-            try:
-                point = np.array([float(parts[1]), float(parts[2]), float(parts[3])])
-            except (IndexError, ValueError):
-                continue
-            lo = np.minimum(lo, point)
-            hi = np.maximum(hi, point)
-            count += 1
-    if count == 0:
+    chunk = []
+
+    def flush():
+        nonlocal lo, hi
+        xyz = np.array([row.split()[1:4] for row in chunk], dtype=np.float64)
+        lo = np.minimum(lo, xyz.min(axis=0))
+        hi = np.maximum(hi, xyz.max(axis=0))
+        chunk.clear()
+
+    for line in lines:
+        if line[:2] == b"v ":
+            chunk.append(line)
+            if len(chunk) >= batch:
+                flush()
+    if chunk:
+        flush()
+    if not np.isfinite(lo).all():
         return None
     return {"size": (hi - lo).tolist(), "offset": ((lo + hi) / 2).tolist()}
+
+
+def estimate_mesh_bbox_from_obj(filepath):
+    with open(filepath, "rb") as handle:
+        return bbox_from_lines(handle)
+
+
+def mesh_bbox_from_key(storage, key):
+    """Bbox of a bucket .obj or zipped .obj; a zip is read in place, textures untouched."""
+    from app.core.storage import open_range
+
+    with open_range(storage, key) as raw:
+        if not key.lower().endswith(".zip"):
+            return bbox_from_lines(raw)
+        with zipfile.ZipFile(raw) as archive:
+            names = [n for n in archive.namelist() if _is_obj_candidate(n)]
+            if not names:
+                raise FileNotFoundError("No .obj file found in the mesh archive")
+            names.sort(key=lambda n: (n.count("/"), n))
+            with archive.open(names[0]) as member:
+                return bbox_from_lines(io.BufferedReader(member, buffer_size=4 << 20))
 
 
 @dataclass

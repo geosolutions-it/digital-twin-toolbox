@@ -1,4 +1,4 @@
-"""Asset inspection on upload (vector, raster) and attribute schema for the expression editor."""
+"""Asset inspection on upload; attribute schema and preview sample of bucket vectors."""
 import json
 import os
 import tempfile
@@ -9,7 +9,7 @@ from pyproj import CRS
 from app.core.storage import get_storage
 from app.worker.common.utils import get_asset_upload_path
 from app.worker.main import celery, AssetDatabaseTask
-from app.worker.tasks.vector.source import coerce, open_layer, resolve_input
+from app.worker.tasks.vector.source import coerce, field_names, open_layer, resolve_input, wgs84_transform
 
 
 def _empty_payload():
@@ -168,3 +168,64 @@ def read_vector_fields(options):
         geometry_type = 'Point' if 'Point' in name else 'Polygon' if 'Polygon' in name else name
         return {'count': layer.GetFeatureCount(), 'fields': fields,
                 'properties': properties, 'geometry_type': geometry_type}
+
+def _count_upto(layer, n):
+    """Filtered feature count capped at n (a full count scans every record)."""
+    layer.ResetReading()
+    count = 0
+    while count < n and layer.GetNextFeature() is not None:
+        count += 1
+    return count
+
+
+def _sample_window(layer, limit):
+    """Source-CRS rect around the first feature holding about `limit` features, or None."""
+    total = layer.GetFeatureCount()
+    first = layer.GetNextFeature()
+    if total <= limit or first is None or first.GetGeometryRef() is None:
+        return None
+    min_x, max_x, min_y, max_y = layer.GetExtent()
+    centre = first.GetGeometryRef().Centroid()
+    cx, cy = centre.GetX(), centre.GetY()
+    half = max(((max_x - min_x) * (max_y - min_y) * limit / total) ** 0.5 / 2, 1.0)
+    for _ in range(8):
+        layer.SetSpatialFilterRect(cx - half, cy - half, cx + half, cy + half)
+        enough = _count_upto(layer, limit // 2) >= limit // 2
+        layer.SetSpatialFilter(None)
+        if enough:
+            break
+        half *= 2
+    return [cx - half, cy - half, cx + half, cy + half]
+
+
+@celery.task(name="read_vector_sample")
+def read_vector_sample(options):
+    """Up to `limit` neighbouring features as WGS84 GeoJSON."""
+    key = options['key']
+    limit = int(options.get('limit') or 200)
+    storage = get_storage()
+    with tempfile.TemporaryDirectory() as scratch:
+        path = resolve_input({'key': key}, storage, scratch)
+        ds, layer = open_layer(path)
+        transform = wgs84_transform(layer)
+        names = field_names(layer)
+        window = _sample_window(layer, limit)
+        if window:
+            layer.SetSpatialFilterRect(*window)
+        layer.ResetReading()
+        features = []
+        for feat in layer:
+            geom = feat.GetGeometryRef()
+            if geom is None:
+                continue
+            geom = geom.Clone()
+            geom.Transform(transform)
+            features.append({
+                'type': 'Feature',
+                'geometry': json.loads(geom.ExportToJson()),
+                'properties': {name: coerce(feat.GetField(name)) for name in names},
+            })
+            if len(features) >= limit:
+                break
+        ds = None
+        return {'type': 'FeatureCollection', 'features': features}

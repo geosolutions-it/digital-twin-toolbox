@@ -8,7 +8,7 @@ from app.models.config import MeshConfig
 from app.worker.common.output import publish_tiles
 from app.worker.common.utils import run_subprocess
 from app.worker.main import celery, PipelineDatabaseTask, AssetDatabaseTask
-from app.worker.tasks.mesh.reader import estimate_mesh_bbox_from_obj, resolve_obj
+from app.worker.tasks.mesh.reader import estimate_mesh_bbox_from_obj, mesh_bbox_from_key, resolve_obj
 
 
 def _tiling_workers():
@@ -46,6 +46,11 @@ def inspect_mesh(options):
         payload['offset'] = mesh_bbox['offset']
 
     return {'asset_type': 'Mesh', 'geometry_type': None, 'payload': payload}
+
+
+@celery.task(name="read_mesh_bbox")
+def read_mesh_bbox(options):
+    return mesh_bbox_from_key(get_storage(), options['key'])
 
 
 def _resolve_input(pipeline_extended):

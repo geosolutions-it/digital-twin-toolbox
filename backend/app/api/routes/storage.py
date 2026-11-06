@@ -4,6 +4,7 @@ from typing import Any
 from app.core.storage import get_storage
 from app.services.file_classify import classify_bucket_file
 from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 
 router = APIRouter()
 
@@ -23,6 +24,18 @@ def list_storage(prefix: str = "") -> Any:
         except Exception:
             f["workflow"] = None
     return listing
+
+
+@router.get("/model")
+def read_model(key: str) -> Any:
+    """Stream a bucket .glb."""
+    key = key.lstrip("/")
+    if ".." in key.split("/") or not key.lower().endswith(".glb"):
+        raise HTTPException(status_code=400, detail="Only .glb models can be read")
+    storage = get_storage()
+    if not storage.exists(key):
+        raise HTTPException(status_code=404, detail="Model not found")
+    return StreamingResponse(storage.iter_object(key), media_type="model/gltf-binary")
 
 
 def _unique_key(storage, key: str) -> str:

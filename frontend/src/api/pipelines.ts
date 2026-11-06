@@ -2,7 +2,6 @@ import axios from "axios"
 import { API_BASE } from "./config"
 import type {
   Message,
-  PipelinePublicExtended,
   PipelinesActionTypes,
   PipelinesOverview,
   PipelinesPublic,
@@ -27,11 +26,6 @@ export async function readPipelinesOverview(
   const res = await axios.get(`${API_BASE}/api/v1/pipelines/overview`, {
     params: { skip: params.skip ?? 0, limit: params.limit ?? 10 },
   })
-  return res.data
-}
-
-export async function readPipeline(id: string): Promise<PipelinePublicExtended> {
-  const res = await axios.get(`${API_BASE}/api/v1/pipelines/${id}`)
   return res.data
 }
 

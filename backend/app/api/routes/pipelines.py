@@ -1,5 +1,5 @@
 from app.api.deps import CurrentUser, SessionDep
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from typing import Any
 from sqlmodel import func, select
 import os
@@ -361,27 +361,57 @@ def update_pipeline_batch(
     return {"batch_id": str(batch_id), "count": len(pipelines)}
 
 
+def _bucket_target(key: str | None, prefix: str | None, workflow: str) -> str:
+    """The given key, or the first file under prefix that classifies as workflow."""
+    if key:
+        return key
+    if prefix:
+        storage = get_storage()
+        for k in storage.list(prefix):
+            if k.lower().endswith(SUPPORTED_EXTENSIONS) and classify_bucket_file(storage, k) == workflow:
+                return k
+    raise HTTPException(status_code=404, detail=f"No {workflow.lower()} file found")
+
+
 @router.get("/vector-fields", response_model=Any)
 def vector_fields(
     *, key: str | None = None, prefix: str | None = None
 ) -> Any:
-    """Attribute schema + first-feature sample for a bucket vector, for the
-    expression editor. A prefix resolves to the first polygon file under it."""
-    storage = get_storage()
-    target = key
-    if not target and prefix:
-        for k in storage.list(prefix):
-            if k.lower().endswith(SUPPORTED_EXTENSIONS) and classify_bucket_file(storage, k) == "Polygon":
-                target = k
-                break
-    if not target:
-        raise HTTPException(status_code=404, detail="No vector file found")
+    """Attribute schema and first-feature values of a bucket vector."""
+    target = _bucket_target(key, prefix, "Polygon")
     try:
         return celery.send_task(
             "read_vector_fields", kwargs={"options": {"key": target}}
         ).get(timeout=30)
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Could not read vector fields: {e}")
+
+
+@router.get("/vector-sample", response_model=Any)
+def vector_sample(
+    *, key: str | None = None, prefix: str | None = None, limit: int = Query(200, ge=1, le=1000)
+) -> Any:
+    """Neighbouring features of a bucket vector as WGS84 GeoJSON."""
+    target = _bucket_target(key, prefix, "Polygon")
+    try:
+        return celery.send_task(
+            "read_vector_sample", kwargs={"options": {"key": target, "limit": limit}}
+        ).get(timeout=60)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Could not read vector sample: {e}")
+
+
+@router.get("/mesh-bbox", response_model=Any)
+def mesh_bbox(*, key: str | None = None, prefix: str | None = None) -> Any:
+    """Mesh size and origin offset in file axes."""
+    target = _bucket_target(key, prefix, "Mesh")
+    try:
+        bbox = celery.send_task("read_mesh_bbox", kwargs={"options": {"key": target}}).get(timeout=120)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Could not read mesh: {e}")
+    if not bbox:
+        raise HTTPException(status_code=422, detail="Mesh has no vertices")
+    return {"key": target, **bbox}
 
 
 def _apply_pipeline_action(session, pipeline: Pipeline, action_type: PipelinesActionTypes) -> dict:

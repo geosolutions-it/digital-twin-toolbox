@@ -32,3 +32,6 @@ export async function uploadToStorage(
   })
   return res.data
 }
+
+export const modelUrl = (key: string) =>
+  `${API_BASE}/api/v1/storage/model?key=${encodeURIComponent(key)}`

@@ -73,6 +73,43 @@ export async function getVectorFields(params: {
   return res.data
 }
 
+export type SampleFeature = {
+  type: "Feature"
+  geometry: { type: string; coordinates: any } | null
+  properties: Record<string, unknown> | null
+}
+
+export type VectorSample = {
+  type: "FeatureCollection"
+  features: SampleFeature[]
+}
+
+export async function getVectorSample(params: {
+  key?: string
+  prefix?: string
+  limit?: number
+}): Promise<VectorSample> {
+  const res = await axios.get(`${API_BASE}/api/v1/pipelines/vector-sample`, {
+    params: { key: params.key, prefix: params.prefix, limit: params.limit },
+  })
+  return res.data
+}
+
+export type MeshBbox = {
+  key: string
+  /** file axes, metres */
+  size: [number, number, number]
+  /** bbox centre relative to the model origin */
+  offset: [number, number, number]
+}
+
+export async function getMeshBbox(params: { key?: string; prefix?: string }): Promise<MeshBbox> {
+  const res = await axios.get(`${API_BASE}/api/v1/pipelines/mesh-bbox`, {
+    params: { key: params.key, prefix: params.prefix },
+  })
+  return res.data
+}
+
 export async function finalizePipelineBatch(batchId: string): Promise<{ ok: boolean }> {
   const res = await axios.post(
     `${API_BASE}/api/v1/pipelines/batch/${batchId}/finalize`,

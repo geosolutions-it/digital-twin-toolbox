@@ -36,7 +36,7 @@ import {
   useDisclosure,
 } from "@chakra-ui/react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Link, createFileRoute, useNavigate } from "@tanstack/react-router"
+import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import React from "react"
 import { useEffect } from "react"
 import { useForm } from "react-hook-form"
@@ -44,7 +44,6 @@ import {
   FiChevronDown,
   FiChevronRight,
   FiDownload,
-  FiEdit,
   FiExternalLink,
   FiPlay,
   FiRefreshCw,
@@ -246,7 +245,6 @@ function pipelineType(p: Pipeline): PipelineType {
 
 function dataToValues(d: any): Partial<BatchFormValues> {
   const num = (v: any) => (typeof v === "number" ? String(v) : "")
-  // heights may be a scalar or an expression array; keep arrays intact for the editor
   const expr = (v: any) => (Array.isArray(v) ? v : typeof v === "number" ? String(v) : "")
   return {
     sample_radius: d?.sample_radius != null ? String(d.sample_radius) : "",
@@ -259,7 +257,6 @@ function dataToValues(d: any): Partial<BatchFormValues> {
     max_features_per_tile: num(d?.max_features_per_tile),
     max_geometric_error: num(d?.max_geometric_error),
     max_tile_size_kb: num(d?.max_tile_size_kb),
-    max_error: num(d?.max_error),
     max_zoom: num(d?.max_zoom),
     vertex_normals: d?.vertex_normals !== false,
     water_key: d?.water_key || "",
@@ -312,7 +309,7 @@ function RollupBar({ counts }: { counts: PipelineBatchCounts }) {
 type RowAction = "run" | "cancel" | "delete" | "rebuild"
 type BatchAction = "run" | "cancel" | "delete" | "rebuild"
 
-// the backend names the attachment after the requested .zip
+// the backend names the attachment after this .zip
 function zipHref(url: string, name: string) {
   const safe = (name || "").replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^[._]+|[._]+$/g, "")
   return url.replace(/[^/]+\.zip$/, `${safe.slice(0, 100) || "download"}.zip`)
@@ -353,20 +350,9 @@ function PipelineRow({ pipeline, selected, onToggle, onAction, onEdit, dim, inde
       </Td>
       <Td maxW={0}>
         <Flex direction="column" gap={0.5} minW={0}>
-          {pipeline.asset_id ? (
-            <Link to="/pipeline/$pipelineId" params={{ pipelineId: pipeline.id }}>
-              <HStack minW={0}>
-                <FiEdit fontSize="14px" />
-                <Text fontWeight="600" isTruncated>
-                  {pipeline.title}
-                </Text>
-              </HStack>
-            </Link>
-          ) : (
-            <Text fontWeight="600" isTruncated>
-              {pipeline.title}
-            </Text>
-          )}
+          <Text fontWeight="600" isTruncated>
+            {pipeline.title}
+          </Text>
           <Text fontSize="xs" color="gray.500" isTruncated>
             {subtitle}
           </Text>
@@ -479,13 +465,11 @@ function BatchGroup({
     allDone && summary.output_prefix
       ? `${API_BASE}/api/v1/${summary.output_prefix}/tileset.json`
       : ""
-  // download.zip is zipped on demand from the combined output tree
   const parentDownload =
     allDone && summary.output_prefix
       ? `${API_BASE}/api/v1/${summary.output_prefix}/${zipHref("download.zip", summary.label)}`
       : ""
 
-  // members load lazily and page on their own, so a big folder never floods the top list
   const [innerPage, setInnerPage] = React.useState(1)
   const { data: members, isPending: membersPending } = useQuery({
     queryKey: ["pipelines", "batch", batchId, { page: innerPage }],
@@ -512,7 +496,7 @@ function BatchGroup({
 
   return (
     <>
-      <Tr bg="blackAlpha.50" _dark={{ bg: "whiteAlpha.100" }}>
+      <Tr>
         <Td>
           <Checkbox
             isChecked={visibleSelected}
@@ -560,6 +544,15 @@ function BatchGroup({
         </Td>
         <Td textAlign="right">
           <HStack spacing={1} justify="flex-end">
+             <Tooltip label="Rebuild combined tileset">
+              <IconButton
+                aria-label="Rebuild combined tileset"
+                icon={<FiRefreshCw />}
+                size="xs"
+                variant="ghost"
+                onClick={() => onBatchAction(batchId, "rebuild")}
+              />
+            </Tooltip>
             {parentUrl && (
               <Tooltip label="Open combined tileset">
                 <IconButton
@@ -587,6 +580,17 @@ function BatchGroup({
                 />
               </Tooltip>
             )}
+            {onEditBatch && (
+              <Tooltip label="Adjust parameters">
+                <IconButton
+                  aria-label="Adjust parameters"
+                  icon={<FiSettings />}
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => onEditBatch(summary)}
+                />
+              </Tooltip>
+            )}
             {batchRunning ? (
               <Tooltip label="Cancel batch">
                 <IconButton
@@ -610,26 +614,6 @@ function BatchGroup({
                 />
               </Tooltip>
             )}
-            {onEditBatch && (
-              <Tooltip label="Adjust parameters">
-                <IconButton
-                  aria-label="Adjust parameters"
-                  icon={<FiSettings />}
-                  size="xs"
-                  variant="ghost"
-                  onClick={() => onEditBatch(summary)}
-                />
-              </Tooltip>
-            )}
-            <Tooltip label="Rebuild combined tileset">
-              <IconButton
-                aria-label="Rebuild combined tileset"
-                icon={<FiRefreshCw />}
-                size="xs"
-                variant="ghost"
-                onClick={() => onBatchAction(batchId, "rebuild")}
-              />
-            </Tooltip>
             <Tooltip label="Delete batch">
               <IconButton
                 aria-label="Delete batch"
@@ -704,7 +688,6 @@ function PipelinesTable() {
 
   const [selected, setSelected] = React.useState<Set<string>>(new Set())
   const [query, setQuery] = React.useState("")
-  // folders are collapsed by default; this holds the ones the user opened
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set())
   const [editTarget, setEditTarget] = React.useState<EditTarget | null>(null)
 
@@ -807,7 +790,7 @@ function PipelinesTable() {
           if (action === "delete") await deletePipeline(id)
           else await processPipelineTask(id, action)
         } catch {
-          // skip rows the action does not apply to
+          // not applicable to this row
         }
       }
     },
@@ -824,7 +807,7 @@ function PipelinesTable() {
     mutationFn: async ({ batchId, action }: { batchId: string; action: BatchAction }) => {
       if (action === "rebuild") return finalizePipelineBatch(batchId)
       if (action === "delete") return deletePipelineBatch(batchId)
-      // run/cancel the whole batch server-side, regardless of which page is loaded
+      // server-side, so unloaded members are included
       return processPipelineBatchTask(batchId, action)
     },
     onSuccess: (_d, { action }) => {
@@ -858,7 +841,7 @@ function PipelinesTable() {
         try {
           await processPipelineTask(id, actionType)
         } catch {
-          // skip rows the action does not apply to (already running, nothing to cancel)
+          // not applicable to this row
         }
       }
     },

@@ -21,20 +21,7 @@ import * as Cesium from "cesium"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { FiCrosshair, FiX } from "react-icons/fi"
 import { API_BASE, readPipelines } from "../../api"
-import "cesium/Source/Widgets/widgets.css"
-
-// Workers, shaders and images are copied to public/cesium by scripts/copy-cesium-assets.mjs.
-// Absolute because Cesium resolves this against document.baseURI and routes can be nested.
-window.CESIUM_BASE_URL = "/cesium/"
-
-declare global {
-  interface Window {
-    CESIUM_BASE_URL?: string
-  }
-}
-
-const WMS_URL = "https://maps1.geosolutionsgroup.com/geoserver/wms"
-const OSM_CREDIT = "© OpenStreetMap contributors"
+import { createViewer } from "../../utils/cesium"
 
 type Layer = {
   id: string
@@ -45,7 +32,6 @@ type Layer = {
   extent?: number[]
 }
 
-// Each successful pipeline becomes a layer; terrain is told apart by its layer.json.
 function soloLayer(p: any): Layer {
   const tileset = String(p.task_result.tileset)
   const type = p?.source?.pipeline || "PointCloud"
@@ -59,7 +45,6 @@ function soloLayer(p: any): Layer {
   }
 }
 
-// Solo pipelines map one-to-one; a batch collapses to one layer on its combined tileset.
 function buildLayers(items: any[]): Layer[] {
   const solo: any[] = []
   const batches = new Map<string, any[]>()
@@ -96,7 +81,6 @@ function buildLayers(items: any[]): Layer[] {
   return layers
 }
 
-// SSE and debug apply to every tileset, shading and classification only to point clouds.
 type PcSettings = {
   attenuation: boolean
   eyeDome: boolean
@@ -119,7 +103,7 @@ const DEFAULT_PC: PcSettings = {
   memory: false,
 }
 
-// Classification palette mirrors frontend/public/preview.html: ground/wheat, veg greens, buildings red.
+// palette mirrors public/preview.html
 function classificationStyle() {
   return new Cesium.Cesium3DTileStyle({
     color: {
@@ -170,7 +154,7 @@ export default function CesiumMap() {
   const tilesetsRef = useRef<Map<string, Cesium.Cesium3DTileset>>(new Map())
   const pendingZoom = useRef<string | null>(null)
   const flewRef = useRef(false)
-  // Mirror of pcSettings so the async tileset-load effect reads the latest without re-running.
+  // read by the async tileset-load effect without re-running it
   const pcRef = useRef<PcSettings>(DEFAULT_PC)
 
   const { data } = useQuery({
@@ -178,7 +162,6 @@ export default function CesiumMap() {
     queryFn: () => readPipelines({ skip: 0, limit: 1000 }),
   })
   const layers = useMemo(() => buildLayers((data as any)?.data || []), [data])
-  // memoized so effects don't rerun (and reset terrain) on every render
   const tileLayers = useMemo(() => layers.filter((l) => !l.isTerrain), [layers])
   const terrainLayers = useMemo(() => layers.filter((l) => l.isTerrain), [layers])
 
@@ -195,34 +178,7 @@ export default function CesiumMap() {
 
   useEffect(() => {
     if (!containerRef.current || viewerRef.current) return
-    const provider = new Cesium.WebMapServiceImageryProvider({
-      url: WMS_URL,
-      layers: "osm:osm",
-      tileWidth: 512,
-      tileHeight: 512,
-      credit: new Cesium.Credit(OSM_CREDIT),
-    })
-    const viewer = new Cesium.Viewer(containerRef.current, {
-      baseLayer: false,
-      baseLayerPicker: false,
-      animation: false,
-      fullscreenButton: false,
-      geocoder: false,
-      homeButton: false,
-      infoBox: false,
-      sceneModePicker: false,
-      selectionIndicator: false,
-      timeline: false,
-      navigationHelpButton: false,
-      navigationInstructionsInitiallyVisible: false,
-      skyBox: false,
-      scene3DOnly: true,
-      requestRenderMode: true,
-      maximumRenderTimeChange: Number.POSITIVE_INFINITY,
-    })
-    viewer.scene.globe.baseColor = new Cesium.Color(0.05, 0.05, 0.05, 1)
-    const imagery = new Cesium.ImageryLayer(provider)
-    viewer.imageryLayers.add(imagery)
+    const { viewer, imagery } = createViewer(containerRef.current)
     imageryRef.current = imagery
     viewerRef.current = viewer
 
@@ -306,7 +262,7 @@ export default function CesiumMap() {
       } else {
         const layer = terrainLayers.find((l) => l.id === activeTerrain)
         if (!layer) return
-        // fromUrl wants the terrain directory and appends layer.json itself.
+        // fromUrl appends layer.json itself
         const terrainUrl = layer.url.replace(/\/layer\.json$/, "")
         const tp = await Cesium.CesiumTerrainProvider.fromUrl(terrainUrl, {
           requestVertexNormals: true,
@@ -315,7 +271,6 @@ export default function CesiumMap() {
         if (cancelled || !viewerRef.current) return
         viewer.terrainProvider = tp
         viewer.scene.globe.depthTestAgainstTerrain = true
-        // Local DEMs are a speck on the globe; fly to the data extent.
         if (layer.extent?.length === 4) {
           const [w, s, e, n] = layer.extent
           viewer.camera.flyTo({ destination: Cesium.Rectangle.fromDegrees(w, s, e, n) })
@@ -359,7 +314,6 @@ export default function CesiumMap() {
 
   return (
     <Box pos="relative" w="100%" h="100%">
-      <style>{".cesium-credit-logoContainer{display:none!important}"}</style>
       <Box ref={containerRef} pos="absolute" inset={0} />
 
       <Box

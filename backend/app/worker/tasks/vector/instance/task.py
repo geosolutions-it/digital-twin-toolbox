@@ -60,7 +60,8 @@ def create_point_instance_3dtiles(pipeline_extended):
         records = []
         for feat in features:
             props = feat['properties']
-            fe = {'type': 'Feature', 'properties': props, 'geometry': {'type': 'Point'}}
+            fe = {'type': 'Feature', 'properties': props,
+                  'geometry': {'type': 'Point', 'coordinates': list(feat['lonlath'])}}
             model = parse_expression('string', config['model'], fe, default_config['model'])
             scale = parse_expression('number', config['scale'], fe, default_config['scale'])
             rotation = parse_expression('number', config['rotation'], fe, default_config['rotation'])

@@ -13,8 +13,15 @@ def resolve_input(source, storage, scratch):
         dest = os.path.join(scratch, 'index.zip')
         storage.download_file(key, dest)
         return f"/vsizip/{dest}"
-    dest = os.path.join(scratch, 'index' + (os.path.splitext(key)[1] or '.geojson'))
+    base, ext = os.path.splitext(key)
+    dest = os.path.join(scratch, 'index' + (ext or '.geojson'))
     storage.download_file(key, dest)
+    if ext.lower() == '.shp':
+        for side in ('.shx', '.dbf', '.prj', '.cpg'):
+            for candidate in (base + side, base + side.upper()):
+                if storage.exists(candidate):
+                    storage.download_file(candidate, os.path.join(scratch, 'index' + side))
+                    break
     return dest
 
 

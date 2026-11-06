@@ -6,6 +6,7 @@ Gateway; a cloud deploy points the S3_* settings at its own bucket. Workers down
 local scratch and upload outputs back, so no shared filesystem is required. The Storage
 interface stays thin so other object-store backends can be added later.
 """
+import io
 import os
 from abc import ABC, abstractmethod
 
@@ -178,3 +179,38 @@ def get_storage() -> Storage:
             create_bucket=settings.S3_CREATE_BUCKET,
         )
     return _storage
+
+
+class _RangeFile(io.RawIOBase):
+    def __init__(self, storage: Storage, key: str):
+        self.storage, self.key = storage, key
+        self.length = storage.size(key)
+        self.pos = 0
+
+    def readable(self):
+        return True
+
+    def seekable(self):
+        return True
+
+    def tell(self):
+        return self.pos
+
+    def seek(self, offset, whence=io.SEEK_SET):
+        base = {io.SEEK_SET: 0, io.SEEK_CUR: self.pos, io.SEEK_END: self.length}[whence]
+        self.pos = max(0, base + offset)
+        return self.pos
+
+    def readinto(self, buffer):
+        n = min(len(buffer), self.length - self.pos)
+        if n <= 0:
+            return 0
+        data = self.storage.read_range(self.key, self.pos, n)
+        buffer[:len(data)] = data
+        self.pos += len(data)
+        return len(data)
+
+
+def open_range(storage: Storage, key: str, buffer_size: int = 4 << 20):
+    """Seekable read-only file over an object, via range requests."""
+    return io.BufferedReader(_RangeFile(storage, key), buffer_size=buffer_size)
