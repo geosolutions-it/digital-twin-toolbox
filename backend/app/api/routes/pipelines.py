@@ -400,6 +400,14 @@ def mesh_bbox(*, key: str | None = None, prefix: str | None = None) -> Any:
     return {"key": target, **bbox}
 
 
+def _revoke_running(pipeline: Pipeline) -> None:
+    if pipeline.task_id and pipeline.task_status in (PENDING, STARTED):
+        try:
+            AsyncResult(pipeline.task_id, app=celery).revoke(terminate=True)
+        except Exception:
+            pass
+
+
 def _apply_pipeline_action(session, pipeline: Pipeline, action_type: PipelinesActionTypes) -> dict:
     """Run/cancel one pipeline, persisting the new task state. Returns the applied fields.
     Raises ValueError for unsupported configs; callers decide how to surface it."""
@@ -488,6 +496,7 @@ def delete_pipeline_batch(
     for pipeline in pipelines:
         source = pipeline.source or {}
         batch_prefix = batch_prefix or source.get('batch_output_prefix')
+        _revoke_running(pipeline)
         payloads.append(pipeline.model_dump())
         session.delete(pipeline)
     session.commit()
@@ -550,6 +559,7 @@ def delete_pipeline(
     batch_prefix = source.get('batch_output_prefix')
     payload = pipeline.model_dump()
 
+    _revoke_running(pipeline)
     session.delete(pipeline)
     session.commit()
 

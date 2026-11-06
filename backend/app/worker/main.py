@@ -30,6 +30,8 @@ class PipelineDatabaseTask(Task):
             return
         with Session(engine) as session:
             pipeline = session.get(Pipeline, pipeline_extended['id'])
+            if pipeline is None:
+                return
             pipeline_in = {"task_id": task_id, "task_status": status}
             if status == SUCCESS:
                 pipeline_in['task_result'] = retval
