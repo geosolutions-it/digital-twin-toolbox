@@ -28,13 +28,3 @@ services:
       - ./backend/app:/app/app
     command:
       - 'watchfiles "celery -A app.worker.main.celery worker --queues=mesh,common --include=app.worker.tasks.mesh.task,app.worker.tasks.common.task --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}" /app/app'
-
-  # Not an official pipeline yet; uncomment (with --workers photogrammetry) to develop it.
-  # worker-photogrammetry:
-  #   build:
-  #     args:
-  #       INSTALL_DEV: ${INSTALL_DEV-true}
-  #   volumes:
-  #     - ./backend/app:/app/app
-  #   command:
-  #     - 'watchfiles "celery -A app.worker.main.celery worker --queues=photogrammetry,common --include=app.worker.tasks.photogrammetry.task,app.worker.tasks.common.task --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}" /app/app'

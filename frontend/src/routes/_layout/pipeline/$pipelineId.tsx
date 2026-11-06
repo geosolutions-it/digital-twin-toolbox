@@ -6,7 +6,6 @@ import PointCloudCanvas from "../../../components/Viewer/PointCloudCanvas"
 // Other pipeline viewers hidden for now (point-cloud focus):
 // import PointGeometryCanvas from "../../../components/Viewer/PointGeometryCanvas"
 // import PolygonGeometryCanvas from "../../../components/Viewer/PolygonGeometryCanvas"
-// import PhotogrammetryCanvas from "../../../components/Viewer/PhotogrammetryCanvas"
 // import MeshCanvas from "../../../components/Viewer/MeshCanvas"
 import { isCeleryTaskInProgress } from "../../../utils/celeryStatus"
 
@@ -70,7 +69,7 @@ function Pipeline() {
             onCancel={handleOnCancel}
           />
         ) : null}
-        {/* Point / Polygon / Photogrammetry / Mesh viewers hidden for now (point-cloud focus) */}
+        {/* Point / Polygon / Mesh viewers hidden for now (point-cloud focus) */}
           </Flex>
         </Box>
         <Divider orientation="vertical" />

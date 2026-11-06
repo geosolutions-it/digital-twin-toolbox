@@ -1,5 +1,5 @@
 from app.worker.main import celery
-from app.worker.pipelines import polygon, point, pointcloud, obj, photogrammetry
+from app.worker.pipelines import polygon, point, pointcloud, obj
 from app.worker.tasks import inspection_task_for_extension
 
 
@@ -16,8 +16,6 @@ def run(pipeline_extended):
         return point.run(pipeline_extended)
     if geometry_type == 'PointCloud':
         return pointcloud.run(pipeline_extended)
-    if asset_type == 'Photogrammetry':
-        return photogrammetry.run(pipeline_extended)
     raise ValueError(f"No pipeline for asset_type={asset_type!r}, geometry_type={geometry_type!r}")
 
 

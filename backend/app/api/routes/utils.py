@@ -192,14 +192,10 @@ def create_asset(session, file_info, current_user, to_ellipsoidal_height):
                 filename = filename.replace('.zip', '.obj.zip')
                 extension = "".join(Path(filename).suffixes)
             else:
-                if not all(ext in ['.jpg', '.json', '.jpg.png', '.png', ''] for ext in zip_file_extensions):
-                    raise HTTPException(
-                        status_code=500,
-                        detail="Not supported zip archive. Include a .obj mesh (optionally .mtl and textures), shapefile (.shp), or photogrammetry images.",
-                    )
-                else:
-                    filename = filename.replace('.zip', '.phg.zip')
-                    extension = "".join(Path(filename).suffixes)
+                raise HTTPException(
+                    status_code=500,
+                    detail="Not supported zip archive. Include a .obj mesh (optionally .mtl and textures) or a shapefile (.shp).",
+                )
 
 
     check_statement = select(Asset).where(Asset.owner_id == current_user.id).where(Asset.filename == filename).limit(1)
@@ -212,9 +208,8 @@ def create_asset(session, file_info, current_user, to_ellipsoidal_height):
     vector_data_extensions = [".shp.zip"]
     point_cloud_data_extensions = [".laz", ".las"]
     raster_formats = [".tiff", ".tif"]
-    photogrammetry_formats = [".phg.zip"]
     mesh_formats = [".obj", ".obj.zip"]
-    supported_extensions = [".glb"] + vector_data_extensions + point_cloud_data_extensions + raster_formats + photogrammetry_formats + mesh_formats
+    supported_extensions = [".glb"] + vector_data_extensions + point_cloud_data_extensions + raster_formats + mesh_formats
 
     if not extension in supported_extensions:
         supported_extensions_list = ", ".join(supported_extensions)
@@ -255,7 +250,6 @@ def create_asset(session, file_info, current_user, to_ellipsoidal_height):
         'vector_data_extensions': vector_data_extensions,
         'point_cloud_data_extensions': point_cloud_data_extensions,
         'raster_formats': raster_formats,
-        'photogrammetry_formats': photogrammetry_formats,
         'mesh_formats': mesh_formats,
         'to_ellipsoidal_height': to_ellipsoidal_height
     })

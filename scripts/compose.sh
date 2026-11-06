@@ -15,7 +15,7 @@ Options:
   --dev               Hot reload (mounted source) for the backend and the
                         selected --workers
   --workers LIST      Comma-separated list of workers to include:
-                        vector (also runs point-cloud), mesh, photogrammetry
+                        vector (also runs point-cloud), mesh
   -h, --help          Show this help and exit
 
 Examples:
