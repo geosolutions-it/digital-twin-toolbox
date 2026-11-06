@@ -27,7 +27,6 @@ def _meta_bytes(props):
 
 
 def _capacity(records, models, max_bytes):
-    """Instances that fit in max_bytes next to the node's models."""
     fixed = sum(_model_bytes(models[name]) for name in {r["model"] for r in records})
     per = _INSTANCE_BYTES + sum(_meta_bytes(r["properties"]) for r in records) / len(records)
     # models alone over budget still need content per node

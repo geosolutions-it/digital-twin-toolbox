@@ -1,6 +1,6 @@
 """Object storage for bucket inputs and pipeline outputs.
 
-Keys are relative paths (e.g. "city/tile.laz", "output/<id>/tiles/tileset.json")
+Keys are relative paths (e.g. "city/tile.laz", "<OUTPUT_PREFIX>/<name>/tiles/tileset.json")
 mapped to objects in an S3-compatible bucket. Single-box/dev runs a bundled Versity S3
 Gateway; a cloud deploy points the S3_* settings at its own bucket. Workers download inputs to
 local scratch and upload outputs back, so no shared filesystem is required. The Storage
@@ -13,8 +13,16 @@ from abc import ABC, abstractmethod
 from app.core.config import settings
 
 
-def output_key(pipeline_id, *parts: str) -> str:
-    return "/".join(["output", str(pipeline_id), *parts])
+def output_root() -> str:
+    return settings.OUTPUT_PREFIX.strip("/")
+
+
+def output_key(*parts) -> str:
+    return "/".join([output_root(), *(str(p) for p in parts)])
+
+
+def output_url(key: str) -> str:
+    return f"{settings.API_V1_STR}/output/{key[len(output_root()) + 1:]}"
 
 
 def _iter_files(local_dir: str):

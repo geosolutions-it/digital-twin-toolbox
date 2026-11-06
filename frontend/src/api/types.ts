@@ -31,6 +31,7 @@ export type PipelineBatchSummary = {
   label: string
   source: string | null
   output_prefix: string | null
+  output_url?: string | null
   pipeline: string | null
   sample_key: string | null
   data: Record<string, unknown> | null

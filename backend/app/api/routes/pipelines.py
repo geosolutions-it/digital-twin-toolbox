@@ -9,7 +9,7 @@ from app.models.task import Pipeline, PipelinePublic, PipelinesPublic, PipelineB
 
 from app.services.pipeline_config import validate_pipeline_config
 from app.services.file_classify import classify_bucket_file, SUPPORTED_EXTENSIONS
-from app.core.storage import get_storage, output_key
+from app.core.storage import get_storage, output_key, output_root, output_url
 from app.core.config import settings
 from app.worker.main import celery
 from celery.result import AsyncResult
@@ -116,6 +116,7 @@ def read_pipelines_overview(
                     label=label,
                     source=f"s3://…/{src_dir}/" if src_dir else None,
                     output_prefix=src.get("batch_output_prefix"),
+                    output_url=output_url(src["batch_output_prefix"]) if src.get("batch_output_prefix") else None,
                     pipeline=src.get("pipeline") or "PointCloud",
                     sample_key=key or None,
                     data=b["rep_data"],
@@ -186,16 +187,8 @@ def create_pipeline_source(
         raise HTTPException(status_code=422, detail=f"Invalid config: {e}")
 
     key = source_in.key
-    if source_in.title:
-        base_name = _slug(source_in.title)
-        out_name = base_name
-        i = 1
-        while storage.list(f"output/{out_name}/"):
-            out_name = f"{base_name}-{i}"
-            i += 1
-        output_base = f"output/{out_name}"
-    else:
-        output_base = f"output/{os.path.splitext(key)[0]}"
+    base_name = _slug(source_in.title) if source_in.title else os.path.splitext(key)[0]
+    output_base = _unique_output(storage, base_name)
     pipeline = Pipeline(
         title=source_in.title or os.path.basename(key),
         data=data,
@@ -223,6 +216,14 @@ def create_pipeline_source(
     return {"id": str(pipeline.id)}
 
 
+def _unique_output(storage, name: str) -> str:
+    out, i = name, 1
+    while storage.list(output_key(out) + "/"):
+        out = f"{name}-{i}"
+        i += 1
+    return output_key(out)
+
+
 @router.post("/batch", response_model=Any)
 def create_pipeline_batch(
     *, session: SessionDep, current_user: CurrentUser, batch_in: PipelineBatchCreate
@@ -232,7 +233,11 @@ def create_pipeline_batch(
     Each file's workflow is detected from its contents (zips are peeked).
     """
     storage = get_storage()
-    candidates = [k for k in storage.list(batch_in.prefix) if k.lower().endswith(SUPPORTED_EXTENSIONS)]
+    skip = output_root() + "/"
+    candidates = [
+        k for k in storage.list(batch_in.prefix)
+        if k.lower().endswith(SUPPORTED_EXTENSIONS) and not k.startswith(skip)
+    ]
     classified = [(k, classify_bucket_file(storage, k)) for k in candidates]
     if batch_in.pipeline == "Instance":
         classified = [(k, "Instance") for k, t in classified if t == "Polygon"]
@@ -248,12 +253,7 @@ def create_pipeline_batch(
     # name the output after the batch title (falls back to the input folder); keep it
     # unique so a new batch never overwrites another batch's output.
     base_name = _slug(batch_in.title) if batch_in.title else (root or "batch")
-    out_name = base_name
-    i = 1
-    while storage.list(f"output/{out_name}/"):
-        out_name = f"{base_name}-{i}"
-        i += 1
-    out_root = f"output/{out_name}"
+    out_root = _unique_output(storage, base_name)
 
     batch_id = uuid.uuid4()
     created = []
@@ -277,6 +277,7 @@ def create_pipeline_batch(
                 "extension": os.path.splitext(key)[1],
                 "output_base": output_base,
                 "batch_output_prefix": out_root,
+                "batch_output_url": output_url(out_root),
                 "pipeline": ptype,
             },
             batch_id=batch_id,

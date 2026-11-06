@@ -1,8 +1,7 @@
 import os
 import tempfile
 
-from app.core.config import settings
-from app.core.storage import get_storage, output_key
+from app.core.storage import get_storage, output_key, output_url
 from app.models.config import PointCloudConfig
 from app.worker.main import celery, PipelineDatabaseTask
 from app.worker.tasks.pointcloud.pdal.processes import (
@@ -92,11 +91,10 @@ def create_point_cloud_3dtiles(pipeline_extended):
         storage.delete_prefix(f"{out_base}/tiles")
         storage.upload_dir(tiles_dir, f"{out_base}/tiles")
 
-    base = settings.API_V1_STR
     return {
         'output': out_base,
-        'tileset': f"{base}/{out_base}/tiles/tileset.json",
-        'download': f"{base}/{out_base}/tiles/download.zip",
+        'tileset': output_url(f"{out_base}/tiles/tileset.json"),
+        'download': output_url(f"{out_base}/tiles/download.zip"),
         'sample_radius': sample_radius,
         'sample_radius_auto': config.sample_radius is None,
     }

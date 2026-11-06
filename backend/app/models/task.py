@@ -59,6 +59,7 @@ class PipelineBatchSummary(SQLModel):
     label: str
     source: str | None = None
     output_prefix: str | None = None
+    output_url: str | None = None
     pipeline: str | None = None
     sample_key: str | None = None
     data: Optional[dict] = None

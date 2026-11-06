@@ -455,14 +455,12 @@ function BatchGroup({
   const state = batchState(counts, total || 1)
   const batchRunning = counts.running > 0
   const allDone = total > 0 && counts.success === total
-  // combined tileset lives at <output_prefix>/tileset.json once every member is done
-  const parentUrl =
-    allDone && summary.output_prefix
-      ? `${API_BASE}/api/v1/${summary.output_prefix}/tileset.json`
-      : ""
+  // combined tileset lives at <output_url>/tileset.json once every member is done
+  const outputUrl = summary.output_url
+  const parentUrl = allDone && outputUrl ? `${API_BASE}${outputUrl}/tileset.json` : ""
   const parentDownload =
-    allDone && summary.output_prefix
-      ? `${API_BASE}/api/v1/${summary.output_prefix}/${zipHref("download.zip", summary.label)}`
+    allDone && outputUrl
+      ? `${API_BASE}${outputUrl}/${zipHref("download.zip", summary.label)}`
       : ""
 
   const [innerPage, setInnerPage] = React.useState(1)

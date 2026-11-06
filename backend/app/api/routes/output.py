@@ -6,7 +6,7 @@ import zipfile
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
-from app.core.storage import get_storage
+from app.core.storage import get_storage, output_key
 
 router = APIRouter()
 
@@ -64,9 +64,9 @@ def _stream_zip(storage, keys, prefix):
 def serve_output_artifact(path: str):
     """Serve public pipeline/batch artifacts (3D Tiles), never process/.
 
-    Proxies objects under the output/ area through the storage layer, keeping the
+    Proxies objects under OUTPUT_PREFIX through the storage layer, keeping the
     tileset's relative references intact under one URL prefix. Works for both
-    single-pipeline outputs (output/<id>/...) and batch outputs (output/<prefix>/...).
+    single-pipeline and batch outputs.
     A .zip path with no stored object is zipped on demand from its siblings, named
     after the requested file.
     """
@@ -76,7 +76,7 @@ def serve_output_artifact(path: str):
         raise HTTPException(status_code=404)
 
     storage = get_storage()
-    key = f"output/{norm}"
+    key = output_key(norm)
 
     if parts[-1].endswith(".zip") and not storage.exists(key):
         prefix = key[: -len(parts[-1])]

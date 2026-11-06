@@ -3,7 +3,7 @@
 import io
 import json
 
-from app.core.storage import get_storage
+from app.core.storage import get_storage, output_url
 from app.worker.common.tileset import box
 from app.worker.main import celery
 
@@ -163,6 +163,6 @@ def finalize_tileset_batch(*args, output_prefix, base=None):
     storage.upload_fileobj(io.BytesIO(json.dumps(parent).encode()), parent_key)
 
     return {
-        'tileset': f"{base}/{parent_key}" if base else parent_key,
+        'tileset': output_url(parent_key) if base else parent_key,
         'count': len(children),
     }

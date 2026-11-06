@@ -64,17 +64,14 @@ function buildLayers(items: any[]): Layer[] {
   }
   for (const [bid, group] of batches) {
     const allDone = group.length > 0 && group.every((p) => p?.task_status === "SUCCESS")
-    const prefix: string = group[0]?.source?.batch_output_prefix || ""
-    const child: string = group.find((p) => p?.task_result?.tileset)?.task_result?.tileset || ""
-    if (!allDone || !prefix || !child) continue
-    const idx = child.indexOf(prefix)
-    if (idx < 0) continue
+    const batchUrl: string = group[0]?.source?.batch_output_url || ""
+    if (!allDone || !batchUrl) continue
     const t: string = group[0]?.title || ""
     layers.push({
       id: `batch:${bid}`,
       title: t.includes(" / ") ? t.split(" / ")[0] : `Batch ${bid.slice(0, 8)}`,
       type: group[0]?.source?.pipeline || "PointCloud",
-      url: `${API_BASE}${child.slice(0, idx)}${prefix}/tileset.json`,
+      url: `${API_BASE}${batchUrl}/tileset.json`,
       isTerrain: false,
     })
   }
