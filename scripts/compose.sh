@@ -15,15 +15,15 @@ Options:
   --dev               Hot reload (mounted source) for the backend and the
                         selected --workers
   --workers LIST      Comma-separated list of workers to include:
-                        vector, point-cloud, mesh, photogrammetry
+                        vector (also runs point-cloud), mesh, photogrammetry
   -h, --help          Show this help and exit
 
 Examples:
   ./scripts/compose.sh -- up -d
   ./scripts/compose.sh --prod -- up -d
-  ./scripts/compose.sh --workers vector,point-cloud -- up -d
-  ./scripts/compose.sh --dev --workers vector,point-cloud -- up
-  ./scripts/compose.sh --prod --workers vector,point-cloud,mesh -- up -d
+  ./scripts/compose.sh --workers vector -- up -d
+  ./scripts/compose.sh --dev --workers vector -- up
+  ./scripts/compose.sh --prod --workers vector,mesh -- up -d
   ./scripts/compose.sh -- down
 EOF
 }

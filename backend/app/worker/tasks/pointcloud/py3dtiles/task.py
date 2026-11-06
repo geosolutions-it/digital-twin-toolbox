@@ -145,15 +145,10 @@ def create_point_cloud_3dtiles(pipeline_extended):
             ground_classification=config.ground_classification,
         )
 
-        has_classification, has_intensity = detect_point_attributes(processed_file)
-        if config.ground_classification:
-            has_classification = True
+        attributes = detect_point_attributes(processed_file, force_classification=config.ground_classification)
 
         tiles_dir = os.path.join(scratch, 'tiles')
-        py3dtiles_convert(
-            processed_file, tiles_dir, f'{horizontal_epsg}',
-            include_classification=has_classification, include_intensity=has_intensity,
-        )
+        py3dtiles_convert(processed_file, tiles_dir, f'{horizontal_epsg}', attributes=attributes)
 
         storage.delete_prefix(f"{out_base}/tiles")
         storage.upload_dir(tiles_dir, f"{out_base}/tiles")

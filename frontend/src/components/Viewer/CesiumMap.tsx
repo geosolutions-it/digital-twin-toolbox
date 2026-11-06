@@ -124,14 +124,14 @@ function classificationStyle() {
   return new Cesium.Cesium3DTileStyle({
     color: {
       conditions: [
-        ["${Classification} === 1", "color('#FFDEAD')"],
-        ["${Classification} === 2", "color('#FFDEAD')"],
-        ["${Classification} === 3", "color('#63FF7E')"],
-        ["${Classification} === 4", "color('#63FF7E')"],
-        ["${Classification} === 5", "color('#22B33A')"],
-        ["${Classification} === 6", "color('#ff0000')"],
-        ["${Classification} === 7", "color('#808080')"],
-        ["${Classification} === 8", "color('#808080')"],
+        ["${classification} === 1", "color('#FFDEAD')"],
+        ["${classification} === 2", "color('#FFDEAD')"],
+        ["${classification} === 3", "color('#63FF7E')"],
+        ["${classification} === 4", "color('#63FF7E')"],
+        ["${classification} === 5", "color('#22B33A')"],
+        ["${classification} === 6", "color('#ff0000')"],
+        ["${classification} === 7", "color('#808080')"],
+        ["${classification} === 8", "color('#808080')"],
         [true, "color('#808080')"],
       ],
     },

@@ -76,7 +76,10 @@ def _recompute_geometric_error(tileset_path):
     return root.get("geometricError")
 
 
-def py3dtiles_convert(input_path, output_path, srs_in, include_classification=False, include_intensity=False):
+def py3dtiles_convert(input_path, output_path, srs_in, attributes=None):
+    """attributes: {laspy dimension name: {"minimum", "maximum"}} exported as extra
+    fields and declared in tileset.json properties."""
+    attributes = attributes or {}
     cmd = [
         'py3dtiles', 'convert', input_path,
         '--overwrite', '--force-srs-in',
@@ -85,20 +88,18 @@ def py3dtiles_convert(input_path, output_path, srs_in, include_classification=Fa
         '--srs_in', srs_in,
         '--srs_out', '4978',
     ]
-    if include_classification:
-        cmd.append('--classification')
-    if include_intensity:
-        cmd.append('--intensity')
+    for name in attributes:
+        cmd += ['--extra-fields', name]
 
     res = run_subprocess(cmd, capture_output=True, text=True)
 
     tileset_json_path = os.path.join(output_path, 'tileset.json')
     try:
         _recompute_geometric_error(tileset_json_path)
-        if include_classification:
+        if attributes:
             with open(tileset_json_path) as f:
                 data = json.load(f)
-            data["properties"] = {"Classification": {"minimum": 0, "maximum": 255}}
+            data["properties"] = attributes
             with open(tileset_json_path, "w") as f:
                 json.dump(data, f)
     except Exception as e:

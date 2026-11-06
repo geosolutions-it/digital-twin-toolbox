@@ -2,6 +2,7 @@ import subprocess
 import json
 import os
 import math
+import laspy
 from pyproj import CRS
 from app.worker.tasks.pointcloud.crs import resolve_epsg_codes_from_pdal_metadata
 from app.worker.common.utils import run_subprocess
@@ -27,27 +28,28 @@ def pdal_stats(file_path):
     return json.loads(result.stdout.decode("utf-8"))
 
 
-def detect_point_attributes(file_path):
-    """Return (has_classification, has_intensity): include an attribute only when the
-    cloud actually carries it with useful variation, not just a zeroed dimension."""
+def detect_point_attributes(file_path, force_classification=False):
+    """Return {laspy name: {"minimum", "maximum"}} for the attributes worth exporting:
+    only when the cloud carries them with useful variation, not just a zeroed dimension."""
     try:
         stats = pdal_stats(file_path)
     except Exception:
-        return False, False
+        stats = {}
     by_name = {s.get('name'): s for s in (stats.get('stats') or {}).get('statistic', [])}
 
-    def varied(name):
-        s = by_name.get(name)
-        if not s:
-            return False
+    def value_range(name):
+        s = by_name.get(name) or {}
         mn, mx = s.get('minimum'), s.get('maximum')
-        return mn is not None and mx is not None and mn != mx
+        return None if mn is None or mx is None else {"minimum": mn, "maximum": mx}
 
-    cls = by_name.get('Classification') or {}
-    # classified if values vary, or a single non-trivial class (not 0/1 = unclassified)
-    has_classification = varied('Classification') or cls.get('minimum') not in (None, 0, 1)
-    has_intensity = varied('Intensity')
-    return has_classification, has_intensity
+    attributes = {}
+    cls = value_range('Classification')
+    if force_classification or (cls and (cls["minimum"] != cls["maximum"] or cls["minimum"] not in (0, 1))):
+        attributes['classification'] = cls or {"minimum": 0, "maximum": 255}
+    intensity = value_range('Intensity')
+    if intensity and intensity["minimum"] != intensity["maximum"]:
+        attributes['intensity'] = intensity
+    return attributes
 
 
 def point_cloud_preview(input_file_path, output_file_path, metadata, stats):
@@ -109,6 +111,11 @@ def resolve_crs_from_file(input_path):
         return None, None
 
 
+def _las_point_format(file_path):
+    with laspy.open(file_path) as f:
+        return f.header.point_format.id
+
+
 def process_las(work_dir, input_path, sample_radius=None, to_ellipsoidal_height=False, horizontal_epsg=None, vertical_epsg=None, colorization_image=None, ground_classification=False):
     pipeline = []
 
@@ -133,13 +140,15 @@ def process_las(work_dir, input_path, sample_radius=None, to_ellipsoidal_height=
             {"type": "filters.smrf", "ignore": "Classification[7:7]"}
         ]
 
-    if len(pipeline) == 0:
+    if len(pipeline) == 0 and _las_point_format(input_path) >= 6:
         return input_path
 
     output_processed_laz_path = os.path.join(work_dir, 'processed.laz')
     pipeline_process_path = os.path.join(work_dir, 'process.pipeline.json')
 
-    pipeline = [{"filename": input_path, "type": 'readers.las'}] + pipeline + [{"type": 'writers.las', "filename": output_processed_laz_path, "compression": True}]
+    # LAS 1.4 format 7 (RGB): full-byte classification, which py3dtiles exports as "classification"
+    writer = {"type": 'writers.las', "filename": output_processed_laz_path, "compression": True, "minor_version": 4, "dataformat_id": 7}
+    pipeline = [{"filename": input_path, "type": 'readers.las'}] + pipeline + [writer]
 
     with open(pipeline_process_path, "w") as f:
         json.dump(pipeline, f)

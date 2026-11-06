@@ -18,16 +18,7 @@ services:
     volumes:
       - ./backend/app:/app/app
     command:
-      - 'watchfiles "celery -A app.worker.main.celery worker --queues=vector,common --include=app.worker.tasks.vector.task,app.worker.tasks.common.task --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}" /app/app'
-
-  worker-point-cloud:
-    build:
-      args:
-        INSTALL_DEV: ${INSTALL_DEV-true}
-    volumes:
-      - ./backend/app:/app/app
-    command:
-      - 'watchfiles "celery -A app.worker.main.celery worker --queues=point-cloud,common --include=app.worker.tasks.pointcloud.task,app.worker.tasks.common.task --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}" /app/app'
+      - 'watchfiles "celery -A app.worker.main.celery worker --queues=vector,point-cloud,common --include=app.worker.tasks.vector.task,app.worker.tasks.pointcloud.task,app.worker.tasks.common.task --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}" /app/app'
 
   worker-mesh:
     build:
