@@ -462,7 +462,7 @@ def _apply_pipeline_action(session, pipeline: Pipeline, action_type: PipelinesAc
 
 
 @router.post("/{id}/task/{action_type}", response_model=Any)
-async def process_pipeline_task(
+def process_pipeline_task(
     *, session: SessionDep, id: uuid.UUID, action_type: PipelinesActionTypes
 ) -> Any:
     """

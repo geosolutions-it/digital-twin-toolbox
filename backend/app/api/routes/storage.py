@@ -51,7 +51,7 @@ def _unique_key(storage, key: str) -> str:
 
 
 @router.post("/upload")
-async def upload_to_storage(
+def upload_to_storage(
     file: UploadFile, prefix: str = ""
 ) -> Any:
     """Drop a file into the bucket at <prefix>/<name>, auto-suffixing on collision."""
