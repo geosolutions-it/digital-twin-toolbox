@@ -2,8 +2,6 @@ CAPABILITIES = {
     'vector': {
         'extensions': {
             '.shp.zip': 'inspect_vector',
-            # Raster metadata is extracted on the vector worker because raster assets are
-            # used as colorization inputs for the point cloud pipeline (PDAL filters.colorization).
             '.tiff': 'inspect_raster',
             '.tif': 'inspect_raster',
         },
@@ -20,10 +18,6 @@ CAPABILITIES = {
             '.obj.zip': 'inspect_mesh',
         },
     },
-    # Shared queue drained by every worker: lightweight, dependency-free tasks
-    # (GLB inspection + asset/pipeline cleanup) that must run regardless of which
-    # component workers are deployed. GLB lives here (not under 'mesh') so it can be
-    # imported without the heavy mesh worker.
     'common': {
         'extensions': {
             '.glb': 'inspect_glb',
@@ -43,9 +37,7 @@ TASK_QUEUES = {
     'create_point_instance_3dtiles': 'vector',
     'create_point_cloud_3dtiles': 'point-cloud',
     'denoise_point_cloud': 'point-cloud',
-    'resolve_mesh_input': 'mesh',
-    'crop_obj': 'mesh',
-    'tile_obj_3dtiles': 'mesh',
+    'create_mesh_3dtiles': 'mesh',
     'complete_asset_remove_process': 'common',
     'complete_pipeline_remove_process': 'common',
     'finalize_tileset_batch': 'common',

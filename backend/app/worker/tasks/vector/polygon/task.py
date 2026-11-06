@@ -7,11 +7,11 @@ import numpy as np
 from app.core.storage import get_storage, output_key
 from app.worker.common.expression import parse_expression
 from app.worker.main import celery, PipelineDatabaseTask
-from app.worker.tasks.vector.gltf.geo import LocalFrame
+from app.worker.common.geo import LocalFrame
 from app.worker.tasks.vector.polygon.tiler import build_tileset
 from app.worker.tasks.vector.polygon.extrude import extrude
 from app.worker.tasks.vector.source import coerce, field_names, open_layer, resolve_input, wgs84_transform
-from app.worker.tasks.vector.output import publish_tiles
+from app.worker.common.output import publish_tiles
 
 
 def _ensure_z(coords):

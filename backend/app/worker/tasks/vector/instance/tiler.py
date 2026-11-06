@@ -9,8 +9,8 @@ import os
 
 import numpy as np
 
-from app.worker.tasks.common.tiles3d import box, write_tileset
-from app.worker.tasks.vector.gltf.glb import tileset_metadata
+from app.worker.common.tileset import box, write_tileset
+from app.worker.common.gltf import tileset_metadata
 from app.worker.tasks.vector.instance.writer import write_instanced_glb
 
 

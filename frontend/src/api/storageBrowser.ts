@@ -5,6 +5,7 @@ export interface StorageFile {
   key: string
   name: string
   size: number
+  workflow?: string | null
 }
 
 export interface StorageListing {

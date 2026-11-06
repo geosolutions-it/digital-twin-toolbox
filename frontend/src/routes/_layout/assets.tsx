@@ -32,7 +32,7 @@ import React from "react"
 import { type SubmitHandler, useForm } from "react-hook-form"
 import { FiFile, FiFolder, FiPlay, FiPlus, FiUpload } from "react-icons/fi"
 import { listStorage, uploadToStorage } from "../../api/storageBrowser"
-import NewBatchModal from "../../components/Pipelines/NewBatchModal"
+import NewBatchModal, { type PipelineType } from "../../components/Pipelines/NewBatchModal"
 import PageHeader from "../../components/Common/PageHeader"
 import useCustomToast from "../../hooks/useCustomToast"
 
@@ -164,24 +164,16 @@ function Breadcrumbs({ cwd, onNavigate }: { cwd: string; onNavigate: (p: string)
   )
 }
 
-const POINTCLOUD_EXT = [".laz", ".las"]
-const VECTOR_EXT = [".fgb", ".gpkg", ".geojson", ".zip"]
-const TERRAIN_EXT = [".tif", ".tiff", ".vrt"]
+const WORKFLOWS: PipelineType[] = ["PointCloud", "Polygon", "Terrain", "Mesh"]
 
-function hintTypeForFile(
-  name: string,
-): "PointCloud" | "Polygon" | "Terrain" | undefined {
-  const n = name.toLowerCase()
-  if (POINTCLOUD_EXT.some((e) => n.endsWith(e))) return "PointCloud"
-  if (VECTOR_EXT.some((e) => n.endsWith(e))) return "Polygon"
-  if (TERRAIN_EXT.some((e) => n.endsWith(e))) return "Terrain"
-  return undefined
+function hintTypeForFile(workflow?: string | null): PipelineType | undefined {
+  return WORKFLOWS.find((w) => w === workflow)
 }
 
 function BucketBrowser({ cwd, setCwd }: { cwd: string; setCwd: (p: string) => void }) {
   const [batchPrefix, setBatchPrefix] = React.useState("")
   const [processKey, setProcessKey] = React.useState("")
-  const [processType, setProcessType] = React.useState<"PointCloud" | "Polygon" | "Terrain" | undefined>()
+  const [processType, setProcessType] = React.useState<PipelineType | undefined>()
   const batchModal = useDisclosure()
   const processModal = useDisclosure()
 
@@ -195,7 +187,7 @@ function BucketBrowser({ cwd, setCwd }: { cwd: string; setCwd: (p: string) => vo
     batchModal.onOpen()
   }
 
-  const openProcess = (key: string, type?: "PointCloud" | "Polygon" | "Terrain") => {
+  const openProcess = (key: string, type?: PipelineType) => {
     setProcessKey(key)
     setProcessType(type)
     processModal.onOpen()
@@ -267,7 +259,7 @@ function BucketBrowser({ cwd, setCwd }: { cwd: string; setCwd: (p: string) => vo
                   )
                 })}
                 {files.map((file) => {
-                  const hintType = hintTypeForFile(file.name)
+                  const hintType = hintTypeForFile(file.workflow)
                   return (
                     <Tr key={file.key} _hover={{ bg: "blackAlpha.50", _dark: { bg: "whiteAlpha.100" } }}>
                       <Td>
@@ -314,7 +306,8 @@ function BucketBrowser({ cwd, setCwd }: { cwd: string; setCwd: (p: string) => vo
 
       <Text fontSize="xs" color="gray.500" mt={3}>
         Listing the bucket by prefix. Use <b>Batch</b> on a folder to process every
-        supported file under it (point clouds, vectors, zipped shapefiles); the
+        supported file under it (point clouds, vectors, zipped shapefiles); zipped
+        meshes run only in a Mesh batch, as they need their own placement. The
         workflow is detected per file. No per-file registration needed.
       </Text>
 

@@ -1,3 +1,39 @@
+x-worker: &worker
+  image: '${DOCKER_IMAGE_WORKER?Variable not set}:${TAG-latest}'
+  restart: always
+  platform: linux/amd64
+  logging:
+    driver: "json-file"
+    options:
+      max-size: 10m
+      max-file: "3"
+  volumes:
+    - app-assets-data:/mnt/assets
+  env_file:
+    - .env
+  networks:
+    - default
+  environment:
+    - POSTGRES_SERVER=db
+    - POSTGRES_PORT=${POSTGRES_PORT}
+    - POSTGRES_DB=${POSTGRES_DB}
+    - POSTGRES_USER=${POSTGRES_USER?Variable not set}
+    - POSTGRES_PASSWORD=${POSTGRES_PASSWORD?Variable not set}
+    - CELERY_BROKER_URL=redis://redis:6379/0
+    - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    - ASSETS_DATA=/mnt/assets
+    - PGPASSWORD=${POSTGRES_PASSWORD?Variable not set}
+    # PROJ fetches geoid/datum grids on demand
+    - PROJ_NETWORK=ON
+    - MESH_TILING_WORKERS=${MESH_TILING_WORKERS:-4}
+  build:
+    context: ./backend
+    dockerfile: Dockerfile.worker
+    args:
+      INSTALL_DEV: ${INSTALL_DEV-false}
+  depends_on:
+    - redis
+    - db
 
 services:
   db:
@@ -97,6 +133,23 @@ services:
       - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-https.entrypoints=https
       - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-https.tls=true
       - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-https.tls.certresolver=le
+  worker-vector:
+    <<: *worker
+    command:
+      - "celery -A app.worker.main.celery worker --queues=vector,common --include=app.worker.tasks.vector.task,app.worker.tasks.common.task --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}"
+
+  worker-point-cloud:
+    <<: *worker
+    mem_limit: ${WORKER_POINT_CLOUD_MEM_LIMIT:-0}
+    command:
+      - "celery -A app.worker.main.celery worker --queues=point-cloud,common --include=app.worker.tasks.pointcloud.task,app.worker.tasks.common.task --loglevel=info --concurrency=${WORKER_POINT_CLOUD_CONCURRENCY:-2}"
+
+  worker-mesh:
+    <<: *worker
+    mem_limit: ${WORKER_MESH_MEM_LIMIT:-0}
+    command:
+      - "celery -A app.worker.main.celery worker --queues=mesh,common --include=app.worker.tasks.mesh.task,app.worker.tasks.common.task --loglevel=info --concurrency=${WORKER_MESH_CONCURRENCY:-1}"
+
 volumes:
   app-db-data:
   app-assets-data:

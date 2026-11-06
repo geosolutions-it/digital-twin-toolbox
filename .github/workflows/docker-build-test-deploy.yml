@@ -25,10 +25,8 @@ jobs:
         run: |
           DOCKER_BUILDKIT=1 docker compose \
             -f docker-compose.yml \
-            -f docker-compose.worker.vector.yml \
-            -f docker-compose.worker.mesh.yml \
             -f docker-compose.build.yml build \
-            backend frontend worker-vector worker-mesh
+            backend frontend worker-vector
 
       - name: Run tests
         run: sh scripts/test-local.sh
@@ -55,5 +53,4 @@ jobs:
           source .env
           docker push $DOCKER_IMAGE_BACKEND:$TAG
           docker push $DOCKER_IMAGE_FRONTEND:$TAG
-          docker push $DOCKER_IMAGE_WORKER_VECTOR:$TAG
-          docker push $DOCKER_IMAGE_WORKER_MESH:$TAG
+          docker push $DOCKER_IMAGE_WORKER:$TAG

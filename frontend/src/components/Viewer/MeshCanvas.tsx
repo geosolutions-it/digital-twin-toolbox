@@ -99,7 +99,7 @@ function MeshCanvas({
     tile_faces_target: 10000,
     texture_image_size: 512,
     max_geometric_error: 256,
-    decimate_last_depth_level: false,
+    decimate_last_depth_level: true,
     forward_axis: "Y",
     up_axis: "Z",
     ...pipeline.data,

@@ -4,7 +4,7 @@ EXT_mesh_gpu_instancing; per-instance properties ride along via EXT_instance_fea
 """
 import numpy as np
 
-from app.worker.tasks.vector.gltf.glb import (
+from app.worker.common.gltf import (
     ARRAY_BUFFER, ELEMENT_ARRAY_BUFFER, FLOAT, UNSIGNED_INT, Blob, enu_to_gltf, metadata, pack_glb,
 )
 

@@ -6,12 +6,12 @@ import tempfile
 from app.core.storage import get_storage, output_key
 from app.worker.common.expression import parse_expression
 from app.worker.main import celery, PipelineDatabaseTask
-from app.worker.tasks.vector.gltf.geo import LocalFrame
-from app.worker.tasks.vector.gltf.glb import infer_schema
+from app.worker.common.geo import LocalFrame
+from app.worker.common.gltf import infer_schema
 from app.worker.tasks.vector.instance import reader
 from app.worker.tasks.vector.instance.tiler import build_instance_tileset
 from app.worker.tasks.vector.source import resolve_input
-from app.worker.tasks.vector.output import publish_tiles
+from app.worker.common.output import publish_tiles
 
 
 def _load_model(storage, name, config, scratch, cache):

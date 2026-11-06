@@ -179,6 +179,7 @@ _SOURCE_TASK = {
     "Polygon": "create_polygon_3dtiles",
     "Terrain": "create_terrain_tiles",
     "Instance": "create_point_instance_3dtiles",
+    "Mesh": "create_mesh_3dtiles",
 }
 
 
@@ -260,8 +261,11 @@ def create_pipeline_batch(
     classified = [(k, classify_bucket_file(storage, k)) for k in candidates]
     if batch_in.pipeline == "Instance":
         classified = [(k, "Instance") for k, t in classified if t == "Polygon"]
+    elif batch_in.pipeline == "Mesh":
+        classified = [(k, t) for k, t in classified if t == "Mesh"]
     else:
-        classified = [(k, t) for k, t in classified if t in _SOURCE_TASK]
+        # meshes need their own lat/lon, so only a Mesh batch picks them up
+        classified = [(k, t) for k, t in classified if t in _SOURCE_TASK and t != "Mesh"]
     if not classified:
         raise HTTPException(status_code=404, detail=f"No supported files under prefix {batch_in.prefix!r}")
 

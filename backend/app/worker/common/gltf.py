@@ -1,4 +1,4 @@
-"""Shared glTF/GLB building blocks: constants, ENU axis swap, binary blob, metadata, packing."""
+"""Shared glTF/GLB building blocks: constants, ENU axis swap, quantization, binary blob, metadata, packing."""
 import json
 import struct
 
@@ -23,6 +23,53 @@ def enu_to_gltf(enu):
     out[:, 1] = enu[:, 2]
     out[:, 2] = -enu[:, 1]
     return out
+
+
+def unique_rows(*cols):
+    """Row-wise dedupe of equal-length arrays -> (first index per unique row, inverse)."""
+    packed = np.concatenate([np.ascontiguousarray(c).view(np.uint8).reshape(len(c), -1) for c in cols], axis=1)
+    packed = np.ascontiguousarray(packed).view(np.dtype((np.void, packed.shape[1]))).ravel()
+    _, first, inverse = np.unique(packed, return_index=True, return_inverse=True)
+    return first, inverse.ravel()
+
+
+def pad_rows(arr, width):
+    """(N,k) small ints -> (N,width) bytes so each vertex element stays 4-byte aligned."""
+    raw = np.ascontiguousarray(arr).view(np.uint8).reshape(len(arr), -1)
+    out = np.zeros((len(arr), width), dtype=np.uint8)
+    out[:, :raw.shape[1]] = raw
+    return out
+
+
+def quantize_positions(pos, max_step=0.01):
+    """(N,3) glTF positions -> (values, step, origin): uint16 grid when the step stays under
+    max_step (KHR_mesh_quantization, undone by node translation/scale), else float32 and step None."""
+    pos = np.asarray(pos, dtype=np.float64)
+    mn = pos.min(axis=0)
+    step = max(float((pos.max(axis=0) - mn).max()) / 65535.0, 1e-9)
+    if step > max_step:
+        return pos.astype(np.float32), None, mn
+    return np.round((pos - mn) / step).astype(np.uint16), step, mn
+
+
+def add_positions(blob, qpos, step, target=ARRAY_BUFFER):
+    """Position accessor for quantize_positions output; uint16 rows padded to an 8-byte stride."""
+    if step is None:
+        view = blob.add(qpos.tobytes(), target)
+        comp = FLOAT
+    else:
+        view = blob.add(pad_rows(qpos, 8).tobytes(), target)
+        blob.views[view]["byteStride"] = 8
+        comp = UNSIGNED_SHORT
+    return {"bufferView": view, "componentType": comp, "count": int(len(qpos)), "type": "VEC3",
+            "min": qpos.min(axis=0).tolist(), "max": qpos.max(axis=0).tolist()}
+
+
+def dequantize_node(step, origin):
+    """Node translation/scale that maps quantized positions back to metres ({} when unquantized)."""
+    if step is None:
+        return {}
+    return {"translation": np.asarray(origin, dtype=np.float64).tolist(), "scale": [step, step, step]}
 
 
 def infer_schema(features):

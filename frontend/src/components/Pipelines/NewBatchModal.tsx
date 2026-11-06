@@ -30,7 +30,16 @@ import { processPipelineTask } from "../../api/pipelines"
 import useCustomToast from "../../hooks/useCustomToast"
 import InputExpression from "../Viewer/InputExpression"
 
-type PipelineType = "PointCloud" | "Polygon" | "Terrain" | "Instance"
+type PipelineType = "PointCloud" | "Polygon" | "Terrain" | "Instance" | "Mesh"
+
+const AXES = [
+  { value: "X", label: "X" },
+  { value: "Y", label: "Y" },
+  { value: "Z", label: "Z" },
+  { value: "NEGATIVE_X", label: "-X" },
+  { value: "NEGATIVE_Y", label: "-Y" },
+  { value: "NEGATIVE_Z", label: "-Z" },
+]
 
 interface NewBatchModalProps {
   isOpen: boolean
@@ -70,6 +79,15 @@ interface BatchFormValues {
   scale?: any
   rotation?: any
   translate_z?: any
+  latitude?: string
+  longitude?: string
+  altitude?: string
+  forward_axis?: string
+  up_axis?: string
+  depth?: string
+  tile_faces_target?: string
+  texture_image_size?: string
+  decimate_last_depth_level?: boolean
 }
 
 function heightValue(v: any): number | any[] | undefined {
@@ -102,10 +120,32 @@ const EMPTY: BatchFormValues = {
   scale: "",
   rotation: "",
   translate_z: "",
+  latitude: "",
+  longitude: "",
+  altitude: "",
+  forward_axis: "Y",
+  up_axis: "Z",
+  depth: "",
+  tile_faces_target: "",
+  texture_image_size: "",
+  decimate_last_depth_level: true,
 }
 
 function buildData(values: BatchFormValues, type: PipelineType): Record<string, unknown> {
   const data: Record<string, unknown> = {}
+  if (type === "Mesh") {
+    data.latitude = Number(values.latitude || 0)
+    data.longitude = Number(values.longitude || 0)
+    data.altitude = Number(values.altitude || 0)
+    data.forward_axis = values.forward_axis || "Y"
+    data.up_axis = values.up_axis || "Z"
+    if (values.depth) data.depth = Number(values.depth)
+    if (values.tile_faces_target) data.tile_faces_target = Number(values.tile_faces_target)
+    if (values.texture_image_size) data.texture_image_size = Number(values.texture_image_size)
+    if (values.max_geometric_error) data.max_geometric_error = Number(values.max_geometric_error)
+    data.decimate_last_depth_level = !!values.decimate_last_depth_level
+    return data
+  }
   if (type === "Terrain") {
     if (values.to_ellipsoidal_height) data.to_ellipsoidal_height = true
     if (values.max_zoom) data.max_zoom = Number(values.max_zoom)
@@ -305,6 +345,7 @@ const NewBatchModal = ({
                 <option value="Polygon">Polygon</option>
                 <option value="Instance">Point instance</option>
                 <option value="Terrain">Terrain</option>
+                <option value="Mesh">Mesh (zipped obj)</option>
               </Select>
             </FormControl>
           )}
@@ -315,7 +356,72 @@ const NewBatchModal = ({
             </FormControl>
           )}
 
-          {type === "Instance" ? (
+          {type === "Mesh" ? (
+            <>
+              <Text fontSize="xs" color="gray.500">
+                The mesh origin (0, 0, 0) is placed at this location; vertices are metres.
+              </Text>
+              <FormControl isRequired isInvalid={!!errors.latitude}>
+                <FormLabel htmlFor="latitude">Latitude</FormLabel>
+                <Input
+                  id="latitude"
+                  type="number"
+                  step="any"
+                  {...register("latitude", { required: "Latitude is required." })}
+                />
+                {errors.latitude && <FormErrorMessage>{errors.latitude.message}</FormErrorMessage>}
+              </FormControl>
+              <FormControl isRequired isInvalid={!!errors.longitude}>
+                <FormLabel htmlFor="longitude">Longitude</FormLabel>
+                <Input
+                  id="longitude"
+                  type="number"
+                  step="any"
+                  {...register("longitude", { required: "Longitude is required." })}
+                />
+                {errors.longitude && <FormErrorMessage>{errors.longitude.message}</FormErrorMessage>}
+              </FormControl>
+              <FormControl>
+                <FormLabel htmlFor="altitude">Altitude (m, ellipsoidal)</FormLabel>
+                <Input id="altitude" type="number" step="any" placeholder="0" {...register("altitude")} />
+              </FormControl>
+              <FormControl>
+                <FormLabel htmlFor="forward_axis">Forward axis (north)</FormLabel>
+                <Select id="forward_axis" {...register("forward_axis")}>
+                  {AXES.map((a) => (
+                    <option key={a.value} value={a.value}>{a.label}</option>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl>
+                <FormLabel htmlFor="up_axis">Up axis</FormLabel>
+                <Select id="up_axis" {...register("up_axis")}>
+                  {AXES.map((a) => (
+                    <option key={a.value} value={a.value}>{a.label}</option>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl>
+                <FormLabel htmlFor="depth">Depth (optional)</FormLabel>
+                <Input id="depth" type="number" placeholder="4" {...register("depth")} />
+              </FormControl>
+              <FormControl>
+                <FormLabel htmlFor="tile_faces_target">Faces per tile (optional)</FormLabel>
+                <Input id="tile_faces_target" type="number" placeholder="10000" {...register("tile_faces_target")} />
+              </FormControl>
+              <FormControl>
+                <FormLabel htmlFor="texture_image_size">Texture size (px, optional)</FormLabel>
+                <Input id="texture_image_size" type="number" placeholder="512" {...register("texture_image_size")} />
+              </FormControl>
+              <FormControl>
+                <FormLabel htmlFor="max_geometric_error">Max geometric error (optional)</FormLabel>
+                <Input id="max_geometric_error" type="number" placeholder="256" {...register("max_geometric_error")} />
+              </FormControl>
+              <FormControl>
+                <Checkbox {...register("decimate_last_depth_level")}>Decimate the last level</Checkbox>
+              </FormControl>
+            </>
+          ) : type === "Instance" ? (
             <>
               <Text fontSize="xs" color="gray.500">
                 Point layer: each point places a glb model, instanced in 3D Tiles.

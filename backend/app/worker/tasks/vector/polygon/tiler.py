@@ -4,8 +4,8 @@ import os
 
 import numpy as np
 
-from app.worker.tasks.vector.gltf.glb import infer_schema, tileset_metadata
-from app.worker.tasks.common.tiles3d import box, write_tileset
+from app.worker.common.gltf import infer_schema, tileset_metadata
+from app.worker.common.tileset import box, write_tileset
 from app.worker.tasks.vector.polygon.writer import glb_bytes
 
 _EST_BYTES_PER_VERTEX = 12

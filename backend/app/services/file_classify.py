@@ -16,6 +16,7 @@ _EXT_WORKFLOW = {
 # inner-file suffix -> workflow, checked in order
 _ZIP_SIGNATURES = [
     (".shp", "Polygon"),
+    (".obj", "Mesh"),
 ]
 
 SUPPORTED_EXTENSIONS = tuple(_EXT_WORKFLOW) + (".zip",)

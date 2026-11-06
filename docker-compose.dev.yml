@@ -1,7 +1,3 @@
-# Hot reload for `compose.sh --dev`: mounts the source and runs each process
-# under `watchfiles`. Keep the workers below in sync with --workers (comment out
-# the ones you are not running). Set WATCHFILES_FORCE_POLLING=true in .env if
-# changes are not detected (Docker Desktop / WSL2 on /mnt/c).
 services:
   backend:
     build:
@@ -18,7 +14,16 @@ services:
     volumes:
       - ./backend/app:/app/app
     command:
-      - 'watchfiles "celery -A app.worker.main.celery worker --queues=vector,point-cloud,common --include=app.worker.tasks.vector.task,app.worker.tasks.pointcloud.task,app.worker.tasks.common.task --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}" /app/app'
+      - 'watchfiles "celery -A app.worker.main.celery worker --queues=vector,common --include=app.worker.tasks.vector.task,app.worker.tasks.common.task --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}" /app/app'
+
+  worker-point-cloud:
+    build:
+      args:
+        INSTALL_DEV: ${INSTALL_DEV-true}
+    volumes:
+      - ./backend/app:/app/app
+    command:
+      - 'watchfiles "celery -A app.worker.main.celery worker --queues=point-cloud,common --include=app.worker.tasks.pointcloud.task,app.worker.tasks.common.task --loglevel=info --concurrency=${WORKER_POINT_CLOUD_CONCURRENCY:-2}" /app/app'
 
   worker-mesh:
     build:
@@ -27,4 +32,4 @@ services:
     volumes:
       - ./backend/app:/app/app
     command:
-      - 'watchfiles "celery -A app.worker.main.celery worker --queues=mesh,common --include=app.worker.tasks.mesh.task,app.worker.tasks.common.task --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}" /app/app'
+      - 'watchfiles "celery -A app.worker.main.celery worker --queues=mesh,common --include=app.worker.tasks.mesh.task,app.worker.tasks.common.task --loglevel=info --concurrency=${WORKER_MESH_CONCURRENCY:-1}" /app/app'

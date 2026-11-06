@@ -2,6 +2,7 @@ import os
 from typing import Any
 
 from app.core.storage import get_storage
+from app.services.file_classify import classify_bucket_file
 from fastapi import APIRouter, HTTPException, UploadFile
 
 router = APIRouter()
@@ -13,7 +14,15 @@ def list_storage(prefix: str = "") -> Any:
     prefix = prefix.lstrip("/")
     if ".." in prefix.split("/"):
         raise HTTPException(status_code=400, detail="Invalid prefix")
-    return get_storage().list_dir(prefix)
+    storage = get_storage()
+    listing = storage.list_dir(prefix)
+    # zips are peeked, so the UI offers the right form
+    for f in listing["files"]:
+        try:
+            f["workflow"] = classify_bucket_file(storage, f["key"])
+        except Exception:
+            f["workflow"] = None
+    return listing
 
 
 def _unique_key(storage, key: str) -> str:

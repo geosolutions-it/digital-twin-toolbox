@@ -39,9 +39,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     if [ "$INSTALL_DEV" = "true" ]; then \
-      uv sync --frozen --no-install-workspace --refresh-package pdal --group worker --group vector --group pointcloud --group dev; \
+      uv sync --frozen --no-install-workspace --refresh-package pdal --group worker --group vector --group pointcloud --group mesh --group dev; \
     else \
-      uv sync --frozen --no-install-workspace --refresh-package pdal --no-dev --group worker --group vector --group pointcloud; \
+      uv sync --frozen --no-install-workspace --refresh-package pdal --no-dev --group worker --group vector --group pointcloud --group mesh; \
     fi
 
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -69,7 +69,7 @@ RUN echo /opt/pdal/lib > /etc/ld.so.conf.d/pdal.conf && ldconfig
 COPY --from=builder /app/.venv /app/.venv
 
 RUN pdal --version && \
-    python -c "import pdal, osgeo.gdal, py3dtiles, laspy, quantized_mesh_tile; print('python-pdal', pdal.__version__, 'gdal', osgeo.gdal.__version__)"
+    python -c "import pdal, osgeo.gdal, py3dtiles, laspy, quantized_mesh_tile, xatlas, fast_simplification, embreex.rtcore_scene, PIL.features; assert PIL.features.check('webp'); print('python-pdal', pdal.__version__, 'gdal', osgeo.gdal.__version__)"
 
 COPY ./scripts/ /app/
 COPY ./alembic.ini ./prestart.sh ./tests-start.sh /app/

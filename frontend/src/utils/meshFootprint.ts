@@ -54,7 +54,7 @@ const cross = (a: Vec3, b: Vec3): Vec3 => [
 
 /**
  * Reorient a file-axis bbox into the ENU frame (x=east, y=north, z=up) that the
- * Blender import produces for the given forward/up axes. forward='Y', up='Z'
+ * mesh worker uses for the given forward/up axes. forward='Y', up='Z'
  * is identity. forward and up must be orthogonal; otherwise returns input as-is.
  */
 export function reorientMeshBbox(

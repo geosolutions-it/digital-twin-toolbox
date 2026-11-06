@@ -7,7 +7,7 @@ from app.core.storage import get_storage, output_key
 from app.worker.main import celery, PipelineDatabaseTask
 from app.worker.tasks.vector.terrain import preprocess
 from app.worker.tasks.vector.terrain.qmesh.tiler import build_terrain
-from app.worker.tasks.vector.output import publish_tiles
+from app.worker.common.output import publish_tiles
 
 
 @celery.task(name="create_terrain_tiles", base=PipelineDatabaseTask)

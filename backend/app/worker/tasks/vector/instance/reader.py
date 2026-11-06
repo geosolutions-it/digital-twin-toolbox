@@ -9,7 +9,7 @@ import struct
 
 import numpy as np
 
-from app.worker.tasks.vector.gltf.glb import BIN_CHUNK, GLB_MAGIC, JSON_CHUNK
+from app.worker.common.gltf import BIN_CHUNK, GLB_MAGIC, JSON_CHUNK
 from app.worker.tasks.vector.source import coerce, field_names, open_layer, wgs84_transform
 
 _DTYPE = {5120: np.int8, 5121: np.uint8, 5122: np.int16, 5123: np.uint16,
