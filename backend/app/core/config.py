@@ -72,11 +72,6 @@ class Settings(BaseSettings):
             query="options=-csearch_path=public"
         )
 
-    # Seeds the single implicit principal (see core/db.py); not login credentials.
-    # TODO: update type to EmailStr when sqlmodel supports it
-    FIRST_SUPERUSER: str
-    FIRST_SUPERUSER_PASSWORD: str
-
     # Selects the auth provider (see app/auth); "standalone" = no in-app auth.
     AUTH_PROVIDER: str = "standalone"
 
@@ -94,9 +89,6 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _enforce_non_default_secrets(self) -> Self:
         self._check_default_secret("POSTGRES_PASSWORD", self.POSTGRES_PASSWORD)
-        self._check_default_secret(
-            "FIRST_SUPERUSER_PASSWORD", self.FIRST_SUPERUSER_PASSWORD
-        )
 
         return self
 

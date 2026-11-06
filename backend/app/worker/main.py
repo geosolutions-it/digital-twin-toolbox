@@ -4,7 +4,7 @@ from celery import Celery, Task
 from app.core.db import engine
 from app.core.config import settings
 from app.models.task import Pipeline
-from app.models.user_db import User  # noqa - registers user table for FK resolution
+from app.models.user import User  # noqa - registers user table for FK resolution
 from app.worker.tasks import TASK_QUEUES
 from celery.states import SUCCESS, FAILURE, REVOKED
 

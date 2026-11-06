@@ -1,15 +1,9 @@
-from pydantic import EmailStr
-from sqlmodel import Field
+import uuid
 
-from app.models.user_db import User, UserBase
-
-
-# Only the schema needed to seed the single implicit user (see core/db.py:init_db).
-class UserCreate(UserBase):
-    email: EmailStr = Field(max_length=255)  # type: ignore
-    password: str = Field(min_length=8, max_length=40)
+from sqlmodel import Field, SQLModel
 
 
-__all__ = [
-    "User", "UserBase", "UserCreate",
-]
+class User(SQLModel, table=True):
+    """Identity columns are added by the auth provider that needs them."""
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
