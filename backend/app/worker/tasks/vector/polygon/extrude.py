@@ -31,17 +31,16 @@ def _walls(rings, z_low, z_high):
     return out
 
 
-def extrude(rings, base_z, lower=None, upper=None, translate_z=0, remove_bottom=True):
+def extrude(rings, base_z, lower=None, upper=None, remove_bottom=True):
     """rings: closed (n,2) arrays, outer first. lower/upper replace base_z for the bottom/top;
     with neither, only the flat footprint is returned. -> (N,3) soup or None."""
     xy = np.concatenate(rings).astype(np.float64)
     tri = _earcut(rings)
-    shift = translate_z or 0
-    z_low = (lower if lower is not None else base_z or 0) + shift
+    z_low = lower if lower is not None else base_z or 0
     if lower is None and upper is None:
         parts = [_cap(xy, tri, z_low)]
     else:
-        z_high = (upper if upper is not None else base_z or 0) + shift
+        z_high = upper if upper is not None else base_z or 0
         if z_low > z_high:
             z_low, z_high = z_high, z_low
         parts = [_cap(xy, tri, z_high)] + _walls(rings, z_low, z_high)

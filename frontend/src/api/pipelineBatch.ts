@@ -88,9 +88,15 @@ export async function getVectorSample(params: {
   key?: string
   prefix?: string
   limit?: number
+  ellipsoidal?: boolean
 }): Promise<VectorSample> {
   const res = await axios.get(`${API_BASE}/api/v1/pipelines/vector-sample`, {
-    params: { key: params.key, prefix: params.prefix, limit: params.limit },
+    params: {
+      key: params.key,
+      prefix: params.prefix,
+      limit: params.limit,
+      ellipsoidal: params.ellipsoidal,
+    },
   })
   return res.data
 }

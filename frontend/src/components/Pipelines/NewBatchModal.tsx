@@ -80,7 +80,6 @@ interface BatchFormValues {
   lower_limit_height?: any
   upper_limit_height?: any
   remove_bottom_surface?: boolean
-  max_features_per_tile?: string
   max_geometric_error?: string
   max_tile_size_kb?: string
   max_zoom?: string
@@ -90,7 +89,7 @@ interface BatchFormValues {
   models_prefix?: string
   scale?: any
   rotation?: any
-  translate_z?: any
+  elevation?: any
   latitude?: string
   longitude?: string
   altitude?: string
@@ -120,7 +119,6 @@ const EMPTY: BatchFormValues = {
   lower_limit_height: "",
   upper_limit_height: "",
   remove_bottom_surface: true,
-  max_features_per_tile: "",
   max_geometric_error: "",
   max_tile_size_kb: "",
   max_zoom: "",
@@ -130,7 +128,7 @@ const EMPTY: BatchFormValues = {
   models_prefix: "",
   scale: "",
   rotation: "",
-  translate_z: "",
+  elevation: "",
   latitude: "",
   longitude: "",
   altitude: "",
@@ -175,13 +173,13 @@ function buildData(
     if (values.models_prefix) data.models_prefix = values.models_prefix
     const scale = heightValue(values.scale)
     const rotation = heightValue(values.rotation)
-    const tz = heightValue(values.translate_z)
+    const elevation = heightValue(values.elevation)
     if (scale !== undefined) data.scale = scale
     if (rotation !== undefined) data.rotation = rotation
-    if (tz !== undefined) data.translate_z = tz
+    if (elevation !== undefined) data.elevation = elevation
     if (values.to_ellipsoidal_height) data.to_ellipsoidal_height = true
-    if (values.max_features_per_tile)
-      data.max_features_per_tile = Number(values.max_features_per_tile)
+    if (values.max_tile_size_kb)
+      data.max_tile_size_kb = Number(values.max_tile_size_kb)
     if (values.max_geometric_error)
       data.max_geometric_error = Number(values.max_geometric_error)
     return data
@@ -260,6 +258,7 @@ const NewBatchModal = ({
         ? { prefix: initialPrefix }
         : null
   const vectorLike = baseType === "Polygon" || baseType === "Instance"
+  const ellipsoidal = !!watch("to_ellipsoidal_height")
   const { data: vectorFields } = useQuery({
     queryKey: ["vector-fields", fieldsParam],
     queryFn: () => getVectorFields(fieldsParam!),
@@ -268,8 +267,8 @@ const NewBatchModal = ({
     staleTime: 60000,
   })
   const sample = useQuery({
-    queryKey: ["vector-sample", fieldsParam],
-    queryFn: () => getVectorSample(fieldsParam!),
+    queryKey: ["vector-sample", fieldsParam, ellipsoidal],
+    queryFn: () => getVectorSample({ ...fieldsParam!, ellipsoidal }),
     enabled:
       isOpen && vectorLike && !!(fieldsParam?.key || fieldsParam?.prefix),
     staleTime: 60000,
@@ -694,24 +693,24 @@ const NewBatchModal = ({
                   />
                 </FormControl>
                 <FormControl>
-                  <FormLabel>Height offset (m, optional)</FormLabel>
+                  <FormLabel>Elevation (m, optional)</FormLabel>
                   <Controller
                     control={control}
-                    name="translate_z"
+                    name="elevation"
                     rules={{
                       validate: (v) =>
                         !isInvalidExpression(v) || "Fix the formula",
                     }}
                     render={({ field }) => (
                       <ExpressionInput
-                        id="translate_z"
+                        id="elevation"
                         type="number"
                         value={field.value}
                         onChange={field.onChange}
                         inputRef={field.ref}
                         fields={fieldNames}
                         features={sampleFeatures}
-                        placeholder="0"
+                        placeholder="point Z, e.g. $minZ + 2"
                       />
                     )}
                   />
@@ -722,14 +721,14 @@ const NewBatchModal = ({
                   </Checkbox>
                 </FormControl>
                 <FormControl>
-                  <FormLabel htmlFor="max_features_per_tile">
-                    Max instances per tile (optional)
+                  <FormLabel htmlFor="max_tile_size_kb">
+                    Max tile size in KB (optional)
                   </FormLabel>
                   <Input
-                    id="max_features_per_tile"
+                    id="max_tile_size_kb"
                     type="number"
-                    placeholder="25000"
-                    {...register("max_features_per_tile")}
+                    placeholder="1024"
+                    {...register("max_tile_size_kb")}
                   />
                 </FormControl>
                 <FormControl>

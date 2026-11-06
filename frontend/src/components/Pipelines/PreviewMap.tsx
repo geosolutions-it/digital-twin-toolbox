@@ -231,7 +231,7 @@ export default function PreviewMap({
     values.model,
     values.scale,
     values.rotation,
-    values.translate_z,
+    values.elevation,
   ]
   const instanceValid = !instanceExprs.some(isInvalidExpression)
   const modelKeys = useMemo(() => {
@@ -279,11 +279,11 @@ export default function PreviewMap({
       if (!entity || !coords) return
       const scale = Number(evalOr("number", values.scale, feature, 1))
       const rotation = Number(evalOr("number", values.rotation, feature, 0))
-      const tz = Number(evalOr("number", values.translate_z, feature, 0))
+      const z = coords[2] ?? 0
       const position = Cesium.Cartesian3.fromDegrees(
         coords[0],
         coords[1],
-        (coords[2] ?? 0) + tz,
+        Number(evalOr("number", values.elevation, feature, z)),
       )
       entity.position = new Cesium.ConstantPositionProperty(position)
       // worker rotation is counter-clockwise, Cesium heading clockwise
@@ -319,7 +319,7 @@ export default function PreviewMap({
     kind,
     values.scale,
     values.rotation,
-    values.translate_z,
+    values.elevation,
     modelKeys,
     models,
     instanceValid,

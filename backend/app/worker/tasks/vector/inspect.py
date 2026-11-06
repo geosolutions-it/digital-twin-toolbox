@@ -66,14 +66,15 @@ def _sample_window(layer, limit):
 
 @celery.task(name="read_vector_sample")
 def read_vector_sample(options):
-    """Up to `limit` neighbouring features as WGS84 GeoJSON."""
+    """Up to `limit` neighbouring features as WGS84 GeoJSON, heights as the workers produce them."""
     key = options['key']
+    ellipsoidal = bool(options.get('ellipsoidal'))
     limit = int(options.get('limit') or 200)
     storage = get_storage()
     with tempfile.TemporaryDirectory() as scratch:
         path = resolve_input({'key': key}, storage, scratch)
         ds, layer = open_layer(path)
-        transform = wgs84_transform(layer)
+        transform = wgs84_transform(layer, ellipsoidal)
         names = field_names(layer)
         window = _sample_window(layer, limit)
         if window:
@@ -85,6 +86,8 @@ def read_vector_sample(options):
             if geom is None:
                 continue
             geom = geom.Clone()
+            if ellipsoidal:
+                geom.Set3D(True)
             geom.Transform(transform)
             features.append({
                 'type': 'Feature',

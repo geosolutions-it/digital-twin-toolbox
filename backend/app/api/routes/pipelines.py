@@ -363,13 +363,18 @@ def vector_fields(
 
 @router.get("/vector-sample", response_model=Any)
 def vector_sample(
-    *, key: str | None = None, prefix: str | None = None, limit: int = Query(200, ge=1, le=1000)
+    *,
+    key: str | None = None,
+    prefix: str | None = None,
+    limit: int = Query(200, ge=1, le=1000),
+    ellipsoidal: bool = False,
 ) -> Any:
     """Neighbouring features of a bucket vector as WGS84 GeoJSON."""
     target = _bucket_target(key, prefix, "Polygon")
     try:
         return celery.send_task(
-            "read_vector_sample", kwargs={"options": {"key": target, "limit": limit}}
+            "read_vector_sample",
+            kwargs={"options": {"key": target, "limit": limit, "ellipsoidal": ellipsoidal}},
         ).get(timeout=60)
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Could not read vector sample: {e}")

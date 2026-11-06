@@ -52,7 +52,6 @@ def _read_raw_features(path, config, default_config):
         feature_for_expr = {'type': 'Feature', 'properties': properties, 'geometry': geometry}
         lower = parse_expression('number', config['lower_limit_height'], feature_for_expr, default_config['lower_limit_height'])
         upper = parse_expression('number', config['upper_limit_height'], feature_for_expr, default_config['upper_limit_height'])
-        translate_z = parse_expression('number', config['translate_z'], feature_for_expr, default_config['translate_z'])
 
         parts = [_ensure_z(p) for p in parts]
         for poly in parts:
@@ -65,7 +64,6 @@ def _read_raw_features(path, config, default_config):
             'parts': parts,
             'lower': lower,
             'upper': upper,
-            'translate_z': translate_z or 0,
             'remove_bottom': config['remove_bottom_surface'],
             'properties': properties,
         })
@@ -86,7 +84,6 @@ def _extrude_feature(payload):
         extrude(part['rings'], part['ground_z'],
                 lower=_height_to_enu(payload['lower'], part),
                 upper=_height_to_enu(payload['upper'], part),
-                translate_z=payload['translate_z'],
                 remove_bottom=payload['remove_bottom'])
         for part in payload['parts']
     ]
@@ -131,7 +128,6 @@ def create_polygon_3dtiles(pipeline_extended):
     default_config = {
         'lower_limit_height': None,
         'upper_limit_height': None,
-        'translate_z': 0,
         'to_ellipsoidal_height': False,
         'remove_bottom_surface': True,
         'max_tile_size_kb': 400,

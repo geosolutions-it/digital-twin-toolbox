@@ -39,9 +39,9 @@ def create_point_instance_3dtiles(pipeline_extended):
         'models_prefix': '',
         'rotation': 0,
         'scale': 1,
-        'translate_z': 0,
+        'elevation': None,
         'to_ellipsoidal_height': False,
-        'max_features_per_tile': 25000,
+        'max_tile_size_kb': 1024,
         'max_geometric_error': 500,
     }
     config = {**default_config, **pipeline_config}
@@ -65,20 +65,20 @@ def create_point_instance_3dtiles(pipeline_extended):
             model = parse_expression('string', config['model'], fe, default_config['model'])
             scale = parse_expression('number', config['scale'], fe, default_config['scale'])
             rotation = parse_expression('number', config['rotation'], fe, default_config['rotation'])
-            translate_z = parse_expression('number', config['translate_z'], fe, default_config['translate_z'])
+            elevation = parse_expression('number', config['elevation'], fe, default_config['elevation'])
 
             _load_model(storage, model, config, scratch, model_cache)
             lon, lat, h = feat['lonlath']
-            enu = frame.to_enu([[lon, lat, h + translate_z]])[0]
+            enu = frame.to_enu([[lon, lat, h if elevation is None else elevation]])[0]
             records.append({'enu': enu, 'heading': rotation, 'scale': scale,
                             'model': model, 'properties': props})
 
         schema = infer_schema([r['properties'] for r in records])
-        max_features = int(parse_expression('number', config['max_features_per_tile'], {}, default_config['max_features_per_tile']))
+        max_kb = float(parse_expression('number', config['max_tile_size_kb'], {}, default_config['max_tile_size_kb']))
         max_ge = float(parse_expression('number', config['max_geometric_error'], {}, default_config['max_geometric_error']))
 
         tiles_dir = os.path.join(scratch, 'tiles')
         build_instance_tileset(records, tiles_dir, frame.transform(), model_cache, schema,
-                               max_features_per_tile=max_features, max_geometric_error=max_ge)
+                               max_tile_bytes=max_kb * 1024, max_geometric_error=max_ge)
 
         return publish_tiles(storage, tiles_dir, out_base, 'tileset.json')

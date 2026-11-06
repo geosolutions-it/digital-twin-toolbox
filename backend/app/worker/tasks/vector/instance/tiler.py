@@ -1,7 +1,7 @@
 """Instance 3D Tiles 1.1 tileset: one glb per node, additive refinement.
 
-Below max_features_per_tile the whole set is a single tile. Above it, an additive
-quadtree: each node keeps a stride sample as its own content and pushes the rest to
+When everything fits in max_tile_bytes the set is a single tile. Otherwise an additive
+quadtree: each node keeps an evenly spaced sample as its own content and pushes the rest to
 quadrant children, so every instance renders exactly once and coarse levels thin
 out (no replacement, no holes).
 """
@@ -12,6 +12,26 @@ import numpy as np
 from app.worker.common.tileset import box, write_tileset
 from app.worker.common.gltf import tileset_metadata
 from app.worker.tasks.vector.instance.writer import write_instanced_glb
+
+# translation, rotation, scale, feature id
+_INSTANCE_BYTES = 44
+_MIN_CAPACITY = 64
+
+
+def _model_bytes(mesh):
+    return sum(p["positions"].nbytes + p["normals"].nbytes + p["indices"].nbytes for p in mesh["primitives"])
+
+
+def _meta_bytes(props):
+    return sum(len(str(v).encode("utf-8")) + 4 for v in (props or {}).values())
+
+
+def _capacity(records, models, max_bytes):
+    """Instances that fit in max_bytes next to the node's models."""
+    fixed = sum(_model_bytes(models[name]) for name in {r["model"] for r in records})
+    per = _INSTANCE_BYTES + sum(_meta_bytes(r["properties"]) for r in records) / len(records)
+    # models alone over budget still need content per node
+    return max(_MIN_CAPACITY, int((max_bytes - fixed) // per))
 
 
 def _write_node(records, models, schema, out_dir, tile_id):
@@ -36,18 +56,19 @@ def _write_node(records, models, schema, out_dir, tile_id):
     return box(enu.min(axis=0), enu.max(axis=0), min_half=1.0)
 
 
-def _subdivide(records, depth, max_features, max_depth, max_ge, models, schema, out_dir, counter):
+def _subdivide(records, depth, max_bytes, max_depth, max_ge, models, schema, out_dir, counter):
     tile_id = counter["n"]
     counter["n"] += 1
+    max_features = _capacity(records, models, max_bytes)
     is_leaf = len(records) <= max_features or depth >= max_depth
 
     if is_leaf:
         content, remainder = records, []
     else:
-        stride = max(1, len(records) // max_features)
-        content = records[::stride]
-        taken = set(id(r) for r in content)
-        remainder = [r for r in records if id(r) not in taken]
+        picked = np.zeros(len(records), dtype=bool)
+        picked[np.linspace(0, len(records) - 1, max_features).astype(np.int64)] = True
+        content = [r for r, p in zip(records, picked) if p]
+        remainder = [r for r, p in zip(records, picked) if not p]
 
     box = _write_node(content, models, schema, out_dir, tile_id)
     node = {
@@ -65,21 +86,21 @@ def _subdivide(records, depth, max_features, max_depth, max_ge, models, schema, 
             qy = 0 if r["enu"][1] < cy else 1
             quads[qy * 2 + qx].append(r)
         node["children"] = [
-            _subdivide(q, depth + 1, max_features, max_depth, max_ge, models, schema, out_dir, counter)
+            _subdivide(q, depth + 1, max_bytes, max_depth, max_ge, models, schema, out_dir, counter)
             for q in quads if q
         ]
     return node
 
 
 def build_instance_tileset(records, output_dir, transform, models, schema,
-                           max_features_per_tile=25000, max_geometric_error=500.0, max_depth=16):
+                           max_tile_bytes=1024 * 1024, max_geometric_error=500.0, max_depth=16):
     """records: dicts with enu(3), heading, scale, model, properties. models: name->mesh."""
     os.makedirs(output_dir, exist_ok=True)
     if not records:
         raise ValueError("No instances to tile")
 
     counter = {"n": 0}
-    root = _subdivide(records, 0, max_features_per_tile, max_depth,
+    root = _subdivide(records, 0, int(max_tile_bytes), max_depth,
                       float(max_geometric_error), models, schema, output_dir, counter)
     if root["geometricError"] == 0.0:
         root["geometricError"] = float(max_geometric_error)
