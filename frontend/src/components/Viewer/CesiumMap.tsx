@@ -149,6 +149,7 @@ export default function CesiumMap() {
   const viewerRef = useRef<Cesium.Viewer | null>(null)
   const imageryRef = useRef<Cesium.ImageryLayer | null>(null)
   const tilesetsRef = useRef<Map<string, Cesium.Cesium3DTileset>>(new Map())
+  const loadingRef = useRef<Set<string>>(new Set())
   const pendingZoom = useRef<string | null>(null)
   const flewRef = useRef(false)
   // read by the async tileset-load effect without re-running it
@@ -163,6 +164,8 @@ export default function CesiumMap() {
   const terrainLayers = useMemo(() => layers.filter((l) => l.isTerrain), [layers])
 
   const [visible, setVisible] = useState<Record<string, boolean>>({})
+  const visibleRef = useRef(visible)
+  visibleRef.current = visible
   const [activeTerrain, setActiveTerrain] = useState("")
   const [basemap, setBasemap] = useState(true)
   const [pc, setPc] = useState<PcSettings>(DEFAULT_PC)
@@ -213,6 +216,7 @@ export default function CesiumMap() {
       viewerRef.current = null
       imageryRef.current = null
       tilesetsRef.current.clear()
+      loadingRef.current.clear()
       flewRef.current = false
     }
   }, [])
@@ -223,14 +227,19 @@ export default function CesiumMap() {
     for (const layer of tileLayers) {
       const on = !!visible[layer.id]
       const existing = tilesetsRef.current.get(layer.id)
-      if (on && !existing) {
+      if (on && !existing && !loadingRef.current.has(layer.id)) {
+        loadingRef.current.add(layer.id)
         Cesium.Cesium3DTileset.fromUrl(layer.url)
           .then((ts) => {
             if (!viewerRef.current) return
             tilesetsRef.current.set(layer.id, ts)
             viewer.scene.primitives.add(ts)
             applySettings(ts, pcRef.current, layer.type === "PointCloud")
-            if (pendingZoom.current === layer.id) {
+            // unticked while loading
+            ts.show = !!visibleRef.current[layer.id]
+            if (!ts.show) {
+              viewer.scene.requestRender()
+            } else if (pendingZoom.current === layer.id) {
               pendingZoom.current = null
               flewRef.current = true
               viewer.flyTo(ts)
@@ -241,6 +250,7 @@ export default function CesiumMap() {
             viewer.scene.requestRender()
           })
           .catch(() => {})
+          .finally(() => loadingRef.current.delete(layer.id))
       } else if (existing) {
         existing.show = on
         viewer.scene.requestRender()

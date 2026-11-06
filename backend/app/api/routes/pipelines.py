@@ -187,7 +187,7 @@ def create_pipeline_source(
         raise HTTPException(status_code=422, detail=f"Invalid config: {e}")
 
     key = source_in.key
-    base_name = _slug(source_in.title) if source_in.title else os.path.splitext(key)[0]
+    base_name = _slug(source_in.title) if source_in.title else os.path.splitext(os.path.basename(key))[0]
     output_base = _unique_output(storage, base_name)
     pipeline = Pipeline(
         title=source_in.title or os.path.basename(key),
@@ -255,20 +255,26 @@ def create_pipeline_batch(
     base_name = _slug(batch_in.title) if batch_in.title else (root or "batch")
     out_root = _unique_output(storage, base_name)
 
-    batch_id = uuid.uuid4()
-    created = []
-    for key, ptype in classified:
+    configs = {}
+    for ptype in {t for _, t in classified}:
         try:
-            data = validate_pipeline_config(ptype, batch_in.data)
+            configs[ptype] = validate_pipeline_config(ptype, batch_in.data)
         except ValueError as e:
             raise HTTPException(status_code=422, detail=f"Invalid config: {e}")
+
+    rels = [key[len(root):].lstrip("/") if root else key for key, _ in classified]
+    stems = [os.path.splitext(r)[0] for r in rels]
+    batch_id = uuid.uuid4()
+    created = []
+    for (key, ptype), rel, stem in zip(classified, rels, stems):
+        data = configs[ptype]
         name = os.path.basename(key)
-        rel = key[len(root):].lstrip("/") if root else key
-        rel_noext = os.path.splitext(rel)[0]
-        output_base = f"{out_root}/{rel_noext}"
+        ext = os.path.splitext(rel)[1]
+        # same stem, different extension (x.las + x.laz) keeps the extension apart
+        output_base = f"{out_root}/{stem}_{ext[1:]}" if stems.count(stem) > 1 else f"{out_root}/{stem}"
         pipeline = Pipeline(
             title=f"{batch_in.title} / {name}" if batch_in.title else name,
-                data=data,
+            data=data,
             task_id=None,
             task_status=None,
             task_result=None,
@@ -489,7 +495,7 @@ def delete_pipeline_batch(
     # drop the whole batch output tree in one shot (no per-member finalize needed)
     if batch_prefix:
         try:
-            get_storage().delete_prefix(batch_prefix)
+            get_storage().delete_prefix(batch_prefix + "/")
         except Exception:
             pass
     for payload in payloads:
@@ -548,7 +554,7 @@ def delete_pipeline(
     session.commit()
 
     try:
-        get_storage().delete_prefix(output_prefix)
+        get_storage().delete_prefix(output_prefix + "/")
     except Exception:
         pass
 

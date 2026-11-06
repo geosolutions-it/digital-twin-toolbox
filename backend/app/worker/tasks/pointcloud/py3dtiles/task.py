@@ -88,7 +88,7 @@ def create_point_cloud_3dtiles(pipeline_extended):
         tiles_dir = os.path.join(scratch, 'tiles')
         py3dtiles_convert(processed_file, tiles_dir, f'{horizontal_epsg}', attributes=attributes)
 
-        storage.delete_prefix(f"{out_base}/tiles")
+        storage.delete_prefix(f"{out_base}/tiles/")
         storage.upload_dir(tiles_dir, f"{out_base}/tiles")
 
     return {

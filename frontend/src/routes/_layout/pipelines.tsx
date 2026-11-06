@@ -88,11 +88,12 @@ export const Route = createFileRoute("/_layout/pipelines")({
 
 interface DeleteProps {
   id: string
+  batch?: boolean
   isOpen: boolean
   onClose: () => void
 }
 
-const DeleteDialog = ({ id, isOpen, onClose }: DeleteProps) => {
+const DeleteDialog = ({ id, batch, isOpen, onClose }: DeleteProps) => {
   const queryClient = useQueryClient()
   const showToast = useCustomToast()
   const cancelRef = React.useRef<HTMLButtonElement | null>(null)
@@ -101,20 +102,22 @@ const DeleteDialog = ({ id, isOpen, onClose }: DeleteProps) => {
     formState: { isSubmitting },
   } = useForm()
 
+  const what = batch ? "Batch" : "Pipeline"
   const deleteEntity = async (id: string) => {
-    await deletePipeline(id)
+    if (batch) await deletePipelineBatch(id)
+    else await deletePipeline(id)
   }
 
   const mutation = useMutation({
     mutationFn: deleteEntity,
     onSuccess: () => {
-      showToast("Success", "The Pipeline was deleted successfully.", "success")
+      showToast("Success", `The ${what} was deleted successfully.`, "success")
       onClose()
     },
     onError: () => {
       showToast(
         "An error occurred.",
-        "An error occurred while deleting the Pipeline.",
+        `An error occurred while deleting the ${what}.`,
         "error",
       )
     },
@@ -140,7 +143,7 @@ const DeleteDialog = ({ id, isOpen, onClose }: DeleteProps) => {
       >
         <AlertDialogOverlay>
           <AlertDialogContent as="form" onSubmit={handleSubmit(onSubmit)}>
-            <AlertDialogHeader>Delete Pipeline</AlertDialogHeader>
+            <AlertDialogHeader>Delete {what}</AlertDialogHeader>
 
             <AlertDialogBody>
               Are you sure? You will not be able to undo this action.
@@ -175,15 +178,17 @@ const DeleteDialog = ({ id, isOpen, onClose }: DeleteProps) => {
 
 interface RemoveButtonProps {
   id: string
+  batch?: boolean
 }
 
-const RemoveButton = ({ id }: RemoveButtonProps) => {
+const RemoveButton = ({ id, batch }: RemoveButtonProps) => {
   const deleteModal = useDisclosure()
+  const label = batch ? "Delete batch" : "Delete"
   return (
     <>
-      <Tooltip label="Delete">
+      <Tooltip label={label}>
         <IconButton
-          aria-label="Delete"
+          aria-label={label}
           icon={<FiTrash />}
           size="xs"
           variant="ghost"
@@ -193,6 +198,7 @@ const RemoveButton = ({ id }: RemoveButtonProps) => {
       </Tooltip>
       <DeleteDialog
         id={id}
+        batch={batch}
         isOpen={deleteModal.isOpen}
         onClose={deleteModal.onClose}
       />
@@ -306,7 +312,7 @@ function RollupBar({ counts }: { counts: PipelineBatchCounts }) {
 }
 
 type RowAction = "run" | "cancel" | "delete" | "rebuild"
-type BatchAction = "run" | "cancel" | "delete" | "rebuild"
+type BatchAction = "run" | "cancel" | "rebuild"
 
 // the backend names the attachment after this .zip
 function zipHref(url: string, name: string) {
@@ -607,16 +613,7 @@ function BatchGroup({
                 />
               </Tooltip>
             )}
-            <Tooltip label="Delete batch">
-              <IconButton
-                aria-label="Delete batch"
-                icon={<FiTrash />}
-                size="xs"
-                variant="ghost"
-                colorScheme="red"
-                onClick={() => onBatchAction(batchId, "delete")}
-              />
-            </Tooltip>
+            <RemoveButton id={batchId} batch />
           </HStack>
         </Td>
       </Tr>
@@ -799,13 +796,11 @@ function PipelinesTable() {
   const batchAct = useMutation({
     mutationFn: async ({ batchId, action }: { batchId: string; action: BatchAction }) => {
       if (action === "rebuild") return finalizePipelineBatch(batchId)
-      if (action === "delete") return deletePipelineBatch(batchId)
       // server-side, so unloaded members are included
       return processPipelineBatchTask(batchId, action)
     },
     onSuccess: (_d, { action }) => {
       if (action === "rebuild") showToast("Rebuilding", "Combined tileset is being rebuilt.", "success")
-      if (action === "delete") showToast("Deleted", "Batch removed.", "success")
     },
     onError: () => {
       showToast("An error occurred.", "Could not apply the batch action.", "error")

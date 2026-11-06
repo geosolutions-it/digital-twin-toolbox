@@ -228,7 +228,7 @@ const NewBatchModal = ({
     watch,
     setValue,
     control,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm<BatchFormValues>({
     mode: "onBlur",
     defaultValues: { ...EMPTY, prefix: initialPrefix },
@@ -388,8 +388,9 @@ const NewBatchModal = ({
 
   const submit =
     (run: boolean): SubmitHandler<BatchFormValues> =>
-    (values) =>
-      mutation.mutate({ values, run })
+    (values) => {
+      if (!mutation.isPending) mutation.mutate({ values, run })
+    }
 
   const heading = edit
     ? `Adjust parameters${label ? `: ${label}` : ""}`
@@ -946,7 +947,7 @@ const NewBatchModal = ({
               <Button
                 type="button"
                 variant="outline"
-                isLoading={isSubmitting}
+                isLoading={mutation.isPending}
                 onClick={handleSubmit(submit(false))}
               >
                 Save
@@ -954,14 +955,14 @@ const NewBatchModal = ({
               <Button
                 type="button"
                 variant="primary"
-                isLoading={isSubmitting}
+                isLoading={mutation.isPending}
                 onClick={handleSubmit(submit(true))}
               >
                 Save & run
               </Button>
             </>
           ) : (
-            <Button variant="primary" type="submit" isLoading={isSubmitting}>
+            <Button variant="primary" type="submit" isLoading={mutation.isPending}>
               {single ? "Process" : "Create jobs"}
             </Button>
           )}

@@ -15,11 +15,13 @@ from app.worker.common.output import publish_tiles
 
 
 def _load_model(storage, name, config, scratch, cache):
-    """Download a model glb from the bucket once and parse it; cached by name."""
+    """Download a model glb from the bucket once and parse it; cached by name, None if missing."""
     if name in cache:
         return cache[name]
-    key = (config.get('models_prefix') or '') + name
-    dest = os.path.join(scratch, 'model_' + os.path.basename(name))
+    key = (config.get('models_prefix') or '') + str(name)
+    if not storage.exists(key):
+        return None
+    dest = os.path.join(scratch, 'model_' + os.path.basename(str(name)))
     storage.download_file(key, dest)
     mesh = reader.read_model_glb(dest)
     cache[name] = mesh
@@ -67,12 +69,19 @@ def create_point_instance_3dtiles(pipeline_extended):
             rotation = parse_expression('number', config['rotation'], fe, default_config['rotation'])
             elevation = parse_expression('number', config['elevation'], fe, default_config['elevation'])
 
-            _load_model(storage, model, config, scratch, model_cache)
+            if not model or _load_model(storage, model, config, scratch, model_cache) is None:
+                continue
+            if scale is None:
+                scale = default_config['scale']
+            if rotation is None:
+                rotation = default_config['rotation']
             lon, lat, h = feat['lonlath']
             enu = frame.to_enu([[lon, lat, h if elevation is None else elevation]])[0]
             records.append({'enu': enu, 'heading': rotation, 'scale': scale,
                             'model': model, 'properties': props})
 
+        if not records:
+            raise Exception("No features with a valid model to tile")
         schema = infer_schema([r['properties'] for r in records])
         max_kb = float(parse_expression('number', config['max_tile_size_kb'], {}, default_config['max_tile_size_kb']))
         max_ge = float(parse_expression('number', config['max_geometric_error'], {}, default_config['max_geometric_error']))
