@@ -26,7 +26,7 @@ jobs:
           DOCKER_BUILDKIT=1 docker compose \
             -f docker-compose.yml \
             -f docker-compose.build.yml build \
-            backend frontend worker
+            backend frontend worker-vector
 
       - name: Run tests
         run: sh scripts/test-local.sh
