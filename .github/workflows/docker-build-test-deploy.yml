@@ -23,6 +23,7 @@ jobs:
 
       - name: Build the docker images
         run: |
+          docker logout
           DOCKER_BUILDKIT=1 docker compose \
             -f docker-compose.yml \
             -f docker-compose.build.yml build \
