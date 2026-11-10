@@ -1,12 +1,10 @@
-"""Mesh tiler: texture orientation, placement, rasteriser. Worker image only (no FastAPI):
-`pytest --noconftest app/tests/worker`."""
 import json
 import struct
 from io import BytesIO
 
-import numpy as np
 import pytest
 
+np = pytest.importorskip("numpy")
 pytest.importorskip("xatlas")
 pytest.importorskip("embreex")
 pytest.importorskip("fast_simplification")

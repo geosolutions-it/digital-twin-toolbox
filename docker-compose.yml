@@ -29,8 +29,6 @@ x-worker: &worker
   build:
     context: ./backend
     dockerfile: Dockerfile.worker
-    args:
-      INSTALL_DEV: ${INSTALL_DEV-false}
   depends_on:
     - redis
     - db
@@ -81,8 +79,6 @@ services:
 
     build:
       context: ./backend
-      args:
-        INSTALL_DEV: ${INSTALL_DEV-false}
     platform: linux/amd64 # Patch for M1 Mac
     labels:
       - traefik.enable=true
