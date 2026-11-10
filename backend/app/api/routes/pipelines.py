@@ -184,6 +184,7 @@ _SOURCE_TASK = {
     "Terrain": "create_terrain_tiles",
     "Instance": "create_point_instance_3dtiles",
     "Mesh": "create_mesh_3dtiles",
+    "CityGML": "create_citygml_3dtiles",
 }
 
 
@@ -265,8 +266,8 @@ def create_pipeline_batch(
     classified = [(k, classify_bucket_file(storage, k)) for k in candidates]
     if batch_in.pipeline == "Instance":
         classified = [(k, "Instance") for k, t in classified if t == "Polygon"]
-    elif batch_in.pipeline == "Mesh":
-        classified = [(k, t) for k, t in classified if t == "Mesh"]
+    elif batch_in.pipeline in ("Mesh", "CityGML"):
+        classified = [(k, t) for k, t in classified if t == batch_in.pipeline]
     else:
         # meshes need their own lat/lon, so only a Mesh batch picks them up
         classified = [(k, t) for k, t in classified if t in _SOURCE_TASK and t != "Mesh"]

@@ -62,3 +62,29 @@ class MeshConfig(BaseModel):
         if not 0 <= v <= 8:
             raise ValueError("depth must be between 0 and 8")
         return v
+
+
+class CityGMLConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    # None: the highest each object has
+    lod: int | None = None
+    to_ellipsoidal_height: bool = False
+    # used when the file declares none
+    horizontal_epsg: int | None = None
+    vertical_epsg: int | None = None
+    max_tile_size_kb: float = 400
+
+    @field_validator("lod", "horizontal_epsg", "vertical_epsg", mode="before")
+    @classmethod
+    def _blank_is_none(cls, v):
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return None
+        return v
+
+    @field_validator("lod")
+    @classmethod
+    def _lod(cls, v):
+        if v is not None and not 0 <= v <= 4:
+            raise ValueError("lod must be between 0 and 4")
+        return v

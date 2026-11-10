@@ -142,8 +142,10 @@ def build_tileset(features, output_dir, transform, max_tile_bytes=400 * 1024, ma
 
     schema = infer_schema([it["properties"] for it in items])
     builder = _Builder(output_dir, schema, int(max_tile_bytes), max_depth)
-    root = builder.node(items, 0)[0]
+    root, root_error, mn, mx, _ = builder.node(items, 0)
     root["refine"] = "REPLACE"
     metadata = tileset_metadata([it["properties"] for it in items], schema)
-    tileset = write_tileset(output_dir, root, transform, float(root["geometricError"]) * 2.0 or 1.0, metadata)
+    # Cesium skips the root while the tileset error is below the SSE threshold
+    error = root_error * 2.0 if root_error > 0 else max(float(np.linalg.norm(mx - mn)), 1.0)
+    tileset = write_tileset(output_dir, root, transform, error, metadata)
     return tileset, builder.stats

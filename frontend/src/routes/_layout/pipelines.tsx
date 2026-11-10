@@ -245,7 +245,7 @@ type EditTarget =
 
 function pipelineType(p: Pipeline): PipelineType {
   const t = p?.source?.pipeline
-  if (t === "Polygon" || t === "Terrain" || t === "Instance" || t === "Mesh") return t
+  if (t === "Polygon" || t === "Terrain" || t === "Instance" || t === "Mesh" || t === "CityGML") return t
   return "PointCloud"
 }
 
@@ -279,6 +279,9 @@ function dataToValues(d: any): Partial<BatchFormValues> {
     tile_faces_target: num(d?.tile_faces_target),
     texture_image_size: num(d?.texture_image_size),
     decimate_last_depth_level: d?.decimate_last_depth_level !== false,
+    lod: num(d?.lod),
+    horizontal_epsg: num(d?.horizontal_epsg),
+    vertical_epsg: num(d?.vertical_epsg),
   }
 }
 

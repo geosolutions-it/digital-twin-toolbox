@@ -16,9 +16,11 @@ _EXT_WORKFLOW = {
 _ZIP_SIGNATURES = [
     (".shp", "Polygon"),
     (".obj", "Mesh"),
+    (".gml", "CityGML"),
 ]
 
-SUPPORTED_EXTENSIONS = tuple(_EXT_WORKFLOW) + (".zip",)
+SUPPORTED_EXTENSIONS = tuple(_EXT_WORKFLOW) + (".gml", ".zip")
+_GML_HEAD = 16384
 
 _EOCD_SIG = b"PK\x05\x06"
 _CD_SIG = 0x02014B50
@@ -70,11 +72,22 @@ def _classify_zip(storage, key):
     return None
 
 
+def _classify_gml(storage, key):
+    """CityGML by its namespace in the header, otherwise a plain GML vector."""
+    try:
+        head = storage.read_range(key, 0, min(storage.size(key), _GML_HEAD))
+    except Exception:
+        return None
+    return "CityGML" if b"/citygml/" in head.lower() else "Polygon"
+
+
 def classify_bucket_file(storage, key):
     """Workflow name for a bucket key, or None if nothing handles it."""
     lower = key.lower()
     if lower.endswith(".zip"):
         return _classify_zip(storage, key)
+    if lower.endswith(".gml"):
+        return _classify_gml(storage, key)
     for ext, workflow in _EXT_WORKFLOW.items():
         if lower.endswith(ext):
             return workflow

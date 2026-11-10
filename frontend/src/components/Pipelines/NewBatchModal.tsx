@@ -39,7 +39,13 @@ import type { PreviewKind } from "./PreviewMap"
 
 const PreviewMap = lazy(() => import("./PreviewMap"))
 
-type PipelineType = "PointCloud" | "Polygon" | "Terrain" | "Instance" | "Mesh"
+type PipelineType =
+  | "PointCloud"
+  | "Polygon"
+  | "Terrain"
+  | "Instance"
+  | "Mesh"
+  | "CityGML"
 
 // worker downloads water as a single file
 const VECTOR_EXTENSIONS = [".gpkg", ".geojson", ".json", ".fgb"]
@@ -99,6 +105,9 @@ interface BatchFormValues {
   tile_faces_target?: string
   texture_image_size?: string
   decimate_last_depth_level?: boolean
+  lod?: string
+  horizontal_epsg?: string
+  vertical_epsg?: string
 }
 
 function heightValue(v: any): number | any[] | undefined {
@@ -138,6 +147,9 @@ const EMPTY: BatchFormValues = {
   tile_faces_target: "",
   texture_image_size: "",
   decimate_last_depth_level: true,
+  lod: "",
+  horizontal_epsg: "",
+  vertical_epsg: "",
 }
 
 function buildData(
@@ -182,6 +194,16 @@ function buildData(
       data.max_tile_size_kb = Number(values.max_tile_size_kb)
     if (values.max_geometric_error)
       data.max_geometric_error = Number(values.max_geometric_error)
+    return data
+  }
+  if (type === "CityGML") {
+    if (values.lod) data.lod = Number(values.lod)
+    if (values.to_ellipsoidal_height) data.to_ellipsoidal_height = true
+    if (values.horizontal_epsg)
+      data.horizontal_epsg = Number(values.horizontal_epsg)
+    if (values.vertical_epsg) data.vertical_epsg = Number(values.vertical_epsg)
+    if (values.max_tile_size_kb)
+      data.max_tile_size_kb = Number(values.max_tile_size_kb)
     return data
   }
   if (type === "Polygon") {
@@ -468,6 +490,7 @@ const NewBatchModal = ({
                   <option value="Instance">Point instance</option>
                   <option value="Terrain">Terrain</option>
                   <option value="Mesh">Mesh (zipped obj)</option>
+                  <option value="CityGML">CityGML</option>
                 </Select>
               </FormControl>
             )}
@@ -782,6 +805,64 @@ const NewBatchModal = ({
                         extensions={VECTOR_EXTENSIONS}
                       />
                     )}
+                  />
+                </FormControl>
+              </>
+            ) : type === "CityGML" ? (
+              <>
+                <FormControl>
+                  <FormLabel htmlFor="lod">Level of detail</FormLabel>
+                  <Select id="lod" {...register("lod")}>
+                    <option value="">Highest available</option>
+                    {[0, 1, 2, 3, 4].map((l) => (
+                      <option key={l} value={String(l)}>
+                        Up to LoD{l}
+                      </option>
+                    ))}
+                  </Select>
+                </FormControl>
+                <FormControl>
+                  <Checkbox {...register("to_ellipsoidal_height")}>
+                    Convert heights to ellipsoidal
+                  </Checkbox>
+                  <Text fontSize="xs" color="gray.500" mt={1}>
+                    Uses the height datum declared in the file; otherwise the
+                    vertical EPSG below (EGM2008 when empty).
+                  </Text>
+                </FormControl>
+                <FormControl>
+                  <FormLabel htmlFor="horizontal_epsg">
+                    Horizontal EPSG (optional)
+                  </FormLabel>
+                  <Input
+                    id="horizontal_epsg"
+                    type="number"
+                    placeholder="from the file srsName"
+                    {...register("horizontal_epsg")}
+                  />
+                </FormControl>
+                {ellipsoidal && (
+                  <FormControl>
+                    <FormLabel htmlFor="vertical_epsg">
+                      Vertical EPSG (optional)
+                    </FormLabel>
+                    <Input
+                      id="vertical_epsg"
+                      type="number"
+                      placeholder="3855"
+                      {...register("vertical_epsg")}
+                    />
+                  </FormControl>
+                )}
+                <FormControl>
+                  <FormLabel htmlFor="max_tile_size_kb">
+                    Max tile size in KB (optional)
+                  </FormLabel>
+                  <Input
+                    id="max_tile_size_kb"
+                    type="number"
+                    placeholder="400"
+                    {...register("max_tile_size_kb")}
                   />
                 </FormControl>
               </>

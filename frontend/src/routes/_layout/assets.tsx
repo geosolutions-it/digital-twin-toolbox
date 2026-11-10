@@ -164,7 +164,7 @@ function Breadcrumbs({ cwd, onNavigate }: { cwd: string; onNavigate: (p: string)
   )
 }
 
-const WORKFLOWS: PipelineType[] = ["PointCloud", "Polygon", "Terrain", "Mesh"]
+const WORKFLOWS: PipelineType[] = ["PointCloud", "Polygon", "Terrain", "Mesh", "CityGML"]
 
 function hintTypeForFile(workflow?: string | null): PipelineType | undefined {
   return WORKFLOWS.find((w) => w === workflow)
@@ -306,7 +306,7 @@ function BucketBrowser({ cwd, setCwd }: { cwd: string; setCwd: (p: string) => vo
 
       <Text fontSize="xs" color="gray.500" mt={3}>
         Listing the bucket by prefix. Use <b>Batch</b> on a folder to process every
-        supported file under it (point clouds, vectors, zipped shapefiles); zipped
+        supported file under it (point clouds, vectors, zipped shapefiles, CityGML); zipped
         meshes run only in a Mesh batch, as they need their own placement. The
         workflow is detected per file. No per-file registration needed.
       </Text>
