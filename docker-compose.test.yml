@@ -1,0 +1,12 @@
+services:
+  backend:
+    image: '${DOCKER_IMAGE_BACKEND?Variable not set}:test'
+    restart: "no"
+    build:
+      target: dev
+
+  worker-vector:
+    image: '${DOCKER_IMAGE_WORKER?Variable not set}:test'
+    restart: "no"
+    build:
+      target: dev

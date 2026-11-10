@@ -1,16 +1,14 @@
 services:
   backend:
     build:
-      args:
-        INSTALL_DEV: ${INSTALL_DEV-true}
+      target: dev
     volumes:
       - ./backend/app:/app/app
     command: /start-reload.sh
 
   worker-vector:
     build:
-      args:
-        INSTALL_DEV: ${INSTALL_DEV-true}
+      target: dev
     volumes:
       - ./backend/app:/app/app
     command:
@@ -18,8 +16,7 @@ services:
 
   worker-point-cloud:
     build:
-      args:
-        INSTALL_DEV: ${INSTALL_DEV-true}
+      target: dev
     volumes:
       - ./backend/app:/app/app
     command:
@@ -27,8 +24,7 @@ services:
 
   worker-mesh:
     build:
-      args:
-        INSTALL_DEV: ${INSTALL_DEV-true}
+      target: dev
     volumes:
       - ./backend/app:/app/app
     command:
