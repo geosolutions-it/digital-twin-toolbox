@@ -2,8 +2,6 @@ services:
   backend:
     build:
       context: ./backend
-      args:
-        INSTALL_DEV: ${INSTALL_DEV-false}
 
   frontend:
     build:
@@ -15,5 +13,3 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.worker
-      args:
-        INSTALL_DEV: ${INSTALL_DEV-false}
