@@ -305,11 +305,10 @@ function BucketBrowser({ cwd, setCwd }: { cwd: string; setCwd: (p: string) => vo
       </TableContainer>
 
       <Text fontSize="xs" color="gray.500" mt={3}>
-        Listing the bucket by prefix. Use <b>Batch</b> on a folder to process every
-        supported file under it (point clouds, vectors, zipped shapefiles, city models
-        in CityGML or CityJSON); zipped meshes run only in a Mesh batch, as they need
-        their own placement. The
-        workflow is detected per file. No per-file registration needed.
+        Listing the bucket by prefix. Use <b>Batch</b> on a folder to run the picked
+        workflow on every matching file under it (point clouds, vectors, zipped
+        shapefiles, elevation rasters, zipped meshes, city models in CityGML or CityJSON); files
+        of other types are skipped. No per-file registration needed.
       </Text>
 
       <NewBatchModal

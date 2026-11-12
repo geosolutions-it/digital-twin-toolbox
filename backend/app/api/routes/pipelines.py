@@ -8,7 +8,7 @@ import uuid
 from app.models.task import Pipeline, PipelinePublic, PipelinesPublic, PipelineBatchCreate, PipelineSourceCreate, Message, PipelinesActionTypes, PipelineUpdate, PipelineBatchCounts, PipelineBatchSummary, PipelineOverviewEntry, PipelinesOverview
 
 from app.services.pipeline_config import validate_pipeline_config
-from app.services.file_classify import classify_bucket_file, SUPPORTED_EXTENSIONS
+from app.services.file_classify import BATCH_ACCEPTS, batch_targets, classify_bucket_file, SUPPORTED_EXTENSIONS
 from app.core.storage import get_storage, output_key, output_root, output_url
 from app.core.config import settings
 from app.worker.main import celery, _maybe_finalize_batch
@@ -257,27 +257,28 @@ def create_pipeline_batch(
     *, session: SessionDep, current_user: CurrentUser, batch_in: PipelineBatchCreate
 ) -> Any:
     """
-    Create and dispatch one pipeline per supported file under a bucket prefix.
-    Each file's workflow is detected from its contents (zips are peeked).
+    Run the picked workflow on every matching file under a bucket prefix, one pipeline
+    per file. File types are detected from contents (zips are peeked).
     """
-    if batch_in.pipeline == "Building":
-        raise HTTPException(status_code=422, detail="Buildings run on a single footprint file, not in a batch")
+    if batch_in.pipeline not in BATCH_ACCEPTS:
+        raise HTTPException(status_code=422, detail=f"{batch_in.pipeline} does not run in a batch")
+    try:
+        data = validate_pipeline_config(batch_in.pipeline, batch_in.data)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=f"Invalid config: {e}")
     storage = get_storage()
     skip = output_root() + "/"
     candidates = [
         k for k in storage.list(batch_in.prefix)
         if k.lower().endswith(SUPPORTED_EXTENSIONS) and not k.startswith(skip)
     ]
-    classified = [(k, classify_bucket_file(storage, k)) for k in candidates]
-    if batch_in.pipeline == "Instance":
-        classified = [(k, "Instance") for k, t in classified if t == "Polygon"]
-    elif batch_in.pipeline in ("Mesh", "CityGML"):
-        classified = [(k, t) for k, t in classified if t == batch_in.pipeline]
-    else:
-        # meshes need their own lat/lon, so only a Mesh batch picks them up
-        classified = [(k, t) for k, t in classified if t in _SOURCE_TASK and t != "Mesh"]
+    classified = batch_targets(
+        [(k, classify_bucket_file(storage, k)) for k in candidates], batch_in.pipeline
+    )
     if not classified:
-        raise HTTPException(status_code=404, detail=f"No supported files under prefix {batch_in.prefix!r}")
+        raise HTTPException(
+            status_code=404, detail=f"No {batch_in.pipeline} files under prefix {batch_in.prefix!r}"
+        )
 
     root = batch_in.prefix.strip("/")
     # name the output after the batch title (falls back to the input folder); keep it
@@ -285,19 +286,11 @@ def create_pipeline_batch(
     base_name = _slug(batch_in.title) if batch_in.title else (root or "batch")
     out_root = _unique_output(storage, base_name)
 
-    configs = {}
-    for ptype in {t for _, t in classified}:
-        try:
-            configs[ptype] = validate_pipeline_config(ptype, batch_in.data)
-        except ValueError as e:
-            raise HTTPException(status_code=422, detail=f"Invalid config: {e}")
-
     rels = [key[len(root):].lstrip("/") if root else key for key, _ in classified]
     stems = [os.path.splitext(r)[0] for r in rels]
     batch_id = uuid.uuid4()
     created = []
     for (key, ptype), rel, stem in zip(classified, rels, stems):
-        data = configs[ptype]
         name = os.path.basename(key)
         ext = os.path.splitext(rel)[1]
         # same stem, different extension (x.las + x.laz) keeps the extension apart
