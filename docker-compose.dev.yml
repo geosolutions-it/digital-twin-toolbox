@@ -12,7 +12,7 @@ services:
     volumes:
       - ./backend/app:/app/app
     command:
-      - 'watchfiles "celery -A app.worker.main.celery worker --queues=vector,common --include=app.worker.tasks.vector.task,app.worker.tasks.common.task --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}" /app/app'
+      - 'watchfiles "celery -A app.worker.main.celery worker --queues=vector,common --include=app.worker.tasks.vector.task,app.worker.tasks.common.task --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}" /app/app --filter python --ignore-paths /app/app/tests,/app/app/alembic'
 
   worker-point-cloud:
     build:
@@ -20,7 +20,7 @@ services:
     volumes:
       - ./backend/app:/app/app
     command:
-      - 'watchfiles "celery -A app.worker.main.celery worker --queues=point-cloud,common --include=app.worker.tasks.pointcloud.task,app.worker.tasks.common.task --loglevel=info --concurrency=${WORKER_POINT_CLOUD_CONCURRENCY:-2}" /app/app'
+      - 'watchfiles "celery -A app.worker.main.celery worker --queues=point-cloud,common --include=app.worker.tasks.pointcloud.task,app.worker.tasks.common.task --loglevel=info --concurrency=${WORKER_POINT_CLOUD_CONCURRENCY:-2}" /app/app --filter python --ignore-paths /app/app/tests,/app/app/alembic'
 
   worker-mesh:
     build:
@@ -28,4 +28,4 @@ services:
     volumes:
       - ./backend/app:/app/app
     command:
-      - 'watchfiles "celery -A app.worker.main.celery worker --queues=mesh,common --include=app.worker.tasks.mesh.task,app.worker.tasks.common.task --loglevel=info --concurrency=${WORKER_MESH_CONCURRENCY:-1}" /app/app'
+      - 'watchfiles "celery -A app.worker.main.celery worker --queues=mesh,common --include=app.worker.tasks.mesh.task,app.worker.tasks.common.task --loglevel=info --concurrency=${WORKER_MESH_CONCURRENCY:-1}" /app/app --filter python --ignore-paths /app/app/tests,/app/app/alembic'
