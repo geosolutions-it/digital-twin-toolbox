@@ -512,12 +512,10 @@ def delete_pipeline_batch(
     if not pipelines:
         raise HTTPException(status_code=404, detail="Batch not found")
     batch_prefix = None
-    payloads = []
     for pipeline in pipelines:
         source = pipeline.source or {}
         batch_prefix = batch_prefix or source.get('batch_output_prefix')
         _revoke_running(pipeline)
-        payloads.append(pipeline.model_dump())
         session.delete(pipeline)
     session.commit()
 
@@ -527,10 +525,8 @@ def delete_pipeline_batch(
             get_storage().delete_prefix(batch_prefix + "/")
         except Exception:
             pass
-    for payload in payloads:
-        celery.send_task('complete_pipeline_remove_process', args=[{'pipeline': payload}])
 
-    return Message(message=f"Deleted {len(payloads)} pipelines")
+    return Message(message=f"Deleted {len(pipelines)} pipelines")
 
 
 @router.put("/{id}", response_model=PipelinePublic)
@@ -577,7 +573,6 @@ def delete_pipeline(
     source = pipeline.source or {}
     output_prefix = source.get('output_base') or output_key(str(pipeline.id))
     batch_prefix = source.get('batch_output_prefix')
-    payload = pipeline.model_dump()
 
     _revoke_running(pipeline)
     session.delete(pipeline)
@@ -594,7 +589,5 @@ def delete_pipeline(
             'finalize_tileset_batch',
             kwargs={'output_prefix': batch_prefix, 'base': settings.API_V1_STR},
         )
-
-    celery.send_task('complete_pipeline_remove_process', args=[{'pipeline': payload}])
 
     return Message(message="Pipeline deleted successfully")

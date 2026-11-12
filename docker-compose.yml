@@ -7,8 +7,6 @@ x-worker: &worker
     options:
       max-size: 10m
       max-file: "3"
-  volumes:
-    - app-assets-data:/mnt/assets
   env_file:
     - .env
   networks:
@@ -21,7 +19,6 @@ x-worker: &worker
     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD?Variable not set}
     - CELERY_BROKER_URL=redis://redis:6379/0
     - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    - ASSETS_DATA=/mnt/assets
     - PGPASSWORD=${POSTGRES_PASSWORD?Variable not set}
     # PROJ fetches geoid/datum grids on demand
     - PROJ_NETWORK=ON
@@ -53,8 +50,6 @@ services:
     image: '${DOCKER_IMAGE_BACKEND?Variable not set}:${TAG-latest}'
     restart: always
     command: /start.sh
-    volumes:
-      - app-assets-data:/mnt/assets
     networks:
       - traefik-public
       - default
@@ -74,7 +69,6 @@ services:
       - SENTRY_DSN=${SENTRY_DSN}
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - ASSETS_DATA=/mnt/assets
       - PGPASSWORD=${POSTGRES_PASSWORD?Variable not set}
 
     build:
@@ -146,7 +140,6 @@ services:
 
 volumes:
   app-db-data:
-  app-assets-data:
 
 networks:
   traefik-public:

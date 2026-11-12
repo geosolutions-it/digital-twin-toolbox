@@ -340,12 +340,6 @@ function zipName(name: string) {
   return (name || "").replace(/(\.zip)+$/i, "")
 }
 
-// the backend names the attachment after this .zip
-function zipHref(url: string, name: string) {
-  const safe = zipName(name).replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^[._]+|[._]+$/g, "")
-  return url.replace(/[^/]+\.zip$/, `${safe.slice(0, 100) || "download"}.zip`)
-}
-
 type Artifact = { name: string; url: string; size?: number }
 
 function artifactSize(bytes?: number) {
@@ -400,7 +394,7 @@ interface RowProps {
 
 function PipelineRow({ pipeline, selected, onToggle, onAction, onEdit, dim, indent }: RowProps) {
   const running = isCeleryTaskInProgress(pipeline.task_status)
-  const download = `${API_BASE}${zipHref(`${pipeline?.task_result?.download}`, pipeline.title)}`
+  const download = `${API_BASE}${pipeline?.task_result?.download}`
   const source = pipeline.source
   const subtitle = source?.key ? `s3://…/${source.key}` : "no input"
   const isSel = selected.has(pipeline.id)
@@ -537,7 +531,7 @@ function BatchGroup({
   const parentUrl = allDone && outputUrl ? `${API_BASE}${outputUrl}/tileset.json` : ""
   const parentDownload =
     allDone && outputUrl
-      ? `${API_BASE}${outputUrl}/${zipHref("download.zip", summary.label)}`
+      ? `${API_BASE}${outputUrl}/download.zip`
       : ""
 
   const [innerPage, setInnerPage] = React.useState(1)

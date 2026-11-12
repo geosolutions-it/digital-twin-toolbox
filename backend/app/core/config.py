@@ -49,7 +49,6 @@ class Settings(BaseSettings):
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str = ""
     POSTGRES_DB: str = ""
-    ASSETS_DATA: str = ""
 
     S3_ENDPOINT_URL: str | None = None
     S3_BUCKET: str | None = None

@@ -38,13 +38,20 @@ class _ZipSink(io.RawIOBase):
         return out
 
 
+DOWNLOAD = "download.zip"
+TILES = "tiles"
 _UNSAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
-_ZIP_SUFFIX = re.compile(r"(\.zip)+$", re.I)
 
 
-def _zip_filename(stem):
-    """Attachment name the client asked for, reduced to safe characters."""
-    safe = _UNSAFE_NAME.sub("_", _ZIP_SUFFIX.sub("", stem)).strip("._")[:100]
+def _zip_name(storage, parts, prefix):
+    """Named after the zipped folder; None unless it is a tiles/ folder or a batch root."""
+    if len(parts) >= 3 and parts[-2] == TILES:
+        folder = parts[-3]
+    elif len(parts) >= 2 and storage.exists(f"{prefix}tileset.json"):
+        folder = parts[-2]
+    else:
+        return None
+    safe = _UNSAFE_NAME.sub("_", folder[:100]).strip("._")
     return f"{safe or 'download'}.zip"
 
 
@@ -86,8 +93,7 @@ def serve_output_artifact(path: str, request: Request):
     Proxies objects under OUTPUT_PREFIX through the storage layer, keeping the
     tileset's relative references intact under one URL prefix. Works for both
     single-pipeline and batch outputs.
-    A .zip path with no stored object is zipped on demand from its siblings, named
-    after the requested file, artifacts excluded.
+    download.zip in a tiles/ folder or a batch root is zipped on demand, artifacts excluded.
     """
     norm = posixpath.normpath(path)
     parts = norm.split("/")
@@ -98,18 +104,11 @@ def serve_output_artifact(path: str, request: Request):
     storage = get_storage()
     key = output_key(norm)
 
-    if parts[-1].endswith(".zip") and not storage.exists(key):
-        prefix = key[: -len(parts[-1])]
-        headers = {
-            "Content-Disposition": f'attachment; filename="{_zip_filename(parts[-1][:-4])}"'
-        }
-        stored = f"{prefix}download.zip"
-        if storage.exists(stored):
-            return StreamingResponse(
-                storage.iter_object(stored),
-                media_type="application/zip",
-                headers=headers,
-            )
+    if parts[-1] == DOWNLOAD:
+        prefix = key[: -len(DOWNLOAD)]
+        name = _zip_name(storage, parts, prefix)
+        if name is None:
+            raise HTTPException(status_code=404)
         keys = [k for k in storage.list(prefix)
                 if not k.endswith(".zip") and f"/{ARTIFACTS}/" not in k[len(prefix) - 1:]]
         if not keys:
@@ -117,7 +116,7 @@ def serve_output_artifact(path: str, request: Request):
         return StreamingResponse(
             _stream_zip(storage, keys, prefix),
             media_type="application/zip",
-            headers=headers,
+            headers={"Content-Disposition": f'attachment; filename="{name}"'},
         )
 
     if not storage.exists(key):

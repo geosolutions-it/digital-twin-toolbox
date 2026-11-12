@@ -1,10 +1,8 @@
 import os
-import shutil
 import signal
 import ctypes
 import threading
 import subprocess
-from app.core.config import settings
 
 
 try:
@@ -59,30 +57,3 @@ def run_subprocess(cmd, check=False, capture_output=False, text=False, cwd=None)
         raise subprocess.CalledProcessError(proc.returncode, cmd, output=out, stderr=err)
     return subprocess.CompletedProcess(cmd, proc.returncode, stdout=out, stderr=err)
 
-
-def get_process_dir(pipeline_id):
-    """Path of the shared per-pipeline process dir (no side effects, unlike setup_output_directory)."""
-    return os.path.join(settings.ASSETS_DATA, "output", f"{pipeline_id}", "process")
-
-
-def setup_output_directory(pipeline_id):
-    relative_output_path = os.path.join("output", f"{pipeline_id}")
-    output_path = os.path.join(settings.ASSETS_DATA, relative_output_path)
-
-    try:
-        for filename in os.listdir(output_path):
-            if filename != 'process':
-                shutil.rmtree(os.path.join(output_path, filename))
-    except Exception:
-        pass
-
-    os.makedirs(output_path, exist_ok=True)
-
-    return {
-        'relative_output_path': relative_output_path,
-        'output_path': output_path,
-        'output_path_3dtiles': os.path.join(output_path, 'tiles'),
-        'output_path_3dtiles_zip': os.path.join(output_path, 'download'),
-        'output_tileset': os.path.join(settings.API_V1_STR, relative_output_path, 'tiles', 'tileset.json'),
-        'output_tileset_zip': os.path.join(settings.API_V1_STR, relative_output_path, 'download.zip'),
-    }
