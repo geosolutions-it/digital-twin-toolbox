@@ -22,6 +22,10 @@ import {
   Input,
   InputGroup,
   InputLeftElement,
+  Menu,
+  MenuButton,
+  MenuItem,
+  MenuList,
   Progress,
   SkeletonText,
   Table,
@@ -45,6 +49,7 @@ import {
   FiChevronRight,
   FiDownload,
   FiExternalLink,
+  FiFileText,
   FiPlay,
   FiRefreshCw,
   FiSearch,
@@ -245,7 +250,15 @@ type EditTarget =
 
 function pipelineType(p: Pipeline): PipelineType {
   const t = p?.source?.pipeline
-  if (t === "Polygon" || t === "Terrain" || t === "Instance" || t === "Mesh" || t === "CityGML") return t
+  if (
+    t === "Polygon" ||
+    t === "Terrain" ||
+    t === "Instance" ||
+    t === "Mesh" ||
+    t === "CityGML" ||
+    t === "Building"
+  )
+    return t
   return "PointCloud"
 }
 
@@ -279,7 +292,13 @@ function dataToValues(d: any): Partial<BatchFormValues> {
     tile_faces_target: num(d?.tile_faces_target),
     texture_image_size: num(d?.texture_image_size),
     decimate_last_depth_level: d?.decimate_last_depth_level !== false,
-    lod: num(d?.lod),
+    lod: typeof d?.lod === "string" ? d.lod : num(d?.lod),
+    point_cloud: d?.point_cloud || "",
+    orthophoto: d?.orthophoto || "",
+    dtm: d?.dtm || "",
+    building_class: num(d?.building_class),
+    ground_class: num(d?.ground_class),
+    texture_resolution: num(d?.texture_resolution),
     horizontal_epsg: num(d?.horizontal_epsg),
     vertical_epsg: num(d?.vertical_epsg),
   }
@@ -317,10 +336,56 @@ function RollupBar({ counts }: { counts: PipelineBatchCounts }) {
 type RowAction = "run" | "cancel" | "delete" | "rebuild"
 type BatchAction = "run" | "cancel" | "rebuild"
 
+function zipName(name: string) {
+  return (name || "").replace(/(\.zip)+$/i, "")
+}
+
 // the backend names the attachment after this .zip
 function zipHref(url: string, name: string) {
-  const safe = (name || "").replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^[._]+|[._]+$/g, "")
+  const safe = zipName(name).replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^[._]+|[._]+$/g, "")
   return url.replace(/[^/]+\.zip$/, `${safe.slice(0, 100) || "download"}.zip`)
+}
+
+type Artifact = { name: string; url: string; size?: number }
+
+function artifactSize(bytes?: number) {
+  if (!bytes) return ""
+  const units = ["B", "KB", "MB", "GB"]
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
+  return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`
+}
+
+function ArtifactsMenu({ artifacts }: { artifacts: Artifact[] }) {
+  return (
+    <Menu isLazy placement="bottom-end">
+      <Tooltip label="Other outputs">
+        <MenuButton
+          as={IconButton}
+          aria-label="Other outputs"
+          icon={<FiFileText />}
+          size="xs"
+          variant="ghost"
+        />
+      </Tooltip>
+      <MenuList fontSize="sm">
+        {artifacts.map((a) => (
+          <MenuItem
+            key={a.name}
+            as="a"
+            href={`${API_BASE}${a.url}`}
+            download={a.name}
+          >
+            <Text fontFamily="mono" fontSize="xs" mr={3}>
+              {a.name}
+            </Text>
+            <Text fontSize="xs" color="gray.500" ml="auto">
+              {artifactSize(a.size)}
+            </Text>
+          </MenuItem>
+        ))}
+      </MenuList>
+    </Menu>
+  )
 }
 
 interface RowProps {
@@ -335,7 +400,7 @@ interface RowProps {
 
 function PipelineRow({ pipeline, selected, onToggle, onAction, onEdit, dim, indent }: RowProps) {
   const running = isCeleryTaskInProgress(pipeline.task_status)
-  const download = zipHref(`${pipeline?.task_result?.download}`, pipeline.title)
+  const download = `${API_BASE}${zipHref(`${pipeline?.task_result?.download}`, pipeline.title)}`
   const source = pipeline.source
   const subtitle = source?.key ? `s3://…/${source.key}` : "no input"
   const isSel = selected.has(pipeline.id)
@@ -367,6 +432,9 @@ function PipelineRow({ pipeline, selected, onToggle, onAction, onEdit, dim, inde
       </Td>
       <Td textAlign="right">
         <HStack spacing={1} justify="flex-end">
+          {!!pipeline.task_result?.artifacts?.length && (
+            <ArtifactsMenu artifacts={pipeline.task_result.artifacts} />
+          )}
           {pipeline.task_result?.tileset && (
             <Tooltip label="Open tileset">
               <IconButton
@@ -386,7 +454,7 @@ function PipelineRow({ pipeline, selected, onToggle, onAction, onEdit, dim, inde
               <IconButton
                 as="a"
                 href={download}
-                download={`${pipeline.title}.zip`}
+                download={`${zipName(pipeline.title)}.zip`}
                 aria-label="Download 3D Tiles"
                 icon={<FiDownload />}
                 size="xs"
@@ -574,7 +642,7 @@ function BatchGroup({
                 <IconButton
                   as="a"
                   href={parentDownload}
-                  download={`${summary.label}.zip`}
+                  download={`${zipName(summary.label)}.zip`}
                   aria-label="Download combined 3D Tiles"
                   icon={<FiDownload />}
                   size="xs"

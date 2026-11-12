@@ -6,7 +6,8 @@ from app.worker.common.gltf import (
     Blob, add_positions, dequantize_node, enu_to_gltf, pack_glb, quantize_positions,
 )
 
-UNTEXTURED_COLOR = [0.7, 0.7, 0.7, 1.0]
+# white: 3D Tiles styles multiply it
+UNTEXTURED_COLOR = [1.0, 1.0, 1.0, 1.0]
 
 
 def glb_bytes(enu_positions, faces, uvs=None, image=None, mime="image/webp", max_step=float("inf")):

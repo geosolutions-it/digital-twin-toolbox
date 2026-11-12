@@ -17,10 +17,13 @@ _ZIP_SIGNATURES = [
     (".shp", "Polygon"),
     (".obj", "Mesh"),
     (".gml", "CityGML"),
+    (".city.json", "CityGML"),
+    (".city.jsonl", "CityGML"),
 ]
 
-SUPPORTED_EXTENSIONS = tuple(_EXT_WORKFLOW) + (".gml", ".zip")
+SUPPORTED_EXTENSIONS = tuple(_EXT_WORKFLOW) + (".gml", ".zip", ".json", ".jsonl")
 _GML_HEAD = 16384
+_JSON_HEAD = 4096
 
 _EOCD_SIG = b"PK\x05\x06"
 _CD_SIG = 0x02014B50
@@ -81,6 +84,15 @@ def _classify_gml(storage, key):
     return "CityGML" if b"/citygml/" in head.lower() else "Polygon"
 
 
+def _classify_json(storage, key):
+    """CityJSON by its "type" in the head; other JSON is unsupported."""
+    try:
+        head = storage.read_range(key, 0, min(storage.size(key), _JSON_HEAD))
+    except Exception:
+        return None
+    return "CityGML" if b'"cityjson"' in head.lower().replace(b" ", b"") else None
+
+
 def classify_bucket_file(storage, key):
     """Workflow name for a bucket key, or None if nothing handles it."""
     lower = key.lower()
@@ -88,6 +100,8 @@ def classify_bucket_file(storage, key):
         return _classify_zip(storage, key)
     if lower.endswith(".gml"):
         return _classify_gml(storage, key)
+    if lower.endswith((".json", ".jsonl")):
+        return _classify_json(storage, key)
     for ext, workflow in _EXT_WORKFLOW.items():
         if lower.endswith(ext):
             return workflow

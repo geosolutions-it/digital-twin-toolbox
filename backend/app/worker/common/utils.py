@@ -19,12 +19,12 @@ def _set_pdeathsig():
         _libc.prctl(1, signal.SIGKILL)
 
 
-def run_subprocess(cmd, check=False, capture_output=False, text=False):
+def run_subprocess(cmd, check=False, capture_output=False, text=False, cwd=None):
     """subprocess.run that kills the child's whole process group on revoke(terminate=True),
     so native children (incl micromamba -> opensfm) don't outlive the task."""
     pipe = subprocess.PIPE if capture_output else None
     proc = subprocess.Popen(
-        cmd, stdout=pipe, stderr=pipe, text=text,
+        cmd, stdout=pipe, stderr=pipe, text=text, cwd=cwd,
         start_new_session=True, preexec_fn=_set_pdeathsig,
     )
     try:

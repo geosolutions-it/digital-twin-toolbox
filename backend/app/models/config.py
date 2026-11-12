@@ -74,12 +74,22 @@ class CityGMLConfig(BaseModel):
     horizontal_epsg: int | None = None
     vertical_epsg: int | None = None
     max_tile_size_kb: float = 400
+    orthophoto: str | None = None
+    # m per texel; None: the orthophoto's
+    texture_resolution: float | None = None
 
-    @field_validator("lod", "horizontal_epsg", "vertical_epsg", mode="before")
+    @field_validator("lod", "horizontal_epsg", "vertical_epsg", "orthophoto", "texture_resolution", mode="before")
     @classmethod
     def _blank_is_none(cls, v):
         if v is None or (isinstance(v, str) and v.strip() == ""):
             return None
+        return v
+
+    @field_validator("texture_resolution")
+    @classmethod
+    def _resolution(cls, v):
+        if v is not None and v <= 0:
+            raise ValueError("texture_resolution must be positive")
         return v
 
     @field_validator("lod")
@@ -87,4 +97,53 @@ class CityGMLConfig(BaseModel):
     def _lod(cls, v):
         if v is not None and not 0 <= v <= 4:
             raise ValueError("lod must be between 0 and 4")
+        return v
+
+
+BUILDING_LODS = ("1.2", "1.3", "2.2")
+
+
+class BuildingConfig(BaseModel):
+    """The footprint file is the pipeline source."""
+    model_config = ConfigDict(extra="ignore")
+
+    # LAS/LAZ key, or a folder ending with /
+    point_cloud: str = ""
+    orthophoto: str | None = None
+    dtm: str | None = None
+    lod: str = "2.2"
+    building_class: int = 6
+    ground_class: int = 2
+    to_ellipsoidal_height: bool = False
+    # m per texel; None: the orthophoto's
+    texture_resolution: float | None = None
+    max_tile_size_kb: float = 400
+
+    @field_validator("orthophoto", "dtm", "texture_resolution", mode="before")
+    @classmethod
+    def _blank_is_none(cls, v):
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return None
+        return v
+
+    @field_validator("point_cloud")
+    @classmethod
+    def _point_cloud(cls, v):
+        if not v or not v.strip():
+            raise ValueError("point_cloud is required")
+        return v.strip()
+
+    @field_validator("lod", mode="before")
+    @classmethod
+    def _lod(cls, v):
+        v = str(v or "2.2")
+        if v not in BUILDING_LODS:
+            raise ValueError(f"lod must be one of {', '.join(BUILDING_LODS)}")
+        return v
+
+    @field_validator("texture_resolution")
+    @classmethod
+    def _resolution(cls, v):
+        if v is not None and v <= 0:
+            raise ValueError("texture_resolution must be positive")
         return v

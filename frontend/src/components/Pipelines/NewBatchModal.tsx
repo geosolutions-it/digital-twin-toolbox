@@ -46,6 +46,7 @@ type PipelineType =
   | "Instance"
   | "Mesh"
   | "CityGML"
+  | "Building"
 
 // worker downloads water as a single file
 const VECTOR_EXTENSIONS = [".gpkg", ".geojson", ".json", ".fgb"]
@@ -108,6 +109,12 @@ interface BatchFormValues {
   lod?: string
   horizontal_epsg?: string
   vertical_epsg?: string
+  point_cloud?: string
+  orthophoto?: string
+  dtm?: string
+  building_class?: string
+  ground_class?: string
+  texture_resolution?: string
 }
 
 function heightValue(v: any): number | any[] | undefined {
@@ -150,6 +157,12 @@ const EMPTY: BatchFormValues = {
   lod: "",
   horizontal_epsg: "",
   vertical_epsg: "",
+  point_cloud: "",
+  orthophoto: "",
+  dtm: "",
+  building_class: "",
+  ground_class: "",
+  texture_resolution: "",
 }
 
 function buildData(
@@ -196,8 +209,28 @@ function buildData(
       data.max_geometric_error = Number(values.max_geometric_error)
     return data
   }
+  if (type === "Building") {
+    data.point_cloud = values.point_cloud
+    if (values.orthophoto) data.orthophoto = values.orthophoto
+    if (values.dtm) data.dtm = values.dtm
+    data.lod = ["1.2", "1.3", "2.2"].includes(values.lod ?? "")
+      ? values.lod
+      : "2.2"
+    if (values.building_class)
+      data.building_class = Number(values.building_class)
+    if (values.ground_class) data.ground_class = Number(values.ground_class)
+    if (values.texture_resolution)
+      data.texture_resolution = Number(values.texture_resolution)
+    if (values.to_ellipsoidal_height) data.to_ellipsoidal_height = true
+    if (values.max_tile_size_kb)
+      data.max_tile_size_kb = Number(values.max_tile_size_kb)
+    return data
+  }
   if (type === "CityGML") {
     if (values.lod) data.lod = Number(values.lod)
+    if (values.orthophoto) data.orthophoto = values.orthophoto
+    if (values.orthophoto && values.texture_resolution)
+      data.texture_resolution = Number(values.texture_resolution)
     if (values.to_ellipsoidal_height) data.to_ellipsoidal_height = true
     if (values.horizontal_epsg)
       data.horizontal_epsg = Number(values.horizontal_epsg)
@@ -270,7 +303,10 @@ const NewBatchModal = ({
   }, [isOpen, initialPrefix, initialValues, pipelineType, edit, reset])
 
   const watchedType = watch("pipelineType")
-  const baseType: PipelineType = pipelineType ?? watchedType ?? "PointCloud"
+  const baseType: PipelineType =
+    pipelineType === "Polygon" && watchedType === "Building"
+      ? "Building"
+      : pipelineType ?? watchedType ?? "PointCloud"
 
   const fieldsParam: { key?: string; prefix?: string } | null = fileKey
     ? { key: fileKey }
@@ -279,7 +315,8 @@ const NewBatchModal = ({
       : !edit
         ? { prefix: initialPrefix }
         : null
-  const vectorLike = baseType === "Polygon" || baseType === "Instance"
+  const vectorLike =
+    baseType === "Polygon" || baseType === "Instance" || baseType === "Building"
   const ellipsoidal = !!watch("to_ellipsoidal_height")
   const { data: vectorFields } = useQuery({
     queryKey: ["vector-fields", fieldsParam],
@@ -328,7 +365,10 @@ const NewBatchModal = ({
     .map((f) => f.key.slice(modelsPrefix.length))
 
   const hasPreview =
-    type === "Polygon" || type === "Instance" || type === "Mesh"
+    type === "Polygon" ||
+    type === "Instance" ||
+    type === "Mesh" ||
+    type === "Building"
   const values = watch()
   const errorText = (e: any) =>
     e?.response?.data?.detail || e?.message || "unknown error"
@@ -490,7 +530,20 @@ const NewBatchModal = ({
                   <option value="Instance">Point instance</option>
                   <option value="Terrain">Terrain</option>
                   <option value="Mesh">Mesh (zipped obj)</option>
-                  <option value="CityGML">CityGML</option>
+                  <option value="CityGML">
+                    City model (CityGML, CityJSON)
+                  </option>
+                </Select>
+              </FormControl>
+            )}
+            {!edit && single && pipelineType === "Polygon" && (
+              <FormControl>
+                <FormLabel htmlFor="pipelineType">Workflow</FormLabel>
+                <Select id="pipelineType" {...register("pipelineType")}>
+                  <option value="Polygon">Polygon (extrude)</option>
+                  <option value="Building">
+                    Buildings (roofs from a point cloud)
+                  </option>
                 </Select>
               </FormControl>
             )}
@@ -808,6 +861,139 @@ const NewBatchModal = ({
                   />
                 </FormControl>
               </>
+            ) : type === "Building" ? (
+              <>
+                <Text fontSize="xs" color="gray.500">
+                  Roofer reconstructs each footprint from the point cloud, which
+                  needs ground and building classes and the same CRS as the
+                  footprints. The footprint attributes are kept.
+                </Text>
+                <FormControl isRequired isInvalid={!!errors.point_cloud}>
+                  <FormLabel htmlFor="point_cloud">
+                    Point cloud (LAS/LAZ file or folder)
+                  </FormLabel>
+                  <Controller
+                    control={control}
+                    name="point_cloud"
+                    rules={{ required: "A point cloud is required." }}
+                    render={({ field }) => (
+                      <StorageKeyInput
+                        id="point_cloud"
+                        value={field.value}
+                        onChange={field.onChange}
+                        inputRef={field.ref}
+                        placeholder="e.g. lidar/tile.laz or lidar/"
+                        extensions={[".las", ".laz"]}
+                      />
+                    )}
+                  />
+                  {errors.point_cloud && (
+                    <FormErrorMessage>
+                      {errors.point_cloud.message}
+                    </FormErrorMessage>
+                  )}
+                </FormControl>
+                <FormControl>
+                  <FormLabel htmlFor="lod">Level of detail</FormLabel>
+                  <Select id="lod" {...register("lod")}>
+                    <option value="2.2">LoD 2.2 (roof shapes)</option>
+                    <option value="1.3">LoD 1.3 (flat roofs, steps)</option>
+                    <option value="1.2">LoD 1.2 (one flat roof)</option>
+                  </Select>
+                </FormControl>
+                <FormControl>
+                  <FormLabel htmlFor="orthophoto">
+                    Orthophoto for the roofs (optional)
+                  </FormLabel>
+                  <Controller
+                    control={control}
+                    name="orthophoto"
+                    render={({ field }) => (
+                      <StorageKeyInput
+                        id="orthophoto"
+                        value={field.value}
+                        onChange={field.onChange}
+                        inputRef={field.ref}
+                        placeholder="e.g. rasters/orthophoto.tif"
+                        extensions={RASTER_EXTENSIONS}
+                      />
+                    )}
+                  />
+                </FormControl>
+                {!!values.orthophoto && (
+                  <FormControl>
+                    <FormLabel htmlFor="texture_resolution">
+                      Texture resolution (m, optional)
+                    </FormLabel>
+                    <Input
+                      id="texture_resolution"
+                      type="number"
+                      step="any"
+                      placeholder="the orthophoto's"
+                      {...register("texture_resolution")}
+                    />
+                  </FormControl>
+                )}
+                <FormControl>
+                  <FormLabel htmlFor="dtm">Terrain (DTM, optional)</FormLabel>
+                  <Controller
+                    control={control}
+                    name="dtm"
+                    render={({ field }) => (
+                      <StorageKeyInput
+                        id="dtm"
+                        value={field.value}
+                        onChange={field.onChange}
+                        inputRef={field.ref}
+                        placeholder="e.g. rasters/dtm.tif"
+                        extensions={RASTER_EXTENSIONS}
+                      />
+                    )}
+                  />
+                  <Text fontSize="xs" color="gray.500" mt={1}>
+                    Lowers building bases onto the terrain on slopes. Same
+                    height datum as the point cloud.
+                  </Text>
+                </FormControl>
+                <Flex gap={3}>
+                  <FormControl>
+                    <FormLabel htmlFor="building_class">
+                      Building class
+                    </FormLabel>
+                    <Input
+                      id="building_class"
+                      type="number"
+                      placeholder="6"
+                      {...register("building_class")}
+                    />
+                  </FormControl>
+                  <FormControl>
+                    <FormLabel htmlFor="ground_class">Ground class</FormLabel>
+                    <Input
+                      id="ground_class"
+                      type="number"
+                      placeholder="2"
+                      {...register("ground_class")}
+                    />
+                  </FormControl>
+                </Flex>
+                <FormControl>
+                  <Checkbox {...register("to_ellipsoidal_height")}>
+                    Convert heights to ellipsoidal (EGM2008)
+                  </Checkbox>
+                </FormControl>
+                <FormControl>
+                  <FormLabel htmlFor="max_tile_size_kb">
+                    Max tile size in KB (optional)
+                  </FormLabel>
+                  <Input
+                    id="max_tile_size_kb"
+                    type="number"
+                    placeholder="400"
+                    {...register("max_tile_size_kb")}
+                  />
+                </FormControl>
+              </>
             ) : type === "CityGML" ? (
               <>
                 <FormControl>
@@ -851,6 +1037,42 @@ const NewBatchModal = ({
                       type="number"
                       placeholder="3855"
                       {...register("vertical_epsg")}
+                    />
+                  </FormControl>
+                )}
+                <FormControl>
+                  <FormLabel htmlFor="orthophoto">
+                    Orthophoto for the roofs (optional)
+                  </FormLabel>
+                  <Controller
+                    control={control}
+                    name="orthophoto"
+                    render={({ field }) => (
+                      <StorageKeyInput
+                        id="orthophoto"
+                        value={field.value}
+                        onChange={field.onChange}
+                        inputRef={field.ref}
+                        placeholder="e.g. rasters/orthophoto.tif"
+                        extensions={RASTER_EXTENSIONS}
+                      />
+                    )}
+                  />
+                  <Text fontSize="xs" color="gray.500" mt={1}>
+                    Textures the roofs and adds a roof_color attribute.
+                  </Text>
+                </FormControl>
+                {!!values.orthophoto && (
+                  <FormControl>
+                    <FormLabel htmlFor="texture_resolution">
+                      Texture resolution (m, optional)
+                    </FormLabel>
+                    <Input
+                      id="texture_resolution"
+                      type="number"
+                      step="any"
+                      placeholder="the orthophoto's"
+                      {...register("texture_resolution")}
                     />
                   </FormControl>
                 )}
@@ -998,8 +1220,16 @@ const NewBatchModal = ({
                 }
               >
                 <PreviewMap
-                  kind={type as PreviewKind}
-                  values={values}
+                  kind={(type === "Building" ? "Polygon" : type) as PreviewKind}
+                  values={
+                    type === "Building"
+                      ? {
+                          ...values,
+                          lower_limit_height: "",
+                          upper_limit_height: "",
+                        }
+                      : values
+                  }
                   features={vectorSample?.features}
                   bbox={meshBbox.data}
                   status={previewStatus}

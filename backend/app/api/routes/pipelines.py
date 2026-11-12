@@ -185,6 +185,7 @@ _SOURCE_TASK = {
     "Instance": "create_point_instance_3dtiles",
     "Mesh": "create_mesh_3dtiles",
     "CityGML": "create_citygml_3dtiles",
+    "Building": "create_building_3dtiles",
 }
 
 
@@ -203,8 +204,10 @@ def create_pipeline_source(
         raise HTTPException(status_code=404, detail=f"No such file: {source_in.key!r}")
 
     pipeline_type = classify_bucket_file(storage, source_in.key)
-    if source_in.pipeline == "Instance" and pipeline_type == "Polygon":
-        pipeline_type = "Instance"
+    if source_in.pipeline == "Building" and pipeline_type != "Polygon":
+        raise HTTPException(status_code=422, detail=f"Buildings need a polygon footprint file: {source_in.key!r}")
+    if source_in.pipeline in ("Instance", "Building") and pipeline_type == "Polygon":
+        pipeline_type = source_in.pipeline
     dispatch_task = _SOURCE_TASK.get(pipeline_type)
     if dispatch_task is None:
         raise HTTPException(status_code=422, detail=f"Unsupported file: {source_in.key!r}")
@@ -257,6 +260,8 @@ def create_pipeline_batch(
     Create and dispatch one pipeline per supported file under a bucket prefix.
     Each file's workflow is detected from its contents (zips are peeked).
     """
+    if batch_in.pipeline == "Building":
+        raise HTTPException(status_code=422, detail="Buildings run on a single footprint file, not in a batch")
     storage = get_storage()
     skip = output_root() + "/"
     candidates = [

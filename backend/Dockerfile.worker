@@ -63,7 +63,13 @@ RUN echo /opt/pdal/lib > /etc/ld.so.conf.d/pdal.conf && ldconfig
 
 COPY --from=builder /app/.venv /app/.venv
 
-RUN pdal --version && \
+# roofer bundles GDAL 3.12.1 + PROJ 9.3.1 (system 3.10.3 + 9.6.0); the wrapper sets their data for roofer only
+COPY --from=3dgi/roofer:v1.1.0-beta.1 /opt/roofer /opt/roofer
+RUN printf '#!/bin/sh\nPROJ_DATA=/opt/roofer/share/proj GDAL_DATA=/opt/roofer/share/gdal exec /opt/roofer/bin/roofer "$@"\n' \
+        > /usr/local/bin/roofer && chmod +x /usr/local/bin/roofer
+
+RUN roofer --version && \
+    pdal --version && \
     python -c "import pdal, osgeo.gdal, py3dtiles, laspy, quantized_mesh_tile, xatlas, fast_simplification, embreex.rtcore_scene, PIL.features; assert PIL.features.check('webp'); print('python-pdal', pdal.__version__, 'gdal', osgeo.gdal.__version__)"
 
 COPY ./scripts/ /app/

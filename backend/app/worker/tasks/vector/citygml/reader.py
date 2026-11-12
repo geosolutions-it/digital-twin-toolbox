@@ -5,6 +5,8 @@ import zipfile
 
 import numpy as np
 
+from app.worker.tasks.vector.citygml.cityjson import iter_cityjson
+
 _LOD = re.compile(r"^lod(\d)")
 _INT = re.compile(r"-?(0|[1-9]\d*)$")
 _SURFACES = {"Polygon", "Triangle", "PolygonPatch"}
@@ -137,19 +139,42 @@ def iter_objects(source, max_lod=None):
         root.clear()
 
 
-def _is_gml(name):
+# as file_classify: a plain .json in a zip is a sidecar, not CityJSON
+CITY_SUFFIXES = (".gml", ".city.json", ".city.jsonl")
+
+
+def _is_city_file(name):
     base = os.path.basename(name)
-    return name.lower().endswith(".gml") and "__MACOSX" not in name and not base.startswith(".")
+    return name.lower().endswith(CITY_SUFFIXES) and "__MACOSX" not in name and not base.startswith(".")
 
 
 def iter_streams(path):
     if not zipfile.is_zipfile(path):
-        yield path
+        with open(path, "rb") as f:
+            yield f
         return
     with zipfile.ZipFile(path) as zf:
-        names = sorted(n for n in zf.namelist() if _is_gml(n))
+        names = sorted(n for n in zf.namelist() if _is_city_file(n))
         if not names:
-            raise Exception("No .gml file in the archive")
+            raise Exception("No .gml or CityJSON file in the archive")
         for name in names:
             with zf.open(name) as f:
                 yield f
+
+
+def _is_json(stream):
+    head = stream.peek(64) if hasattr(stream, "peek") else b""
+    if not head:
+        pos = stream.tell()
+        head = stream.read(64)
+        stream.seek(pos)
+    return head.lstrip()[:1] == b"{"
+
+
+def iter_city_objects(path, max_lod=None):
+    """-> (srs, properties, polygons) per city object."""
+    for stream in iter_streams(path):
+        if _is_json(stream):
+            yield from iter_cityjson(stream, max_lod)
+        else:
+            yield from iter_objects(stream, max_lod)

@@ -19,6 +19,35 @@ document.head.appendChild(hideIonLogo)
 const WMS_URL = "https://maps1.geosolutionsgroup.com/geoserver/wms"
 const OSM_CREDIT = "© OpenStreetMap contributors"
 
+// light follows the camera, slightly from above-left, instead of the sun
+const HEADLIGHT_UP = 0.5
+const HEADLIGHT_LEFT = 0.25
+
+function addHeadlight(scene: Cesium.Scene) {
+  const light = new Cesium.DirectionalLight({
+    direction: new Cesium.Cartesian3(0, 0, -1),
+    intensity: 2.0,
+  })
+  scene.light = light
+  const up = new Cesium.Cartesian3()
+  const right = new Cesium.Cartesian3()
+  scene.preRender.addEventListener(() => {
+    const camera = scene.camera
+    Cesium.Cartesian3.multiplyByScalar(camera.upWC, -HEADLIGHT_UP, up)
+    Cesium.Cartesian3.multiplyByScalar(camera.rightWC, HEADLIGHT_LEFT, right)
+    Cesium.Cartesian3.add(camera.directionWC, up, light.direction)
+    Cesium.Cartesian3.add(light.direction, right, light.direction)
+    Cesium.Cartesian3.normalize(light.direction, light.direction)
+  })
+}
+
+// Cesium's default environment ground (#717145) tints models yellow
+const NEUTRAL_GROUND = Cesium.Color.fromCssColorString("#6e6e6e")
+
+export function neutralLighting(tileset: Cesium.Cesium3DTileset) {
+  tileset.environmentMapManager.groundColor = NEUTRAL_GROUND
+}
+
 export function createViewer(container: HTMLElement): {
   viewer: Cesium.Viewer
   imagery: Cesium.ImageryLayer
@@ -49,6 +78,7 @@ export function createViewer(container: HTMLElement): {
     maximumRenderTimeChange: Number.POSITIVE_INFINITY,
   })
   viewer.scene.globe.baseColor = new Cesium.Color(0.05, 0.05, 0.05, 1)
+  addHeadlight(viewer.scene)
   const imagery = new Cesium.ImageryLayer(provider)
   viewer.imageryLayers.add(imagery)
   return { viewer, imagery }

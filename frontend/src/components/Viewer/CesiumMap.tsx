@@ -21,7 +21,7 @@ import * as Cesium from "cesium"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { FiCrosshair, FiX } from "react-icons/fi"
 import { API_BASE, readPipelines } from "../../api"
-import { createViewer } from "../../utils/cesium"
+import { createViewer, neutralLighting } from "../../utils/cesium"
 
 type Layer = {
   id: string
@@ -233,6 +233,7 @@ export default function CesiumMap() {
           .then((ts) => {
             if (!viewerRef.current) return
             tilesetsRef.current.set(layer.id, ts)
+            neutralLighting(ts)
             viewer.scene.primitives.add(ts)
             applySettings(ts, pcRef.current, layer.type === "PointCloud")
             // unticked while loading

@@ -5,7 +5,8 @@ from pyproj.crs import CompoundCRS
 
 # EPSG:2056, urn:...:EPSG::25832, urn:...:EPSG:6.12:25832, .../EPSG/0/6697
 _EPSG = re.compile(r"EPSG(?:/0/|:+(?:[\d.]+:)?)(\d+)", re.I)
-_SHORT_EPSG = re.compile(r"\s*EPSG:\d+\s*$", re.I)
+# short EPSG:n forms keep x/y order, as in GDAL
+_SHORT_EPSG = re.compile(r"\s*EPSG:\d+(\+EPSG:\d+)?\s*$", re.I)
 _ADV = {
     "ETRS89_UTM32": 25832,
     "ETRS89_UTM33": 25833,
@@ -16,6 +17,10 @@ _ADV = {
     "DE_DHHN2016_NH": 7837,
 }
 DEFAULT_VERTICAL_EPSG = 3855
+
+
+def epsg_codes(name):
+    return [int(c) for c in _EPSG.findall(name or "")]
 
 
 def resolve_crs(srs_name, horizontal_epsg=None):
