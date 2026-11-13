@@ -1,4 +1,5 @@
 """Attribute schema and preview sample of bucket vectors."""
+
 import json
 import tempfile
 
@@ -6,34 +7,50 @@ from osgeo import ogr
 
 from app.core.storage import get_storage
 from app.worker.main import celery
-from app.worker.tasks.vector.source import coerce, field_names, open_layer, resolve_input, wgs84_transform
+from app.worker.tasks.vector.source import (
+    coerce,
+    field_names,
+    open_layer,
+    resolve_input,
+    wgs84_transform,
+)
 
 
 @celery.task(name="read_vector_fields")
 def read_vector_fields(options):
     """Attribute schema + a first-feature sample for a bucket vector, for the
     expression editor. Reads one feature; no reprojection or extrusion."""
-    key = options['key']
+    key = options["key"]
     storage = get_storage()
     with tempfile.TemporaryDirectory() as scratch:
-        path = resolve_input({'key': key}, storage, scratch)
+        path = resolve_input({"key": key}, storage, scratch)
         ds, layer = open_layer(path)
         defn = layer.GetLayerDefn()
         fields = [
-            {'name': defn.GetFieldDefn(i).GetName(), 'type': defn.GetFieldDefn(i).GetTypeName()}
+            {
+                "name": defn.GetFieldDefn(i).GetName(),
+                "type": defn.GetFieldDefn(i).GetTypeName(),
+            }
             for i in range(defn.GetFieldCount())
         ]
         feat = layer.GetNextFeature()
         properties = {}
         if feat is not None:
             for f in fields:
-                properties[f['name']] = coerce(feat.GetField(f['name']))
+                properties[f["name"]] = coerce(feat.GetField(f["name"]))
         name = ogr.GeometryTypeToName(layer.GetGeomType())
-        if 'Unknown' in name and feat is not None and feat.GetGeometryRef() is not None:
+        if "Unknown" in name and feat is not None and feat.GetGeometryRef() is not None:
             name = feat.GetGeometryRef().GetGeometryName()
-        geometry_type = 'Point' if 'Point' in name else 'Polygon' if 'Polygon' in name else name
-        return {'count': layer.GetFeatureCount(), 'fields': fields,
-                'properties': properties, 'geometry_type': geometry_type}
+        geometry_type = (
+            "Point" if "Point" in name else "Polygon" if "Polygon" in name else name
+        )
+        return {
+            "count": layer.GetFeatureCount(),
+            "fields": fields,
+            "properties": properties,
+            "geometry_type": geometry_type,
+        }
+
 
 def _count_upto(layer, n):
     """Filtered feature count capped at n (a full count scans every record)."""
@@ -67,12 +84,12 @@ def _sample_window(layer, limit):
 @celery.task(name="read_vector_sample")
 def read_vector_sample(options):
     """Up to `limit` neighbouring features as WGS84 GeoJSON, heights as the workers produce them."""
-    key = options['key']
-    ellipsoidal = bool(options.get('ellipsoidal'))
-    limit = int(options.get('limit') or 200)
+    key = options["key"]
+    ellipsoidal = bool(options.get("ellipsoidal"))
+    limit = int(options.get("limit") or 200)
     storage = get_storage()
     with tempfile.TemporaryDirectory() as scratch:
-        path = resolve_input({'key': key}, storage, scratch)
+        path = resolve_input({"key": key}, storage, scratch)
         ds, layer = open_layer(path)
         transform = wgs84_transform(layer, ellipsoidal)
         names = field_names(layer)
@@ -89,11 +106,13 @@ def read_vector_sample(options):
             if ellipsoidal:
                 geom.Set3D(True)
             geom.Transform(transform)
-            features.append({
-                'type': 'Feature',
-                'geometry': json.loads(geom.ExportToJson()),
-                'properties': {name: coerce(feat.GetField(name)) for name in names},
-            })
+            features.append(
+                {
+                    "type": "Feature",
+                    "geometry": json.loads(geom.ExportToJson()),
+                    "properties": {name: coerce(feat.GetField(name)) for name in names},
+                }
+            )
             if len(features) >= limit:
                 break
-        return {'type': 'FeatureCollection', 'features': features}
+        return {"type": "FeatureCollection", "features": features}

@@ -15,7 +15,10 @@ MIXED = [
 
 
 def test_pointcloud_keeps_only_point_clouds():
-    assert batch_targets(MIXED, "PointCloud") == [("f/a.laz", "PointCloud"), ("f/b.las", "PointCloud")]
+    assert batch_targets(MIXED, "PointCloud") == [
+        ("f/a.laz", "PointCloud"),
+        ("f/b.las", "PointCloud"),
+    ]
 
 
 def test_terrain_keeps_only_rasters():
@@ -23,7 +26,10 @@ def test_terrain_keeps_only_rasters():
 
 
 def test_instance_runs_on_vectors():
-    assert batch_targets(MIXED, "Instance") == [("f/c.gpkg", "Instance"), ("f/d.zip", "Instance")]
+    assert batch_targets(MIXED, "Instance") == [
+        ("f/c.gpkg", "Instance"),
+        ("f/d.zip", "Instance"),
+    ]
 
 
 def test_no_match_is_empty():

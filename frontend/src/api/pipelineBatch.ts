@@ -2,8 +2,8 @@ import axios from "axios"
 import { API_BASE } from "./config"
 import type {
   FinalizeQueued,
-  Message,
   MeshBbox,
+  Message,
   PipelineBatchActionResult,
   PipelineBatchCreate,
   PipelineBatchCreated,
@@ -11,8 +11,8 @@ import type {
   PipelineConfigInput,
   PipelineCreated,
   PipelinePublic,
-  PipelinesActionTypes,
   PipelineSourceCreate,
+  PipelinesActionTypes,
   VectorFields,
   VectorSample,
 } from "./types"
@@ -43,10 +43,9 @@ export async function updateBatchConfig(
   batchId: string,
   data: PipelineConfigInput,
 ): Promise<PipelineBatchUpdated> {
-  const res = await axios.put(
-    `${API_BASE}/api/v1/pipelines/batch/${batchId}`,
-    { data },
-  )
+  const res = await axios.put(`${API_BASE}/api/v1/pipelines/batch/${batchId}`, {
+    data,
+  })
   return res.data
 }
 
@@ -80,14 +79,19 @@ export async function getVectorSample(params: {
   return res.data
 }
 
-export async function getMeshBbox(params: { key?: string; prefix?: string }): Promise<MeshBbox> {
+export async function getMeshBbox(params: {
+  key?: string
+  prefix?: string
+}): Promise<MeshBbox> {
   const res = await axios.get(`${API_BASE}/api/v1/pipelines/mesh-bbox`, {
     params: { key: params.key, prefix: params.prefix },
   })
   return res.data
 }
 
-export async function finalizePipelineBatch(batchId: string): Promise<FinalizeQueued> {
+export async function finalizePipelineBatch(
+  batchId: string,
+): Promise<FinalizeQueued> {
   const res = await axios.post(
     `${API_BASE}/api/v1/pipelines/batch/${batchId}/finalize`,
     {},
@@ -105,9 +109,7 @@ export async function processPipelineBatchTask(
   return res.data
 }
 
-export async function deletePipelineBatch(
-  batchId: string,
-): Promise<Message> {
+export async function deletePipelineBatch(batchId: string): Promise<Message> {
   const res = await axios.delete(
     `${API_BASE}/api/v1/pipelines/batch/${batchId}`,
   )

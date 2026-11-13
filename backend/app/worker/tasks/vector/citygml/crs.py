@@ -29,7 +29,9 @@ def resolve_crs(srs_name, horizontal_epsg=None):
     if srs_name:
         codes = [int(c) for c in _EPSG.findall(srs_name)]
         if not codes:
-            codes = [_ADV[p] for p in srs_name.rsplit(":", 1)[-1].split("*") if p in _ADV]
+            codes = [
+                _ADV[p] for p in srs_name.rsplit(":", 1)[-1].split("*") if p in _ADV
+            ]
     if codes:
         crs = CRS.from_user_input("+".join(f"EPSG:{c}" for c in codes[:2]))
     elif srs_name and not horizontal_epsg:
@@ -37,7 +39,9 @@ def resolve_crs(srs_name, horizontal_epsg=None):
     elif horizontal_epsg:
         crs = CRS.from_epsg(int(horizontal_epsg))
     else:
-        raise Exception("Missing spatial reference system: no srsName in the file and no horizontal EPSG set")
+        raise Exception(
+            "Missing spatial reference system: no srsName in the file and no horizontal EPSG set"
+        )
     swap = crs.is_geographic and not _SHORT_EPSG.match(srs_name or "")
     return crs, swap
 

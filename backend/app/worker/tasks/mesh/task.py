@@ -8,7 +8,7 @@ from app.models.config import MeshConfig
 from app.worker.common.logs import log_stage
 from app.worker.common.output import publish_tiles
 from app.worker.common.utils import run_subprocess
-from app.worker.main import celery, PipelineDatabaseTask
+from app.worker.main import PipelineDatabaseTask, celery
 from app.worker.tasks.mesh.reader import mesh_bbox_from_key, resolve_obj
 
 
@@ -26,34 +26,37 @@ def _materialize(storage, key, scratch, name):
 
 @celery.task(name="read_mesh_bbox")
 def read_mesh_bbox(options):
-    return mesh_bbox_from_key(get_storage(), options['key'])
+    return mesh_bbox_from_key(get_storage(), options["key"])
 
 
 def _resolve_input(pipeline_extended):
-    key = (pipeline_extended.get('source') or {}).get('key')
+    key = (pipeline_extended.get("source") or {}).get("key")
     if not key:
         raise Exception("Mesh pipeline requires a bucket source")
-    return key, '.zip' if key.lower().endswith('.zip') else os.path.splitext(key)[1]
+    return key, ".zip" if key.lower().endswith(".zip") else os.path.splitext(key)[1]
 
 
 @celery.task(name="create_mesh_3dtiles", base=PipelineDatabaseTask)
 def create_mesh_3dtiles(pipeline_extended):
-    config = MeshConfig(**(pipeline_extended.get('data') or {}))
+    config = MeshConfig(**(pipeline_extended.get("data") or {}))
     storage = get_storage()
     input_key, extension = _resolve_input(pipeline_extended)
-    source = pipeline_extended.get('source') or {}
-    out_base = source.get('output_base') or output_key(pipeline_extended['id'])
+    source = pipeline_extended.get("source") or {}
+    out_base = source.get("output_base") or output_key(pipeline_extended["id"])
 
     with tempfile.TemporaryDirectory() as scratch:
         log_stage("Downloading mesh")
         local = _materialize(storage, input_key, scratch, f"index{extension}")
-        tiles_dir = os.path.join(scratch, 'tiles')
+        tiles_dir = os.path.join(scratch, "tiles")
         params = {
             **config.model_dump(),
-            'input_file': resolve_obj(local, scratch),
-            'output_dir': tiles_dir,
-            'workers': _tiling_workers(),
+            "input_file": resolve_obj(local, scratch),
+            "output_dir": tiles_dir,
+            "workers": _tiling_workers(),
         }
         log_stage("Tiling mesh")
-        run_subprocess([sys.executable, '-m', 'app.worker.tasks.mesh.tiler', json.dumps(params)], check=True)
-        return publish_tiles(storage, tiles_dir, out_base, 'tileset.json')
+        run_subprocess(
+            [sys.executable, "-m", "app.worker.tasks.mesh.tiler", json.dumps(params)],
+            check=True,
+        )
+        return publish_tiles(storage, tiles_dir, out_base, "tileset.json")

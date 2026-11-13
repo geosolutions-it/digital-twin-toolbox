@@ -10,15 +10,15 @@ from app.worker.tasks.common.tiles3d import build_parent_tileset
 def finalize_tileset_batch(*_args, output_prefix, base=None):
     """Stitch whatever child tilesets exist under output_prefix into one parent."""
     storage = get_storage()
-    prefix = output_prefix.rstrip('/') + '/'
-    parent_key = prefix + 'tileset.json'
+    prefix = output_prefix.rstrip("/") + "/"
+    parent_key = prefix + "tileset.json"
 
     children = []
     for key in storage.list(prefix):
-        if not key.endswith('/tileset.json') or key == parent_key:
+        if not key.endswith("/tileset.json") or key == parent_key:
             continue
-        data = b''.join(storage.iter_object(key))
-        children.append({'uri': key[len(prefix):], 'tileset': json.loads(data)})
+        data = b"".join(storage.iter_object(key))
+        children.append({"uri": key[len(prefix) :], "tileset": json.loads(data)})
 
     if not children:
         # all children gone: drop the stale parent
@@ -26,12 +26,12 @@ def finalize_tileset_batch(*_args, output_prefix, base=None):
             storage.delete_prefix(parent_key)
         except Exception:
             pass
-        return {'tileset': None, 'count': 0}
+        return {"tileset": None, "count": 0}
 
     parent = build_parent_tileset(children)
     storage.upload_fileobj(io.BytesIO(json.dumps(parent).encode()), parent_key)
 
     return {
-        'tileset': output_url(parent_key) if base else parent_key,
-        'count': len(children),
+        "tileset": output_url(parent_key) if base else parent_key,
+        "count": len(children),
     }

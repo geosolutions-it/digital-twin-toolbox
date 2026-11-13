@@ -27,13 +27,15 @@ class _Storage:
 
 @pytest.fixture
 def storage(monkeypatch):
-    s = _Storage({
-        "job/tiles/tileset.json": b"{}",
-        "job/artifacts/a.txt": b"private",
-        "city/tileset.json": b"{}",
-        "city/x/tiles/tileset.json": b"{}",
-        "city/y/tiles/tileset.json": b"{}",
-    })
+    s = _Storage(
+        {
+            "job/tiles/tileset.json": b"{}",
+            "job/artifacts/a.txt": b"private",
+            "city/tileset.json": b"{}",
+            "city/x/tiles/tileset.json": b"{}",
+            "city/y/tiles/tileset.json": b"{}",
+        }
+    )
     monkeypatch.setattr(output, "get_storage", lambda: s)
     return s
 
@@ -62,17 +64,24 @@ def test_job_tiles_zip_is_named_after_the_job_folder():
 def test_batch_root_zip_skips_artifacts():
     res, body = _download("city/download.zip")
     assert res.headers["content-disposition"] == 'attachment; filename="city.zip"'
-    assert _names(body) == ["tileset.json", "x/tiles/tileset.json", "y/tiles/tileset.json"]
+    assert _names(body) == [
+        "tileset.json",
+        "x/tiles/tileset.json",
+        "y/tiles/tileset.json",
+    ]
 
 
 @pytest.mark.usefixtures("storage")
-@pytest.mark.parametrize("path", [
-    "download.zip",
-    "job/download.zip",
-    "city/x/download.zip",
-    "job/tiles/Invoice_URGENT.zip",
-    "missing/tiles/download.zip",
-])
+@pytest.mark.parametrize(
+    "path",
+    [
+        "download.zip",
+        "job/download.zip",
+        "city/x/download.zip",
+        "job/tiles/Invoice_URGENT.zip",
+        "missing/tiles/download.zip",
+    ],
+)
 def test_other_zip_paths_are_not_found(path):
     with pytest.raises(HTTPException) as e:
         output.serve_output_artifact(path, None)

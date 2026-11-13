@@ -41,7 +41,9 @@ function soloLayer(p: any): Layer {
     type,
     url: `${API_BASE}${tileset}`,
     isTerrain: tileset.endsWith("layer.json") || type === "Terrain",
-    extent: Array.isArray(p.task_result.extent) ? p.task_result.extent : undefined,
+    extent: Array.isArray(p.task_result.extent)
+      ? p.task_result.extent
+      : undefined,
   }
 }
 
@@ -60,10 +62,12 @@ function buildLayers(items: any[]): Layer[] {
 
   const layers: Layer[] = []
   for (const p of solo) {
-    if (p?.task_status === "SUCCESS" && p?.task_result?.tileset) layers.push(soloLayer(p))
+    if (p?.task_status === "SUCCESS" && p?.task_result?.tileset)
+      layers.push(soloLayer(p))
   }
   for (const [bid, group] of batches) {
-    const allDone = group.length > 0 && group.every((p) => p?.task_status === "SUCCESS")
+    const allDone =
+      group.length > 0 && group.every((p) => p?.task_status === "SUCCESS")
     const batchUrl: string = group[0]?.source?.batch_output_url || ""
     if (!allDone || !batchUrl) continue
     const t: string = group[0]?.title || ""
@@ -119,7 +123,11 @@ function classificationStyle() {
   })
 }
 
-function applySettings(ts: Cesium.Cesium3DTileset, s: PcSettings, isPointCloud: boolean) {
+function applySettings(
+  ts: Cesium.Cesium3DTileset,
+  s: PcSettings,
+  isPointCloud: boolean,
+) {
   ts.maximumScreenSpaceError = s.sse
   if (isPointCloud) {
     ts.pointCloudShading.attenuation = s.attenuation
@@ -140,7 +148,8 @@ type Picked = {
 }
 
 function formatValue(v: unknown) {
-  if (typeof v === "number") return Number.isInteger(v) ? String(v) : v.toFixed(3)
+  if (typeof v === "number")
+    return Number.isInteger(v) ? String(v) : v.toFixed(3)
   return v == null ? "" : String(v)
 }
 
@@ -161,7 +170,10 @@ export default function CesiumMap() {
   })
   const layers = useMemo(() => buildLayers((data as any)?.data || []), [data])
   const tileLayers = useMemo(() => layers.filter((l) => !l.isTerrain), [layers])
-  const terrainLayers = useMemo(() => layers.filter((l) => l.isTerrain), [layers])
+  const terrainLayers = useMemo(
+    () => layers.filter((l) => l.isTerrain),
+    [layers],
+  )
 
   const [visible, setVisible] = useState<Record<string, boolean>>({})
   const visibleRef = useRef(visible)
@@ -182,33 +194,43 @@ export default function CesiumMap() {
     imageryRef.current = imagery
     viewerRef.current = viewer
 
-    let highlighted: { feature: Cesium.Cesium3DTileFeature; color: Cesium.Color } | null = null
+    let highlighted: {
+      feature: Cesium.Cesium3DTileFeature
+      color: Cesium.Color
+    } | null = null
     const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas)
-    handler.setInputAction((e: Cesium.ScreenSpaceEventHandler.PositionedEvent) => {
-      if (highlighted) {
-        try {
-          highlighted.feature.color = highlighted.color
-        } catch {
-          // tile unloaded
+    handler.setInputAction(
+      (e: Cesium.ScreenSpaceEventHandler.PositionedEvent) => {
+        if (highlighted) {
+          try {
+            highlighted.feature.color = highlighted.color
+          } catch {
+            // tile unloaded
+          }
+          highlighted = null
         }
-        highlighted = null
-      }
-      const obj = viewer.scene.pick(e.position)
-      if (obj instanceof Cesium.Cesium3DTileFeature) {
-        highlighted = { feature: obj, color: Cesium.Color.clone(obj.color) }
-        obj.color = Cesium.Color.YELLOW
-        // content is untyped but public
-        const content = (obj as unknown as { content: Cesium.Cesium3DTileContent }).content
-        setPicked({
-          props: obj.getPropertyIds().map((id) => [id, obj.getProperty(id)] as [string, unknown]),
-          tile: content.url.split("/").pop()?.split("?")[0] || "",
-          geometricError: content.tile.geometricError,
-        })
-      } else {
-        setPicked(null)
-      }
-      viewer.scene.requestRender()
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK)
+        const obj = viewer.scene.pick(e.position)
+        if (obj instanceof Cesium.Cesium3DTileFeature) {
+          highlighted = { feature: obj, color: Cesium.Color.clone(obj.color) }
+          obj.color = Cesium.Color.YELLOW
+          // content is untyped but public
+          const content = (
+            obj as unknown as { content: Cesium.Cesium3DTileContent }
+          ).content
+          setPicked({
+            props: obj
+              .getPropertyIds()
+              .map((id) => [id, obj.getProperty(id)] as [string, unknown]),
+            tile: content.url.split("/").pop()?.split("?")[0] || "",
+            geometricError: content.tile.geometricError,
+          })
+        } else {
+          setPicked(null)
+        }
+        viewer.scene.requestRender()
+      },
+      Cesium.ScreenSpaceEventType.LEFT_CLICK,
+    )
 
     return () => {
       handler.destroy()
@@ -281,7 +303,9 @@ export default function CesiumMap() {
         viewer.scene.globe.depthTestAgainstTerrain = true
         if (layer.extent?.length === 4) {
           const [w, s, e, n] = layer.extent
-          viewer.camera.flyTo({ destination: Cesium.Rectangle.fromDegrees(w, s, e, n) })
+          viewer.camera.flyTo({
+            destination: Cesium.Rectangle.fromDegrees(w, s, e, n),
+          })
         }
       }
       viewer.scene.requestRender()
@@ -342,7 +366,11 @@ export default function CesiumMap() {
           <Heading size="xs" textTransform="uppercase" letterSpacing="wide">
             Layers
           </Heading>
-          <Checkbox isChecked={basemap} onChange={(e) => setBasemap(e.target.checked)} size="sm">
+          <Checkbox
+            isChecked={basemap}
+            onChange={(e) => setBasemap(e.target.checked)}
+            size="sm"
+          >
             Basemap
           </Checkbox>
         </Flex>
@@ -360,7 +388,9 @@ export default function CesiumMap() {
               <Flex key={layer.id} align="center" gap={2} minW={0}>
                 <Checkbox
                   isChecked={!!visible[layer.id]}
-                  onChange={(e) => setVisible((v) => ({ ...v, [layer.id]: e.target.checked }))}
+                  onChange={(e) =>
+                    setVisible((v) => ({ ...v, [layer.id]: e.target.checked }))
+                  }
                   size="sm"
                   flexShrink={0}
                 />
@@ -370,7 +400,9 @@ export default function CesiumMap() {
                   isTruncated
                   title={layer.title}
                   cursor="pointer"
-                  onClick={() => setVisible((v) => ({ ...v, [layer.id]: !v[layer.id] }))}
+                  onClick={() =>
+                    setVisible((v) => ({ ...v, [layer.id]: !v[layer.id] }))
+                  }
                 >
                   {layer.title}
                 </Text>
@@ -404,7 +436,9 @@ export default function CesiumMap() {
                   </Text>
                   <Checkbox
                     isChecked={pc.attenuation}
-                    onChange={(e) => setPcField("attenuation", e.target.checked)}
+                    onChange={(e) =>
+                      setPcField("attenuation", e.target.checked)
+                    }
                     size="sm"
                   >
                     Shading (attenuation)
@@ -418,7 +452,9 @@ export default function CesiumMap() {
                   </Checkbox>
                   <Checkbox
                     isChecked={pc.classification}
-                    onChange={(e) => setPcField("classification", e.target.checked)}
+                    onChange={(e) =>
+                      setPcField("classification", e.target.checked)
+                    }
                     size="sm"
                   >
                     Classification colors
@@ -480,14 +516,18 @@ export default function CesiumMap() {
                 </Checkbox>
                 <Checkbox
                   isChecked={pc.boundingVolume}
-                  onChange={(e) => setPcField("boundingVolume", e.target.checked)}
+                  onChange={(e) =>
+                    setPcField("boundingVolume", e.target.checked)
+                  }
                   size="sm"
                 >
                   Bounding volumes
                 </Checkbox>
                 <Checkbox
                   isChecked={pc.geometricError}
-                  onChange={(e) => setPcField("geometricError", e.target.checked)}
+                  onChange={(e) =>
+                    setPcField("geometricError", e.target.checked)
+                  }
                   size="sm"
                 >
                   Geometric error
@@ -546,7 +586,8 @@ export default function CesiumMap() {
             />
           </Flex>
           <Text opacity={0.6} mb={2}>
-            tile {picked.tile} · geometric error {picked.geometricError.toFixed(1)} m
+            tile {picked.tile} · geometric error{" "}
+            {picked.geometricError.toFixed(1)} m
           </Text>
           {picked.props.length === 0 ? (
             <Text opacity={0.5}>No properties on this feature.</Text>
@@ -554,7 +595,13 @@ export default function CesiumMap() {
             <Stack spacing={0}>
               {picked.props.map(([k, v]) => (
                 <Flex key={k} gap={2}>
-                  <Text opacity={0.7} flexShrink={0} w="110px" isTruncated title={k}>
+                  <Text
+                    opacity={0.7}
+                    flexShrink={0}
+                    w="110px"
+                    isTruncated
+                    title={k}
+                  >
                     {k}
                   </Text>
                   <Text fontFamily="mono" wordBreak="break-all">

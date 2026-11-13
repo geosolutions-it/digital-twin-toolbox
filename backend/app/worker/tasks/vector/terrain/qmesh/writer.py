@@ -1,5 +1,6 @@
 """Encode one quantized-mesh tile via quantized-mesh-tile; drop zero-area
 triangles so lighting normals never NaN, retry without lighting on failure."""
+
 import os
 
 import numpy as np

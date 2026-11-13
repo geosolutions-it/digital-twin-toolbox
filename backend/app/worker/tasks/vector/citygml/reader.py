@@ -64,7 +64,9 @@ def _collect(el, lod, inst, out):
         if lod is not None:
             rings = [_ring(r) for b in el for r in b if _local(r.tag) == "LinearRing"]
             if rings and len(rings[0]) >= 3:
-                out.setdefault((inst, lod), []).append([r for r in rings if len(r) >= 3])
+                out.setdefault((inst, lod), []).append(
+                    [r for r in rings if len(r) >= 3]
+                )
         return
     for c in el:
         _collect(c, lod, inst, out)
@@ -106,10 +108,17 @@ def attributes(obj):
     for c in obj:
         name = _local(c.tag)
         if name.endswith("Attribute") and c.get("name"):
-            _put(props, c.get("name"), _child_text(c, "value"), name[: -len("Attribute")])
+            _put(
+                props, c.get("name"), _child_text(c, "value"), name[: -len("Attribute")]
+            )
         elif name == "genericAttribute":
             for a in c:
-                _put(props, _child_text(a, "name"), _child_text(a, "value"), _local(a.tag)[: -len("Attribute")])
+                _put(
+                    props,
+                    _child_text(a, "name"),
+                    _child_text(a, "value"),
+                    _local(a.tag)[: -len("Attribute")],
+                )
         elif len(c) == 0 and c.text and c.text.strip():
             _put(props, name, c.text.strip(), "measure" if c.get("uom") else "")
     return props
@@ -145,7 +154,11 @@ CITY_SUFFIXES = (".gml", ".city.json", ".city.jsonl")
 
 def _is_city_file(name):
     base = os.path.basename(name)
-    return name.lower().endswith(CITY_SUFFIXES) and "__MACOSX" not in name and not base.startswith(".")
+    return (
+        name.lower().endswith(CITY_SUFFIXES)
+        and "__MACOSX" not in name
+        and not base.startswith(".")
+    )
 
 
 def iter_streams(path):

@@ -12,8 +12,14 @@ PID = uuid.uuid4()
 
 def test_redact_signed_urls_credentials_and_secrets():
     url = "https://s3/b/k.laz?X-Amz-Credential=AKIA%2F1&X-Amz-Signature=abc123&x-id=GetObject"
-    assert redact(url) == "https://s3/b/k.laz?X-Amz-Credential=***&X-Amz-Signature=***&x-id=GetObject"
-    assert redact("postgresql+psycopg://app:hunter22@db:5432/app") == "postgresql+psycopg://app:***@db:5432/app"
+    assert (
+        redact(url)
+        == "https://s3/b/k.laz?X-Amz-Credential=***&X-Amz-Signature=***&x-id=GetObject"
+    )
+    assert (
+        redact("postgresql+psycopg://app:hunter22@db:5432/app")
+        == "postgresql+psycopg://app:***@db:5432/app"
+    )
     assert redact("key=supersecret ok", secrets=["supersecret"]) == "key=*** ok"
 
 
@@ -27,7 +33,9 @@ def test_short_secrets_are_not_masked(monkeypatch):
 @pytest.fixture
 def captured():
     batches = []
-    handler = PipelineLogHandler(PID, write=lambda pid, rows: batches.append((pid, rows)))
+    handler = PipelineLogHandler(
+        PID, write=lambda pid, rows: batches.append((pid, rows))
+    )
     log = logging.getLogger("test.pipeline")
     log.setLevel(logging.DEBUG)
     log.addHandler(handler)
@@ -75,7 +83,9 @@ def test_log_stage_sets_the_stage(captured, monkeypatch):
     logs.log_stage("Tiling 3 buildings")
     stage_logger.removeHandler(handler)
     handler.close()
-    assert [(r["message"], r["stage"]) for r in rows(batches)] == [("Tiling 3 buildings", "Tiling 3 buildings")]
+    assert [(r["message"], r["stage"]) for r in rows(batches)] == [
+        ("Tiling 3 buildings", "Tiling 3 buildings")
+    ]
 
 
 def test_exception_traceback_and_length_cap(captured):

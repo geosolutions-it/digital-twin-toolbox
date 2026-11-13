@@ -7,7 +7,11 @@ interface PageHeaderProps {
   actions?: ReactNode
 }
 
-export default function PageHeader({ eyebrow, title, actions }: PageHeaderProps) {
+export default function PageHeader({
+  eyebrow,
+  title,
+  actions,
+}: PageHeaderProps) {
   return (
     <Flex
       position="sticky"

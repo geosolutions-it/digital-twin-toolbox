@@ -28,7 +28,12 @@ def test_clear_scratch_removes_only_tempfile_folders(tmp_path):
 
 @pytest.fixture
 def fake(monkeypatch):
-    state = {"rows": [(A, "t-a"), (B, "t-b"), (C, "t-c")], "active": {"t-b"}, "applied": True, "writes": []}
+    state = {
+        "rows": [(A, "t-a"), (B, "t-b"), (C, "t-c")],
+        "active": {"t-b"},
+        "applied": True,
+        "writes": [],
+    }
 
     def write(pipeline_id, task_id, values, status=None):
         state["writes"].append((pipeline_id, task_id, values, status))

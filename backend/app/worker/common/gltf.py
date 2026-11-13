@@ -1,4 +1,5 @@
 """Shared glTF/GLB building blocks: constants, ENU axis swap, quantization, binary blob, metadata, packing."""
+
 import json
 import struct
 
@@ -27,8 +28,13 @@ def enu_to_gltf(enu):
 
 def unique_rows(*cols):
     """Row-wise dedupe of equal-length arrays -> (first index per unique row, inverse)."""
-    packed = np.concatenate([np.ascontiguousarray(c).view(np.uint8).reshape(len(c), -1) for c in cols], axis=1)
-    packed = np.ascontiguousarray(packed).view(np.dtype((np.void, packed.shape[1]))).ravel()
+    packed = np.concatenate(
+        [np.ascontiguousarray(c).view(np.uint8).reshape(len(c), -1) for c in cols],
+        axis=1,
+    )
+    packed = (
+        np.ascontiguousarray(packed).view(np.dtype((np.void, packed.shape[1]))).ravel()
+    )
     _, first, inverse = np.unique(packed, return_index=True, return_inverse=True)
     return first, inverse.ravel()
 
@@ -37,7 +43,7 @@ def pad_rows(arr, width):
     """(N,k) small ints -> (N,width) bytes so each vertex element stays 4-byte aligned."""
     raw = np.ascontiguousarray(arr).view(np.uint8).reshape(len(arr), -1)
     out = np.zeros((len(arr), width), dtype=np.uint8)
-    out[:, :raw.shape[1]] = raw
+    out[:, : raw.shape[1]] = raw
     return out
 
 
@@ -61,15 +67,24 @@ def add_positions(blob, qpos, step, target=ARRAY_BUFFER):
         view = blob.add(pad_rows(qpos, 8).tobytes(), target)
         blob.views[view]["byteStride"] = 8
         comp = UNSIGNED_SHORT
-    return {"bufferView": view, "componentType": comp, "count": int(len(qpos)), "type": "VEC3",
-            "min": qpos.min(axis=0).tolist(), "max": qpos.max(axis=0).tolist()}
+    return {
+        "bufferView": view,
+        "componentType": comp,
+        "count": int(len(qpos)),
+        "type": "VEC3",
+        "min": qpos.min(axis=0).tolist(),
+        "max": qpos.max(axis=0).tolist(),
+    }
 
 
 def dequantize_node(step, origin):
     """Node translation/scale that maps quantized positions back to metres ({} when unquantized)."""
     if step is None:
         return {}
-    return {"translation": np.asarray(origin, dtype=np.float64).tolist(), "scale": [step, step, step]}
+    return {
+        "translation": np.asarray(origin, dtype=np.float64).tolist(),
+        "scale": [step, step, step],
+    }
 
 
 def infer_schema(features):
@@ -89,7 +104,9 @@ def infer_schema(features):
 def schema_json(schema):
     """Metadata schema shared by the glb property tables and tileset.json."""
     props = {
-        p["name"]: {"type": "SCALAR", "componentType": "FLOAT32"} if p["kind"] == "number" else {"type": "STRING"}
+        p["name"]: {"type": "SCALAR", "componentType": "FLOAT32"}
+        if p["kind"] == "number"
+        else {"type": "STRING"}
         for p in schema
     }
     return {"id": "dtt", "classes": {"feature": {"properties": props}}}
@@ -100,7 +117,9 @@ def tileset_metadata(features, schema):
     properties, stats = {}, {}
     for prop in schema:
         name = prop["name"]
-        values = [float(f[name]) for f in features if isinstance(f.get(name), (int, float))]
+        values = [
+            float(f[name]) for f in features if isinstance(f.get(name), (int, float))
+        ]
         if prop["kind"] == "number" and values:
             properties[name] = {"minimum": min(values), "maximum": max(values)}
             stats[name] = {"min": min(values), "max": max(values)}
@@ -109,7 +128,9 @@ def tileset_metadata(features, schema):
     return {
         "properties": properties,
         "schema": schema_json(schema),
-        "statistics": {"classes": {"feature": {"count": len(features), "properties": stats}}},
+        "statistics": {
+            "classes": {"feature": {"count": len(features), "properties": stats}}
+        },
     }
 
 

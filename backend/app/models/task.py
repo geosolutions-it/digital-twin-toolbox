@@ -1,23 +1,24 @@
 import uuid
 from datetime import datetime
-from typing import Literal, Optional
 from enum import Enum
+from typing import Literal
 
 from sqlalchemy import BigInteger, DateTime, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
-
-PipelineType = Literal["PointCloud", "Polygon", "Terrain", "Instance", "Mesh", "CityGML", "Building"]
+PipelineType = Literal[
+    "PointCloud", "Polygon", "Terrain", "Instance", "Mesh", "CityGML", "Building"
+]
 
 
 class PipelineBase(SQLModel):
     title: str = Field(min_length=1, max_length=255)
-    data: Optional[dict] = Field(nullable=True, sa_type=JSONB)
+    data: dict | None = Field(nullable=True, sa_type=JSONB)
     task_id: str | None
     task_status: str | None
-    task_result: Optional[dict | None] | None = Field(nullable=True, sa_type=JSONB)
-    source: Optional[dict] = Field(default=None, nullable=True, sa_type=JSONB)
+    task_result: dict | None | None = Field(nullable=True, sa_type=JSONB)
+    source: dict | None = Field(default=None, nullable=True, sa_type=JSONB)
     batch_id: uuid.UUID | None = Field(default=None, nullable=True, index=True)
 
 
@@ -32,7 +33,9 @@ class PipelineLog(SQLModel, table=True):
     __tablename__ = "pipeline_log"
 
     id: int | None = Field(default=None, primary_key=True, sa_type=BigInteger)
-    pipeline_id: uuid.UUID = Field(foreign_key="pipeline.id", nullable=False, ondelete="CASCADE", index=True)
+    pipeline_id: uuid.UUID = Field(
+        foreign_key="pipeline.id", nullable=False, ondelete="CASCADE", index=True
+    )
     created_at: datetime = Field(sa_type=DateTime(timezone=True))
     level: str = Field(max_length=10)
     message: str = Field(sa_type=Text)
@@ -61,14 +64,14 @@ class PipelinePublic(PipelineBase):
 class PipelineBatchCreate(SQLModel):
     prefix: str
     pipeline: PipelineType = "PointCloud"
-    data: Optional[dict] = None
+    data: dict | None = None
     title: str | None = None
 
 
 class PipelineSourceCreate(SQLModel):
     key: str
     pipeline: PipelineType = "PointCloud"
-    data: Optional[dict] = None
+    data: dict | None = None
     title: str | None = None
 
 
@@ -92,7 +95,7 @@ class PipelineBatchSummary(SQLModel):
     output_url: str | None = None
     pipeline: PipelineType | None = None
     sample_key: str | None = None
-    data: Optional[dict] = None
+    data: dict | None = None
     total: int
     counts: PipelineBatchCounts
 
@@ -109,7 +112,7 @@ class PipelinesOverview(SQLModel):
 
 
 class PipelineUpdate(SQLModel):
-    data: Optional[dict] = Field(nullable=True, sa_type=JSONB)
+    data: dict | None = Field(nullable=True, sa_type=JSONB)
 
 
 class PipelinesActionTypes(str, Enum):

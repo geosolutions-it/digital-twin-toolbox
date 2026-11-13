@@ -1,4 +1,5 @@
 """Dependency-free 3D Tiles helpers: bounding box and tileset.json writing."""
+
 import json
 import os
 
@@ -8,10 +9,18 @@ def box(mn, mx, min_half=0.01):
     c = [(float(mn[i]) + float(mx[i])) / 2.0 for i in range(3)]
     h = [max((float(mx[i]) - float(mn[i])) / 2.0, min_half) for i in range(3)]
     return [
-        c[0], c[1], c[2],
-        h[0], 0.0, 0.0,
-        0.0, h[1], 0.0,
-        0.0, 0.0, h[2],
+        c[0],
+        c[1],
+        c[2],
+        h[0],
+        0.0,
+        0.0,
+        0.0,
+        h[1],
+        0.0,
+        0.0,
+        0.0,
+        h[2],
     ]
 
 

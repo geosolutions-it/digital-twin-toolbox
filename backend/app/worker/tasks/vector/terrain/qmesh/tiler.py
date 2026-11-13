@@ -1,5 +1,6 @@
 """DEM -> quantized-mesh pyramid + layer.json. Samples each tile and meshes it
 as a regular grid so flat tiles still follow the ellipsoid. Cesium geographic/TMS."""
+
 import json
 import os
 
@@ -7,14 +8,16 @@ import numpy as np
 from osgeo import gdal
 from quantized_mesh_tile.global_geodetic import GlobalGeodetic
 
-from app.worker.tasks.vector.terrain.qmesh.writer import encode_tile
 from app.worker.tasks.vector.terrain.qmesh.water import tile_water_mask
+from app.worker.tasks.vector.terrain.qmesh.writer import encode_tile
 
 gdal.UseExceptions()
 
 GRID = 257  # DEM sampling grid per tile
 MESH_N = 33  # regular mesh vertices per tile side; enough to follow the ellipsoid
-FULL_COVER_LEVEL = 2  # cover the whole world at these coarse levels so the globe is never half-missing
+FULL_COVER_LEVEL = (
+    2  # cover the whole world at these coarse levels so the globe is never half-missing
+)
 
 
 def _max_zoom(geodetic, pixel_deg, cap=18):
@@ -29,8 +32,15 @@ def _sample_tile(dem, bounds):
     """(GRID, GRID) float32 elevation over the tile bbox; flat 0 where no data."""
     west, south, east, north = bounds
     try:
-        mem = gdal.Warp('', dem, format='MEM', outputBounds=(west, south, east, north),
-                        width=GRID, height=GRID, resampleAlg='bilinear')
+        mem = gdal.Warp(
+            "",
+            dem,
+            format="MEM",
+            outputBounds=(west, south, east, north),
+            width=GRID,
+            height=GRID,
+            resampleAlg="bilinear",
+        )
     except RuntimeError:
         return np.zeros((GRID, GRID), dtype=np.float32)
     if mem is None:
@@ -69,25 +79,25 @@ def _grid_mesh(terrain, bounds):
 
 def _layer_json(output_dir, available, min_zoom, max_zoom, config):
     extensions = []
-    if config.get('vertex_normals'):
-        extensions.append('octvertexnormals')
-    if config.get('water_path'):
-        extensions.append('watermask')
+    if config.get("vertex_normals"):
+        extensions.append("octvertexnormals")
+    if config.get("water_path"):
+        extensions.append("watermask")
     layer = {
-        'tilejson': '2.1.0',
-        'format': 'quantized-mesh-1.0',
-        'scheme': 'tms',
-        'tiles': ['{z}/{x}/{y}.terrain'],
-        'projection': 'EPSG:4326',
-        'bounds': [-180, -90, 180, 90],
-        'available': available,
-        'minzoom': min_zoom,
-        'maxzoom': max_zoom,
+        "tilejson": "2.1.0",
+        "format": "quantized-mesh-1.0",
+        "scheme": "tms",
+        "tiles": ["{z}/{x}/{y}.terrain"],
+        "projection": "EPSG:4326",
+        "bounds": [-180, -90, 180, 90],
+        "available": available,
+        "minzoom": min_zoom,
+        "maxzoom": max_zoom,
     }
     if extensions:
-        layer['extensions'] = extensions
-    with open(os.path.join(output_dir, 'layer.json'), 'w') as f:
-        json.dump(layer, f, separators=(',', ':'))
+        layer["extensions"] = extensions
+    with open(os.path.join(output_dir, "layer.json"), "w") as f:
+        json.dump(layer, f, separators=(",", ":"))
 
 
 def build_terrain(dem_path, output_dir, config):
@@ -101,9 +111,13 @@ def build_terrain(dem_path, output_dir, config):
     south = gt[3] + gt[5] * dem.RasterYSize
 
     geodetic = GlobalGeodetic(True)
-    min_zoom = int(config['min_zoom'])
-    max_zoom = int(config['max_zoom']) if config.get('max_zoom') else _max_zoom(geodetic, pixel_deg)
-    water_path = config.get('water_path')
+    min_zoom = int(config["min_zoom"])
+    max_zoom = (
+        int(config["max_zoom"])
+        if config.get("max_zoom")
+        else _max_zoom(geodetic, pixel_deg)
+    )
+    water_path = config.get("water_path")
 
     available = []
     for z in range(min_zoom, max_zoom + 1):
@@ -113,7 +127,7 @@ def build_terrain(dem_path, output_dir, config):
         else:
             x0, y0 = geodetic.LonLatToTile(west, south, z)
             x1, y1 = geodetic.LonLatToTile(east, north, z)
-        available.append([{'startX': x0, 'startY': y0, 'endX': x1, 'endY': y1}])
+        available.append([{"startX": x0, "startY": y0, "endX": x1, "endY": y1}])
         for tx in range(x0, x1 + 1):
             for ty in range(y0, y1 + 1):
                 bounds = geodetic.TileBounds(tx, ty, z)
@@ -122,12 +136,18 @@ def build_terrain(dem_path, output_dir, config):
                 mask = tile_water_mask(water_path, bounds) if water_path else None
                 out = os.path.join(output_dir, str(z), str(tx))
                 os.makedirs(out, exist_ok=True)
-                encode_tile(os.path.join(out, f"{ty}.terrain"),
-                            positions, triangles, bounds, config, water=mask)
+                encode_tile(
+                    os.path.join(out, f"{ty}.terrain"),
+                    positions,
+                    triangles,
+                    bounds,
+                    config,
+                    water=mask,
+                )
 
     _layer_json(output_dir, available, min_zoom, max_zoom, config)
     return {
-        'min_zoom': min_zoom,
-        'max_zoom': max_zoom,
-        'extent': [west, south, east, north],
+        "min_zoom": min_zoom,
+        "max_zoom": max_zoom,
+        "extent": [west, south, east, north],
     }

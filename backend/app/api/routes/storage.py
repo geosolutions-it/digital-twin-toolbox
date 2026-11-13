@@ -1,10 +1,11 @@
 import os
 from typing import Any
 
-from app.core.storage import get_storage
-from app.services.file_classify import classify_bucket_file
 from fastapi import APIRouter, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
+
+from app.core.storage import get_storage
+from app.services.file_classify import classify_bucket_file
 
 router = APIRouter()
 
@@ -51,9 +52,7 @@ def _unique_key(storage, key: str) -> str:
 
 
 @router.post("/upload")
-def upload_to_storage(
-    file: UploadFile, prefix: str = ""
-) -> Any:
+def upload_to_storage(file: UploadFile, prefix: str = "") -> Any:
     """Drop a file into the bucket at <prefix>/<name>, auto-suffixing on collision."""
     name = os.path.basename(file.filename or "")
     if not name or name in (".", ".."):

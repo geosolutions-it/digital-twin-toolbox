@@ -2,9 +2,9 @@ import math
 
 
 def get_geometry(feature):
-    if 'geometry' in feature:
-        return feature['geometry']
-    return {'type': ''}
+    if "geometry" in feature:
+        return feature["geometry"]
+    return {"type": ""}
 
 
 def get_z(coordinates):
@@ -14,21 +14,21 @@ def get_z(coordinates):
 
 
 def get_func(name, feature):
-    if name in ['$maxZ', '$minZ']:
+    if name in ["$maxZ", "$minZ"]:
         geometry = get_geometry(feature)
-        if geometry['type'] == 'Point':
-            return get_z(geometry['coordinates'])
-        if geometry['type'] == 'Polygon':
+        if geometry["type"] == "Point":
+            return get_z(geometry["coordinates"])
+        if geometry["type"] == "Polygon":
             min_z = math.inf
             max_z = -math.inf
-            for ring in geometry['coordinates']:
+            for ring in geometry["coordinates"]:
                 for coords in ring:
                     z = get_z(coords)
                     if z < min_z:
                         min_z = z
                     if z > max_z:
                         max_z = z
-            if name == '$maxZ':
+            if name == "$maxZ":
                 return max_z
             return min_z
     return None
@@ -39,16 +39,16 @@ def parse_expression(type, value, feature, default_value=None):
         if not isinstance(value, list):
             if value is None:
                 return None
-            if type == 'string':
+            if type == "string":
                 return f"{value}"
-            if type == 'number':
+            if type == "number":
                 return float(value)
             return value
         operator = value[0]
 
         _type = type
-        if operator in ['property', 'func']:
-            _type = ''
+        if operator in ["property", "func"]:
+            _type = ""
 
         value_length = len(value)
 
@@ -60,7 +60,7 @@ def parse_expression(type, value, feature, default_value=None):
         if value_length > 2:
             b = parse_expression(_type, value[2], feature)
 
-        if operator == '+':
+        if operator == "+":
             return float(a) + float(b)
         if operator == "-":
             return float(a) - float(b)
@@ -75,8 +75,8 @@ def parse_expression(type, value, feature, default_value=None):
         if operator == "uppercase":
             return f"{a}".upper()
         if operator == "property":
-            if a in feature['properties']:
-                return feature['properties'][a]
+            if a in feature["properties"]:
+                return feature["properties"][a]
         if operator == "func":
             return get_func(a, feature)
         return None

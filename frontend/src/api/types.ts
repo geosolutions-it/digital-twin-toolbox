@@ -28,7 +28,10 @@ const PIPELINE_TYPES: Record<PipelineType, true> = {
 }
 
 export function isPipelineType(v: unknown): v is PipelineType {
-  return typeof v === "string" && Object.prototype.hasOwnProperty.call(PIPELINE_TYPES, v)
+  return (
+    typeof v === "string" &&
+    Object.prototype.hasOwnProperty.call(PIPELINE_TYPES, v)
+  )
 }
 export type PipelineCreated = S["PipelineCreated"]
 export type PipelineBatchCreated = S["PipelineBatchCreated"]
@@ -65,7 +68,9 @@ type PipelineConfig =
 export type PipelineConfigInput = Partial<PipelineConfig>
 
 type KeysOfUnion<T> = T extends T ? keyof T : never
-type ValueInUnion<T, K extends PropertyKey> = T extends Record<K, infer V> ? V : never
+type ValueInUnion<T, K extends PropertyKey> = T extends Record<K, infer V>
+  ? V
+  : never
 
 // every key of every pipeline config, for code that reads a stored config of any type
 export type AnyPipelineConfig = {

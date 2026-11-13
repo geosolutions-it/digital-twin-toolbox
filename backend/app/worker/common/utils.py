@@ -1,9 +1,9 @@
+import ctypes
 import logging
 import os
 import signal
-import ctypes
-import threading
 import subprocess
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -28,25 +28,45 @@ def _pump(stream, sink, forward, stage_of):
             sink.append(raw)
         if forward:
             # progress bars redraw with \r
-            for line in raw.replace(b"\r", b"\n").decode("utf-8", "replace").splitlines():
+            for line in (
+                raw.replace(b"\r", b"\n").decode("utf-8", "replace").splitlines()
+            ):
                 if line.strip():
                     stage = stage_of(line) if stage_of else None
-                    logger.info(line[:MAX_LINE], extra={"stage": stage[:255]} if stage else None)
+                    logger.info(
+                        line[:MAX_LINE], extra={"stage": stage[:255]} if stage else None
+                    )
     stream.close()
 
 
-def run_subprocess(cmd, check=False, capture_output=False, text=False, cwd=None, log_stdout=True, stage_of=None):
+def run_subprocess(
+    cmd,
+    check=False,
+    capture_output=False,
+    text=False,
+    cwd=None,
+    log_stdout=True,
+    stage_of=None,
+):
     """subprocess.run that logs each output line as it arrives (stdout only with log_stdout) and kills the
     child's whole process group on revoke(terminate=True), so native children (incl micromamba -> opensfm)
     don't outlive the task. stage_of(line) may return a stage name for that line."""
     proc = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd,
-        start_new_session=True, preexec_fn=_set_pdeathsig,
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        cwd=cwd,
+        start_new_session=True,
+        preexec_fn=_set_pdeathsig,
     )
     out, err = ([], []) if capture_output else (None, None)
     pumps = [
-        threading.Thread(target=_pump, args=(proc.stdout, out, log_stdout, stage_of), daemon=True),
-        threading.Thread(target=_pump, args=(proc.stderr, err, True, stage_of), daemon=True),
+        threading.Thread(
+            target=_pump, args=(proc.stdout, out, log_stdout, stage_of), daemon=True
+        ),
+        threading.Thread(
+            target=_pump, args=(proc.stderr, err, True, stage_of), daemon=True
+        ),
     ]
     for pump in pumps:
         pump.start()
@@ -86,6 +106,7 @@ def run_subprocess(cmd, check=False, capture_output=False, text=False, cwd=None,
             out, err = out.decode("utf-8", "replace"), err.decode("utf-8", "replace")
 
     if check and proc.returncode != 0:
-        raise subprocess.CalledProcessError(proc.returncode, cmd, output=out, stderr=err)
+        raise subprocess.CalledProcessError(
+            proc.returncode, cmd, output=out, stderr=err
+        )
     return subprocess.CompletedProcess(cmd, proc.returncode, stdout=out, stderr=err)
-

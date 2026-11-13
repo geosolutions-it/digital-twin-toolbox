@@ -9,11 +9,7 @@
     "enabled": true
   },
   "files": {
-    "ignore": [
-      "node_modules",
-      "src/routeTree.gen.ts",
-      "src/api/schema.gen.ts"
-    ]
+    "ignore": ["node_modules", "src/routeTree.gen.ts", "src/api/schema.gen.ts"]
   },
   "linter": {
     "enabled": true,

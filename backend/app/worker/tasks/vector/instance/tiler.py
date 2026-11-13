@@ -5,12 +5,13 @@ quadtree: each node keeps an evenly spaced sample as its own content and pushes 
 quadrant children, so every instance renders exactly once and coarse levels thin
 out (no replacement, no holes).
 """
+
 import os
 
 import numpy as np
 
-from app.worker.common.tileset import box, write_tileset
 from app.worker.common.gltf import tileset_metadata
+from app.worker.common.tileset import box, write_tileset
 from app.worker.tasks.vector.instance.writer import write_instanced_glb
 
 # translation, rotation, scale, feature id
@@ -19,7 +20,10 @@ _MIN_CAPACITY = 64
 
 
 def _model_bytes(mesh):
-    return sum(p["positions"].nbytes + p["normals"].nbytes + p["indices"].nbytes for p in mesh["primitives"])
+    return sum(
+        p["positions"].nbytes + p["normals"].nbytes + p["indices"].nbytes
+        for p in mesh["primitives"]
+    )
 
 
 def _meta_bytes(props):
@@ -28,7 +32,9 @@ def _meta_bytes(props):
 
 def _capacity(records, models, max_bytes):
     fixed = sum(_model_bytes(models[name]) for name in {r["model"] for r in records})
-    per = _INSTANCE_BYTES + sum(_meta_bytes(r["properties"]) for r in records) / len(records)
+    per = _INSTANCE_BYTES + sum(_meta_bytes(r["properties"]) for r in records) / len(
+        records
+    )
     # models alone over budget still need content per node
     return max(_MIN_CAPACITY, int((max_bytes - fixed) // per))
 
@@ -43,19 +49,25 @@ def _write_node(records, models, schema, out_dir, tile_id):
     while i < len(records):
         name = records[i]["model"]
         chunk = [r for r in records if r["model"] == name]
-        groups.append({
-            "mesh": models[name],
-            "translations": np.array([r["enu"] for r in chunk], dtype=np.float64),
-            "headings": np.array([r["heading"] for r in chunk], dtype=np.float64),
-            "scales": np.array([r["scale"] for r in chunk], dtype=np.float64),
-        })
+        groups.append(
+            {
+                "mesh": models[name],
+                "translations": np.array([r["enu"] for r in chunk], dtype=np.float64),
+                "headings": np.array([r["heading"] for r in chunk], dtype=np.float64),
+                "scales": np.array([r["scale"] for r in chunk], dtype=np.float64),
+            }
+        )
         features.extend(r["properties"] for r in chunk)
         i += len(chunk)
-    write_instanced_glb(os.path.join(out_dir, f"{tile_id}.glb"), groups, features, schema)
+    write_instanced_glb(
+        os.path.join(out_dir, f"{tile_id}.glb"), groups, features, schema
+    )
     return box(enu.min(axis=0), enu.max(axis=0), min_half=1.0)
 
 
-def _subdivide(records, depth, max_bytes, max_depth, max_ge, models, schema, out_dir, counter):
+def _subdivide(
+    records, depth, max_bytes, max_depth, max_ge, models, schema, out_dir, counter
+):
     tile_id = counter["n"]
     counter["n"] += 1
     max_features = _capacity(records, models, max_bytes)
@@ -72,7 +84,7 @@ def _subdivide(records, depth, max_bytes, max_depth, max_ge, models, schema, out
     box = _write_node(content, models, schema, out_dir, tile_id)
     node = {
         "boundingVolume": {"box": box},
-        "geometricError": float(max_ge) / (2 ** depth) if not is_leaf else 0.0,
+        "geometricError": float(max_ge) / (2**depth) if not is_leaf else 0.0,
         "content": {"uri": f"{tile_id}.glb"},
         "refine": "ADD",
     }
@@ -85,22 +97,50 @@ def _subdivide(records, depth, max_bytes, max_depth, max_ge, models, schema, out
             qy = 0 if r["enu"][1] < cy else 1
             quads[qy * 2 + qx].append(r)
         node["children"] = [
-            _subdivide(q, depth + 1, max_bytes, max_depth, max_ge, models, schema, out_dir, counter)
-            for q in quads if q
+            _subdivide(
+                q,
+                depth + 1,
+                max_bytes,
+                max_depth,
+                max_ge,
+                models,
+                schema,
+                out_dir,
+                counter,
+            )
+            for q in quads
+            if q
         ]
     return node
 
 
-def build_instance_tileset(records, output_dir, transform, models, schema,
-                           max_tile_bytes=1024 * 1024, max_geometric_error=500.0, max_depth=16):
+def build_instance_tileset(
+    records,
+    output_dir,
+    transform,
+    models,
+    schema,
+    max_tile_bytes=1024 * 1024,
+    max_geometric_error=500.0,
+    max_depth=16,
+):
     """records: dicts with enu(3), heading, scale, model, properties. models: name->mesh."""
     os.makedirs(output_dir, exist_ok=True)
     if not records:
         raise ValueError("No instances to tile")
 
     counter = {"n": 0}
-    root = _subdivide(records, 0, int(max_tile_bytes), max_depth,
-                      float(max_geometric_error), models, schema, output_dir, counter)
+    root = _subdivide(
+        records,
+        0,
+        int(max_tile_bytes),
+        max_depth,
+        float(max_geometric_error),
+        models,
+        schema,
+        output_dir,
+        counter,
+    )
     if root["geometricError"] == 0.0:
         root["geometricError"] = float(max_geometric_error)
     metadata = tileset_metadata([r["properties"] for r in records], schema)

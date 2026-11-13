@@ -20,8 +20,10 @@ from app.worker.tasks.vector.citygml.triangulate import triangulate  # noqa: E40
 def _poly(gid, coords):
     pos = " ".join(f"{x} {y} {z}" for x, y, z in coords + coords[:1])
     ident = f' gml:id="{gid}"' if gid else ""
-    return (f"<gml:Polygon{ident}><gml:exterior><gml:LinearRing><gml:posList srsDimension=\"3\">{pos}"
-            "</gml:posList></gml:LinearRing></gml:exterior></gml:Polygon>")
+    return (
+        f'<gml:Polygon{ident}><gml:exterior><gml:LinearRing><gml:posList srsDimension="3">{pos}'
+        "</gml:posList></gml:LinearRing></gml:exterior></gml:Polygon>"
+    )
 
 
 ROOF = [(0, 0, 10), (10, 0, 10), (10, 10, 10), (0, 10, 10)]
@@ -81,7 +83,11 @@ def test_max_lod_drops_objects_without_it():
 def test_attributes():
     props = _objects()[0][1]
     assert props == {
-        "citygml_type": "Building", "gml_id": "B1", "usage": "residential", "year": 2010, "measuredHeight": 10.5,
+        "citygml_type": "Building",
+        "gml_id": "B1",
+        "usage": "residential",
+        "year": 2010,
+        "measuredHeight": 10.5,
     }
 
 
@@ -96,14 +102,33 @@ def test_zip_streams_every_gml(tmp_path):
     assert count == 4
 
 
-@pytest.mark.parametrize("srs, name, swap", [
-    ("urn:ogc:def:crs:EPSG:2056, crs:EPSG:5728", "CH1903+ / LV95 + LN02 height", False),
-    ("urn:ogc:def:crs,crs:EPSG::25832,crs:EPSG::7837", "ETRS89 / UTM zone 32N + DHHN2016 height", False),
-    ("urn:adv:crs:ETRS89_UTM32*DE_DHHN2016_NH", "ETRS89 / UTM zone 32N + DHHN2016 height", False),
-    ("http://www.opengis.net/def/crs/EPSG/0/6697", "JGD2011 + JGD2011 (vertical) height", True),
-    ("urn:ogc:def:crs:EPSG:6.12:4326", "WGS 84", True),
-    ("EPSG:4326", "WGS 84", False),
-])
+@pytest.mark.parametrize(
+    "srs, name, swap",
+    [
+        (
+            "urn:ogc:def:crs:EPSG:2056, crs:EPSG:5728",
+            "CH1903+ / LV95 + LN02 height",
+            False,
+        ),
+        (
+            "urn:ogc:def:crs,crs:EPSG::25832,crs:EPSG::7837",
+            "ETRS89 / UTM zone 32N + DHHN2016 height",
+            False,
+        ),
+        (
+            "urn:adv:crs:ETRS89_UTM32*DE_DHHN2016_NH",
+            "ETRS89 / UTM zone 32N + DHHN2016 height",
+            False,
+        ),
+        (
+            "http://www.opengis.net/def/crs/EPSG/0/6697",
+            "JGD2011 + JGD2011 (vertical) height",
+            True,
+        ),
+        ("urn:ogc:def:crs:EPSG:6.12:4326", "WGS 84", True),
+        ("EPSG:4326", "WGS 84", False),
+    ],
+)
 def test_resolve_crs(srs, name, swap):
     crs, swapped = resolve_crs(srs)
     assert crs.name == name and swapped == swap
@@ -125,7 +150,9 @@ def test_horizontal_only_gets_vertical_datum():
 
 def _area(soup):
     t = soup.reshape(-1, 3, 3)
-    return float(np.linalg.norm(np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0]), axis=1).sum() / 2)
+    return float(
+        np.linalg.norm(np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0]), axis=1).sum() / 2
+    )
 
 
 def test_triangulate_vertical_and_concave():
@@ -137,7 +164,9 @@ def test_triangulate_vertical_and_concave():
 
 
 def test_triangulate_with_hole_on_tilted_plane():
-    outer = np.array([(0, 0, 0), (10, 0, 5), (10, 10, 5), (0, 10, 0), (-1, 5, -0.5)], dtype=float)
+    outer = np.array(
+        [(0, 0, 0), (10, 0, 5), (10, 10, 5), (0, 10, 0), (-1, 5, -0.5)], dtype=float
+    )
     hole = np.array([(2, 2, 1), (2, 4, 1), (4, 4, 2), (4, 2, 2)], dtype=float)
     full = _area(triangulate([outer]))
     holed = _area(triangulate([outer, hole]))
@@ -145,4 +174,9 @@ def test_triangulate_with_hole_on_tilted_plane():
 
 
 def test_triangulate_degenerate():
-    assert triangulate([np.array([(0, 0, 0), (1, 1, 1), (2, 2, 2), (3, 3, 3)], dtype=float)]) is None
+    assert (
+        triangulate(
+            [np.array([(0, 0, 0), (1, 1, 1), (2, 2, 2), (3, 3, 3)], dtype=float)]
+        )
+        is None
+    )

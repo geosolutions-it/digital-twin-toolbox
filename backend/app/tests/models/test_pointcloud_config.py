@@ -14,7 +14,11 @@ def test_defaults():
 
 def test_coercion_and_extra_ignored():
     # geometric_error_scale_factor is no longer a field; it must be ignored, not error
-    c = PointCloudConfig(sample_radius="0.5", to_ellipsoidal_height="true", geometric_error_scale_factor=4)
+    c = PointCloudConfig(
+        sample_radius="0.5",
+        to_ellipsoidal_height="true",
+        geometric_error_scale_factor=4,
+    )
     assert c.sample_radius == 0.5
     assert c.to_ellipsoidal_height is True
     assert not hasattr(c, "geometric_error_scale_factor")

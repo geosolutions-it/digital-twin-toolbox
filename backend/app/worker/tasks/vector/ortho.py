@@ -1,5 +1,6 @@
 """An orthographic projection at the frame origin matches ENU east/north within cm over a city,
 so a roof vertex's UV is its east/north and survives the tiler's vertex clustering."""
+
 import io
 
 import numpy as np
@@ -42,8 +43,10 @@ class OrthoTexturer:
             raise Exception("The orthophoto needs 3 bands (RGB)")
         if not self.src.GetProjection():
             raise Exception("The orthophoto has no CRS")
-        self.dst_srs = (f"+proj=ortho +lat_0={frame.origin_lat} +lon_0={frame.origin_lon} "
-                        "+x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs")
+        self.dst_srs = (
+            f"+proj=ortho +lat_0={frame.origin_lat} +lon_0={frame.origin_lon} "
+            "+x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs"
+        )
         self.resolution = resolution or self._native_resolution()
         self.max_px = max_px
         self.wall_rgb = np.array(wall_rgb, dtype=np.uint8)
@@ -51,7 +54,9 @@ class OrthoTexturer:
         self.ranges = None
         if self.src.GetRasterBand(1).DataType != gdal.GDT_Byte:
             # one stretch for the whole raster keeps colours consistent across tiles
-            self.ranges = [self.src.GetRasterBand(b).ComputeRasterMinMax(True) for b in (1, 2, 3)]
+            self.ranges = [
+                self.src.GetRasterBand(b).ComputeRasterMinMax(True) for b in (1, 2, 3)
+            ]
 
     def _native_resolution(self):
         # measured in the local frame, so geographic rasters work too
@@ -59,8 +64,16 @@ class OrthoTexturer:
         return float(abs(ds.GetGeoTransform()[1]))
 
     def _read(self, x0, y0, x1, y1, width, height):
-        ds = gdal.Warp("", self.src, format="MEM", dstSRS=self.dst_srs, outputBounds=(x0, y0, x1, y1),
-                       width=width, height=height, resampleAlg="average")
+        ds = gdal.Warp(
+            "",
+            self.src,
+            format="MEM",
+            dstSRS=self.dst_srs,
+            outputBounds=(x0, y0, x1, y1),
+            width=width,
+            height=height,
+            resampleAlg="average",
+        )
         rgb = np.moveaxis(ds.ReadAsArray()[:3], 0, -1)
         if self.ranges is None:
             return rgb
@@ -76,7 +89,13 @@ class OrthoTexturer:
         res = max(self.resolution, detail / 4.0)
         x0, y0 = xy.reshape(-1, 2).min(axis=0) - res
         x1, y1 = xy.reshape(-1, 2).max(axis=0) + res
-        return x0, y0, x1, y1, max(res, (x1 - x0) / self.max_px, (y1 - y0) / self.max_px)
+        return (
+            x0,
+            y0,
+            x1,
+            y1,
+            max(res, (x1 - x0) / self.max_px, (y1 - y0) / self.max_px),
+        )
 
     def texel(self, tris, detail=0.0):
         """Metres per pixel __call__ would use; None without roofs."""
@@ -89,7 +108,10 @@ class OrthoTexturer:
             return None
         xy = tris[roof][:, :, :2]
         x0, y0, x1, y1, res = self._grid(xy, detail)
-        width, height = max(int(np.ceil((x1 - x0) / res)), 1), max(int(np.ceil((y1 - y0) / res)), 1)
+        width, height = (
+            max(int(np.ceil((x1 - x0) / res)), 1),
+            max(int(np.ceil((y1 - y0) / res)), 1),
+        )
         x1, y1 = x0 + width * res, y0 + height * res
         rgb = self._read(x0, y0, x1, y1, width, height)
 
@@ -124,7 +146,10 @@ class OrthoTexturer:
         x0, y0 = np.min([p.min(axis=0) for p in pts], axis=0)
         x1, y1 = np.max([p.max(axis=0) for p in pts], axis=0)
         res = max(resolution, self.resolution, (x1 - x0) / max_px, (y1 - y0) / max_px)
-        width, height = max(int(np.ceil((x1 - x0) / res)), 1), max(int(np.ceil((y1 - y0) / res)), 1)
+        width, height = (
+            max(int(np.ceil((x1 - x0) / res)), 1),
+            max(int(np.ceil((y1 - y0) / res)), 1),
+        )
         top = y0 + height * res
         rgb = self._read(x0, y0, x0 + width * res, top, width, height)
 
@@ -142,11 +167,15 @@ class OrthoTexturer:
             draw = ImageDraw.Draw(mask)
             for t in px:
                 draw.polygon([(c - c0, r - r0) for c, r in t], fill=255)
-            window = rgb[r0:r0 + mask.height, c0:c0 + mask.width]
-            pixels = window[np.asarray(mask)[:window.shape[0], :window.shape[1]] > 0]
+            window = rgb[r0 : r0 + mask.height, c0 : c0 + mask.width]
+            pixels = window[np.asarray(mask)[: window.shape[0], : window.shape[1]] > 0]
             if not len(pixels):
-                c, r = np.clip(px.reshape(-1, 2).mean(axis=0).astype(int), 0, [width - 1, height - 1])
-                pixels = rgb[r:r + 1, c:c + 1].reshape(-1, 3)
+                c, r = np.clip(
+                    px.reshape(-1, 2).mean(axis=0).astype(int),
+                    0,
+                    [width - 1, height - 1],
+                )
+                pixels = rgb[r : r + 1, c : c + 1].reshape(-1, 3)
             pixels = pixels[pixels.sum(axis=1) > 0]  # outside the raster reads black
             if not len(pixels):
                 colors.append(None)

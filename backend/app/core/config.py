@@ -61,7 +61,7 @@ class Settings(BaseSettings):
             host=self.POSTGRES_SERVER,
             port=self.POSTGRES_PORT,
             path=self.POSTGRES_DB,
-            query="options=-csearch_path=public"
+            query="options=-csearch_path=public",
         )
 
     # Selects the auth provider (see app/auth); "standalone" = no in-app auth.

@@ -2,9 +2,9 @@ import {
   Box,
   Button,
   Checkbox,
+  Flex,
   FormControl,
   FormErrorMessage,
-  Flex,
   FormLabel,
   Input,
   Modal,
@@ -47,11 +47,10 @@ import type {
 } from "../../api/types"
 import useCustomToast from "../../hooks/useCustomToast"
 import ExpressionInput, { isInvalidExpression } from "./ExpressionInput"
-import StorageKeyInput, { useStorageListing } from "./StorageKeyInput"
 import type { PreviewKind } from "./PreviewMap"
+import StorageKeyInput, { useStorageListing } from "./StorageKeyInput"
 
 const PreviewMap = lazy(() => import("./PreviewMap"))
-
 
 // worker downloads water as a single file
 const VECTOR_EXTENSIONS = [".gpkg", ".geojson", ".json", ".fgb"]
@@ -418,12 +417,11 @@ const NewBatchModal = ({
             // server-side, so unloaded members run too
             await processPipelineBatchTask(editBatchId, "run")
           } else {
-            const ids =
-              targetIds?.length
-                ? targetIds
-                : editPipelineId
-                  ? [editPipelineId]
-                  : []
+            const ids = targetIds?.length
+              ? targetIds
+              : editPipelineId
+                ? [editPipelineId]
+                : []
             for (const id of ids) {
               try {
                 await processPipelineTask(id, "run")
@@ -1292,7 +1290,11 @@ const NewBatchModal = ({
               </Button>
             </>
           ) : (
-            <Button variant="primary" type="submit" isLoading={mutation.isPending}>
+            <Button
+              variant="primary"
+              type="submit"
+              isLoading={mutation.isPending}
+            >
               {single ? "Process" : "Create jobs"}
             </Button>
           )}

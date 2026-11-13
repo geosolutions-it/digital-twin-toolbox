@@ -1,9 +1,4 @@
 import {
-  celeryTaskStatusColor,
-  celeryTaskStatusLabel,
-  isCeleryTaskInProgress,
-} from "../../utils/celeryStatus"
-import {
   AlertDialog,
   AlertDialogBody,
   AlertDialogContent,
@@ -67,25 +62,30 @@ import {
   readPipelinesOverview,
 } from "../../api"
 import {
+  deletePipelineBatch,
+  finalizePipelineBatch,
+  processPipelineBatchTask,
+} from "../../api/pipelineBatch"
+import {
   type AnyPipelineConfig,
-  isPipelineType,
   type PipelineBatchCounts,
   type PipelineBatchSummary,
   type PipelineOverviewEntry,
   type PipelinePublic,
   type PipelineType,
+  isPipelineType,
 } from "../../api/types"
-import useCustomToast from "../../hooks/useCustomToast"
+import PageHeader from "../../components/Common/PageHeader"
+import LogsDrawer from "../../components/Pipelines/LogsDrawer"
 import NewBatchModal, {
   type BatchFormValues,
 } from "../../components/Pipelines/NewBatchModal"
-import PageHeader from "../../components/Common/PageHeader"
-import LogsDrawer from "../../components/Pipelines/LogsDrawer"
+import useCustomToast from "../../hooks/useCustomToast"
 import {
-  deletePipelineBatch,
-  finalizePipelineBatch,
-  processPipelineBatchTask,
-} from "../../api/pipelineBatch"
+  celeryTaskStatusColor,
+  celeryTaskStatusLabel,
+  isCeleryTaskInProgress,
+} from "../../utils/celeryStatus"
 
 const pipelinesSearchSchema = z.object({
   page: z.number().catch(1),
@@ -229,7 +229,10 @@ function getOverviewQueryOptions({ page }: { page: number }) {
   }
 }
 
-function StatusCell({ status, stage }: { status?: string | null; stage?: string | null }) {
+function StatusCell({
+  status,
+  stage,
+}: { status?: string | null; stage?: string | null }) {
   const running = isCeleryTaskInProgress(status)
   return (
     <Flex direction="column" gap={1} maxW="180px">
@@ -281,13 +284,32 @@ function LogsButton({ pipeline }: { pipeline: PipelinePublic }) {
 
 // JSON columns the API does not type yet
 type PipelineSource = { key?: string; pipeline?: string }
-type TaskResult = { tileset?: string; download?: string; artifacts?: Artifact[] }
+type TaskResult = {
+  tileset?: string
+  download?: string
+  artifacts?: Artifact[]
+}
 
-const sourceOf = (p: PipelinePublic) => p.source as PipelineSource | null | undefined
+const sourceOf = (p: PipelinePublic) =>
+  p.source as PipelineSource | null | undefined
 
 type EditTarget =
-  | { kind: "single"; id: string; label: string; type: PipelineType; sampleKey?: string; values: Partial<BatchFormValues> }
-  | { kind: "batch"; batchId: string; label: string; type: PipelineType; sampleKey?: string; values: Partial<BatchFormValues> }
+  | {
+      kind: "single"
+      id: string
+      label: string
+      type: PipelineType
+      sampleKey?: string
+      values: Partial<BatchFormValues>
+    }
+  | {
+      kind: "batch"
+      batchId: string
+      label: string
+      type: PipelineType
+      sampleKey?: string
+      values: Partial<BatchFormValues>
+    }
 
 function pipelineType(p: PipelinePublic): PipelineType {
   const t = sourceOf(p)?.pipeline
@@ -300,7 +322,8 @@ function dataToValues(
   // stored rows predate validation, so values are still checked at runtime
   const d = (data ?? {}) as AnyPipelineConfig
   const num = (v: unknown) => (typeof v === "number" ? String(v) : "")
-  const expr = (v: unknown) => (Array.isArray(v) ? v : typeof v === "number" ? String(v) : "")
+  const expr = (v: unknown) =>
+    Array.isArray(v) ? v : typeof v === "number" ? String(v) : ""
   return {
     sample_radius: d?.sample_radius != null ? String(d.sample_radius) : "",
     colorization_image: d?.colorization_image || "",
@@ -354,14 +377,27 @@ function batchState(counts: PipelineBatchCounts, total: number) {
       label: `Running ${Math.round((100 * counts.success) / total)}%`,
     }
   if (counts.ready) return { color: "blue", label: "Queued" }
-  if (counts.failed) return { color: "red", label: `Done · ${counts.failed} failed` }
+  if (counts.failed)
+    return { color: "red", label: `Done · ${counts.failed} failed` }
   return { color: "green", label: "Completed" }
 }
 
 function RollupBar({ counts }: { counts: PipelineBatchCounts }) {
-  const order: (keyof typeof counts)[] = ["success", "running", "ready", "failed"]
+  const order: (keyof typeof counts)[] = [
+    "success",
+    "running",
+    "ready",
+    "failed",
+  ]
   return (
-    <Flex h="6px" minW="90px" borderRadius="full" overflow="hidden" bg="gray.100" _dark={{ bg: "gray.700" }}>
+    <Flex
+      h="6px"
+      minW="90px"
+      borderRadius="full"
+      overflow="hidden"
+      bg="gray.100"
+      _dark={{ bg: "gray.700" }}
+    >
       {order.map((k) =>
         counts[k] ? <Box key={k} flex={counts[k]} bg={SEG_COLORS[k]} /> : null,
       )}
@@ -381,7 +417,10 @@ type Artifact = { name: string; url: string; size?: number }
 function artifactSize(bytes?: number) {
   if (!bytes) return ""
   const units = ["B", "KB", "MB", "GB"]
-  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
+  const i = Math.min(
+    Math.floor(Math.log(bytes) / Math.log(1024)),
+    units.length - 1,
+  )
   return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`
 }
 
@@ -428,7 +467,15 @@ interface RowProps {
   indent?: boolean
 }
 
-function PipelineRow({ pipeline, selected, onToggle, onAction, onEdit, dim, indent }: RowProps) {
+function PipelineRow({
+  pipeline,
+  selected,
+  onToggle,
+  onAction,
+  onEdit,
+  dim,
+  indent,
+}: RowProps) {
   const running = isCeleryTaskInProgress(pipeline.task_status)
   const result = pipeline.task_result as TaskResult | null
   const download = `${API_BASE}${result?.download}`
@@ -566,11 +613,10 @@ function BatchGroup({
   const allDone = total > 0 && counts.success === total
   // combined tileset lives at <output_url>/tileset.json once every member is done
   const outputUrl = summary.output_url
-  const parentUrl = allDone && outputUrl ? `${API_BASE}${outputUrl}/tileset.json` : ""
+  const parentUrl =
+    allDone && outputUrl ? `${API_BASE}${outputUrl}/tileset.json` : ""
   const parentDownload =
-    allDone && outputUrl
-      ? `${API_BASE}${outputUrl}/download.zip`
-      : ""
+    allDone && outputUrl ? `${API_BASE}${outputUrl}/download.zip` : ""
 
   const [innerPage, setInnerPage] = React.useState(1)
   const { data: members, isPending: membersPending } = useQuery({
@@ -585,14 +631,16 @@ function BatchGroup({
     placeholderData: (prev) => prev,
     refetchInterval: (query) => {
       const data = query.state.data?.data || []
-      const active = batchRunning || data.some((p) => isCeleryTaskInProgress(p.task_status))
+      const active =
+        batchRunning || data.some((p) => isCeleryTaskInProgress(p.task_status))
       return active ? 1000 : false
     },
   })
   const memberRows = members?.data || []
   const memberTotal = members?.count ?? total
   const memberIds = memberRows.map((p) => p.id)
-  const visibleSelected = memberIds.length > 0 && memberIds.every((i) => selected.has(i))
+  const visibleSelected =
+    memberIds.length > 0 && memberIds.every((i) => selected.has(i))
   const innerHasNext = innerPage * PER_PAGE < memberTotal
   const innerHasPrev = innerPage > 1
 
@@ -646,7 +694,7 @@ function BatchGroup({
         </Td>
         <Td textAlign="right">
           <HStack spacing={1} justify="flex-end">
-             <Tooltip label="Rebuild combined tileset">
+            <Tooltip label="Rebuild combined tileset">
               <IconButton
                 aria-label="Rebuild combined tileset"
                 icon={<FiRefreshCw />}
@@ -815,7 +863,8 @@ function PipelinesTable() {
   const hasNextPage = page * PER_PAGE < total
   const hasPreviousPage = page > 1
   const showPager = hasNextPage || hasPreviousPage
-  const allSelected = soloIds.length > 0 && soloIds.every((id) => selected.has(id))
+  const allSelected =
+    soloIds.length > 0 && soloIds.every((id) => selected.has(id))
 
   useEffect(() => {
     if (hasNextPage) {
@@ -871,7 +920,11 @@ function PipelinesTable() {
       setSelected(new Set())
     },
     onError: () => {
-      showToast("An error occurred.", "Could not delete the selection.", "error")
+      showToast(
+        "An error occurred.",
+        "Could not delete the selection.",
+        "error",
+      )
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["pipelines"] })
@@ -879,7 +932,10 @@ function PipelinesTable() {
   })
 
   const act = useMutation({
-    mutationFn: async ({ ids, action }: { ids: string[]; action: RowAction }) => {
+    mutationFn: async ({
+      ids,
+      action,
+    }: { ids: string[]; action: RowAction }) => {
       if (action === "rebuild") {
         await finalizePipelineBatch(ids[0])
         return
@@ -894,34 +950,52 @@ function PipelinesTable() {
       }
     },
     onSuccess: (_d, { action }) => {
-      if (action === "rebuild") showToast("Rebuilding", "Combined tileset is being rebuilt.", "success")
+      if (action === "rebuild")
+        showToast("Rebuilding", "Combined tileset is being rebuilt.", "success")
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["pipelines"] })
     },
   })
-  const onAction = (ids: string[], action: RowAction) => act.mutate({ ids, action })
+  const onAction = (ids: string[], action: RowAction) =>
+    act.mutate({ ids, action })
 
   const batchAct = useMutation({
-    mutationFn: async ({ batchId, action }: { batchId: string; action: BatchAction }) => {
+    mutationFn: async ({
+      batchId,
+      action,
+    }: { batchId: string; action: BatchAction }) => {
       if (action === "rebuild") return finalizePipelineBatch(batchId)
       // server-side, so unloaded members are included
       return processPipelineBatchTask(batchId, action)
     },
     onSuccess: (_d, { action }) => {
-      if (action === "rebuild") showToast("Rebuilding", "Combined tileset is being rebuilt.", "success")
+      if (action === "rebuild")
+        showToast("Rebuilding", "Combined tileset is being rebuilt.", "success")
     },
     onError: () => {
-      showToast("An error occurred.", "Could not apply the batch action.", "error")
+      showToast(
+        "An error occurred.",
+        "Could not apply the batch action.",
+        "error",
+      )
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["pipelines"] })
     },
   })
-  const onBatchAction = (batchId: string, action: BatchAction) => batchAct.mutate({ batchId, action })
+  const onBatchAction = (batchId: string, action: BatchAction) =>
+    batchAct.mutate({ batchId, action })
 
   const editPipeline = (p: PipelinePublic) =>
-    setEditTarget({ kind: "single", id: p.id, label: p.title, type: pipelineType(p), sampleKey: sourceOf(p)?.key, values: dataToValues(p.data) })
+    setEditTarget({
+      kind: "single",
+      id: p.id,
+      label: p.title,
+      type: pipelineType(p),
+      sampleKey: sourceOf(p)?.key,
+      values: dataToValues(p.data),
+    })
   const editBatch = (summary: PipelineBatchSummary) =>
     setEditTarget({
       kind: "batch",
@@ -943,7 +1017,11 @@ function PipelinesTable() {
       }
     },
     onSuccess: (_d, actionType) => {
-      showToast(actionType === "run" ? "Started" : "Cancelled", `${selected.size} job(s).`, "success")
+      showToast(
+        actionType === "run" ? "Started" : "Cancelled",
+        `${selected.size} job(s).`,
+        "success",
+      )
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["pipelines"] })
@@ -1033,11 +1111,19 @@ function PipelinesTable() {
           py={4}
           justifyContent="center"
         >
-          <Button size="sm" onClick={() => setPage(page - 1)} isDisabled={!hasPreviousPage}>
+          <Button
+            size="sm"
+            onClick={() => setPage(page - 1)}
+            isDisabled={!hasPreviousPage}
+          >
             Previous
           </Button>
           <span>Page {page}</span>
-          <Button size="sm" isDisabled={!hasNextPage} onClick={() => setPage(page + 1)}>
+          <Button
+            size="sm"
+            isDisabled={!hasNextPage}
+            onClick={() => setPage(page + 1)}
+          >
             Next
           </Button>
         </Flex>
@@ -1077,7 +1163,9 @@ function PipelinesTable() {
             colorScheme="orange"
             variant="outline"
             leftIcon={<FiSquare />}
-            isLoading={bulkAction.isPending && bulkAction.variables === "cancel"}
+            isLoading={
+              bulkAction.isPending && bulkAction.variables === "cancel"
+            }
             onClick={() => bulkAction.mutate("cancel")}
           >
             Cancel
@@ -1092,7 +1180,11 @@ function PipelinesTable() {
           >
             Delete
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setSelected(new Set())}
+          >
             Clear
           </Button>
         </Flex>
@@ -1105,8 +1197,12 @@ function PipelinesTable() {
         pipelineType={editTarget?.type}
         editSampleKey={editTarget?.sampleKey}
         initialValues={editTarget?.values}
-        editPipelineId={editTarget?.kind === "single" ? editTarget.id : undefined}
-        editBatchId={editTarget?.kind === "batch" ? editTarget.batchId : undefined}
+        editPipelineId={
+          editTarget?.kind === "single" ? editTarget.id : undefined
+        }
+        editBatchId={
+          editTarget?.kind === "batch" ? editTarget.batchId : undefined
+        }
       />
     </>
   )

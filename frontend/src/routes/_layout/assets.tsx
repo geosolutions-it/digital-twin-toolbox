@@ -33,8 +33,8 @@ import { type SubmitHandler, useForm } from "react-hook-form"
 import { FiFile, FiFolder, FiPlay, FiPlus, FiUpload } from "react-icons/fi"
 import { listStorage, uploadToStorage } from "../../api/storageBrowser"
 import type { PipelineType } from "../../api/types"
-import NewBatchModal from "../../components/Pipelines/NewBatchModal"
 import PageHeader from "../../components/Common/PageHeader"
+import NewBatchModal from "../../components/Pipelines/NewBatchModal"
 import useCustomToast from "../../hooks/useCustomToast"
 
 export const Route = createFileRoute("/_layout/assets")({
@@ -94,10 +94,16 @@ const UploadModal = ({ isOpen, onClose, initialPrefix }: UploadProps) => {
     },
   })
 
-  const onSubmit: SubmitHandler<UploadFormValues> = (data) => mutation.mutate(data)
+  const onSubmit: SubmitHandler<UploadFormValues> = (data) =>
+    mutation.mutate(data)
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size={{ base: "sm", md: "md" }} isCentered>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      size={{ base: "sm", md: "md" }}
+      isCentered
+    >
       <ModalOverlay />
       <ModalContent as="form" onSubmit={handleSubmit(onSubmit)}>
         <ModalHeader>Upload to bucket</ModalHeader>
@@ -105,7 +111,11 @@ const UploadModal = ({ isOpen, onClose, initialPrefix }: UploadProps) => {
         <ModalBody pb={6} display="flex" flexDirection="column" gap={4}>
           <FormControl>
             <FormLabel htmlFor="prefix">Destination folder</FormLabel>
-            <Input id="prefix" placeholder="e.g. city-timisoara/" {...register("prefix")} />
+            <Input
+              id="prefix"
+              placeholder="e.g. city-timisoara/"
+              {...register("prefix")}
+            />
           </FormControl>
           <FormControl isRequired isInvalid={!!errors.file}>
             <FormLabel htmlFor="file">File</FormLabel>
@@ -131,7 +141,11 @@ const UploadModal = ({ isOpen, onClose, initialPrefix }: UploadProps) => {
           </FormControl>
         </ModalBody>
         <ModalFooter gap={3}>
-          <Button variant="primary" type="submit" isLoading={isSubmitting || mutation.isPending}>
+          <Button
+            variant="primary"
+            type="submit"
+            isLoading={isSubmitting || mutation.isPending}
+          >
             Upload
           </Button>
           <Button onClick={onClose}>Cancel</Button>
@@ -141,12 +155,21 @@ const UploadModal = ({ isOpen, onClose, initialPrefix }: UploadProps) => {
   )
 }
 
-function Breadcrumbs({ cwd, onNavigate }: { cwd: string; onNavigate: (p: string) => void }) {
+function Breadcrumbs({
+  cwd,
+  onNavigate,
+}: { cwd: string; onNavigate: (p: string) => void }) {
   const segs = cwd ? cwd.replace(/\/$/, "").split("/") : []
   let acc = ""
   return (
     <Flex align="center" gap={1} fontSize="sm" flexWrap="wrap">
-      <Box as="button" type="button" color="blue.500" fontWeight="semibold" onClick={() => onNavigate("")}>
+      <Box
+        as="button"
+        type="button"
+        color="blue.500"
+        fontWeight="semibold"
+        onClick={() => onNavigate("")}
+      >
         root
       </Box>
       {segs.map((seg) => {
@@ -155,7 +178,13 @@ function Breadcrumbs({ cwd, onNavigate }: { cwd: string; onNavigate: (p: string)
         return (
           <Flex key={target} align="center" gap={1}>
             <Text color="gray.400">/</Text>
-            <Box as="button" type="button" color="blue.500" fontWeight="semibold" onClick={() => onNavigate(target)}>
+            <Box
+              as="button"
+              type="button"
+              color="blue.500"
+              fontWeight="semibold"
+              onClick={() => onNavigate(target)}
+            >
               {seg}
             </Box>
           </Flex>
@@ -165,16 +194,27 @@ function Breadcrumbs({ cwd, onNavigate }: { cwd: string; onNavigate: (p: string)
   )
 }
 
-const WORKFLOWS: PipelineType[] = ["PointCloud", "Polygon", "Terrain", "Mesh", "CityGML"]
+const WORKFLOWS: PipelineType[] = [
+  "PointCloud",
+  "Polygon",
+  "Terrain",
+  "Mesh",
+  "CityGML",
+]
 
 function hintTypeForFile(workflow?: string | null): PipelineType | undefined {
   return WORKFLOWS.find((w) => w === workflow)
 }
 
-function BucketBrowser({ cwd, setCwd }: { cwd: string; setCwd: (p: string) => void }) {
+function BucketBrowser({
+  cwd,
+  setCwd,
+}: { cwd: string; setCwd: (p: string) => void }) {
   const [batchPrefix, setBatchPrefix] = React.useState("")
   const [processKey, setProcessKey] = React.useState("")
-  const [processType, setProcessType] = React.useState<PipelineType | undefined>()
+  const [processType, setProcessType] = React.useState<
+    PipelineType | undefined
+  >()
   const batchModal = useDisclosure()
   const processModal = useDisclosure()
 
@@ -201,7 +241,14 @@ function BucketBrowser({ cwd, setCwd }: { cwd: string; setCwd: (p: string) => vo
   return (
     <>
       <Flex align="center" gap={3} pb={4} flexWrap="wrap">
-        <Badge variant="outline" fontFamily="mono" textTransform="none" px={2} py={1} borderRadius="md">
+        <Badge
+          variant="outline"
+          fontFamily="mono"
+          textTransform="none"
+          px={2}
+          py={1}
+          borderRadius="md"
+        >
           s3://bucket
         </Badge>
         <Breadcrumbs cwd={cwd} onNavigate={setCwd} />
@@ -231,7 +278,13 @@ function BucketBrowser({ cwd, setCwd }: { cwd: string; setCwd: (p: string) => vo
                 {folders.map((folder) => {
                   const name = folder.slice(cwd.length).replace(/\/$/, "")
                   return (
-                    <Tr key={folder} _hover={{ bg: "blackAlpha.50", _dark: { bg: "whiteAlpha.100" } }}>
+                    <Tr
+                      key={folder}
+                      _hover={{
+                        bg: "blackAlpha.50",
+                        _dark: { bg: "whiteAlpha.100" },
+                      }}
+                    >
                       <Td>
                         <Flex
                           as="button"
@@ -252,7 +305,12 @@ function BucketBrowser({ cwd, setCwd }: { cwd: string; setCwd: (p: string) => vo
                         —
                       </Td>
                       <Td textAlign="right">
-                        <Button size="xs" variant="ghost" leftIcon={<FiPlus />} onClick={() => openBatch(folder)}>
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          leftIcon={<FiPlus />}
+                          onClick={() => openBatch(folder)}
+                        >
                           Batch
                         </Button>
                       </Td>
@@ -262,9 +320,20 @@ function BucketBrowser({ cwd, setCwd }: { cwd: string; setCwd: (p: string) => vo
                 {files.map((file) => {
                   const hintType = hintTypeForFile(file.workflow)
                   return (
-                    <Tr key={file.key} _hover={{ bg: "blackAlpha.50", _dark: { bg: "whiteAlpha.100" } }}>
+                    <Tr
+                      key={file.key}
+                      _hover={{
+                        bg: "blackAlpha.50",
+                        _dark: { bg: "whiteAlpha.100" },
+                      }}
+                    >
                       <Td>
-                        <Flex align="center" gap={2} fontFamily="mono" fontSize="xs">
+                        <Flex
+                          align="center"
+                          gap={2}
+                          fontFamily="mono"
+                          fontSize="xs"
+                        >
                           <Icon as={FiFile} color="gray.400" />
                           {file.name}
                         </Flex>
@@ -306,10 +375,11 @@ function BucketBrowser({ cwd, setCwd }: { cwd: string; setCwd: (p: string) => vo
       </TableContainer>
 
       <Text fontSize="xs" color="gray.500" mt={3}>
-        Listing the bucket by prefix. Use <b>Batch</b> on a folder to run the picked
-        workflow on every matching file under it (point clouds, vectors, zipped
-        shapefiles, elevation rasters, zipped meshes, city models in CityGML or CityJSON); files
-        of other types are skipped. No per-file registration needed.
+        Listing the bucket by prefix. Use <b>Batch</b> on a folder to run the
+        picked workflow on every matching file under it (point clouds, vectors,
+        zipped shapefiles, elevation rasters, zipped meshes, city models in
+        CityGML or CityJSON); files of other types are skipped. No per-file
+        registration needed.
       </Text>
 
       <NewBatchModal
@@ -348,7 +418,11 @@ function Assets() {
           </Button>
         }
       />
-      <UploadModal isOpen={uploadModal.isOpen} onClose={uploadModal.onClose} initialPrefix={cwd} />
+      <UploadModal
+        isOpen={uploadModal.isOpen}
+        onClose={uploadModal.onClose}
+        initialPrefix={cwd}
+      />
       <BucketBrowser cwd={cwd} setCwd={setCwd} />
     </Container>
   )

@@ -7,8 +7,12 @@ from pathlib import Path
 import numpy as np
 
 AXIS_VECTORS = {
-    "X": (1.0, 0.0, 0.0), "Y": (0.0, 1.0, 0.0), "Z": (0.0, 0.0, 1.0),
-    "NEGATIVE_X": (-1.0, 0.0, 0.0), "NEGATIVE_Y": (0.0, -1.0, 0.0), "NEGATIVE_Z": (0.0, 0.0, -1.0),
+    "X": (1.0, 0.0, 0.0),
+    "Y": (0.0, 1.0, 0.0),
+    "Z": (0.0, 0.0, 1.0),
+    "NEGATIVE_X": (-1.0, 0.0, 0.0),
+    "NEGATIVE_Y": (0.0, -1.0, 0.0),
+    "NEGATIVE_Z": (0.0, 0.0, -1.0),
 }
 
 
@@ -54,7 +58,9 @@ def axis_matrix(forward_axis="Y", up_axis="Z"):
     forward = np.array(AXIS_VECTORS[forward_axis])
     up = np.array(AXIS_VECTORS[up_axis])
     if abs(float(forward @ up)) > 0.5:
-        raise ValueError(f"forward_axis {forward_axis} and up_axis {up_axis} must differ")
+        raise ValueError(
+            f"forward_axis {forward_axis} and up_axis {up_axis} must differ"
+        )
     return np.stack([np.cross(forward, up), forward, up])
 
 
@@ -102,6 +108,7 @@ def mesh_bbox_from_key(storage, key):
 @dataclass
 class ObjMesh:
     """Triangulated OBJ; face_vt is -1 where a face has no UV, uvs have the origin bottom-left."""
+
     positions: np.ndarray
     uvs: np.ndarray
     face_v: np.ndarray
@@ -150,7 +157,9 @@ def parse_obj(path):
                     other_mat.append(current)
             elif line.startswith(b"usemtl"):
                 parts = line.split(maxsplit=1)
-                name = parts[1].strip().decode(errors="ignore") if len(parts) > 1 else ""
+                name = (
+                    parts[1].strip().decode(errors="ignore") if len(parts) > 1 else ""
+                )
                 if name not in mat_index:
                     mat_index[name] = len(mat_names)
                     mat_names.append(name)
@@ -176,7 +185,9 @@ def parse_obj(path):
         if not chunks:
             return np.zeros((0, per_face), np.int64), np.zeros((0, per_face), np.int64)
         raw = b"".join(chunks).replace(b"/", b" ")
-        ints = np.fromstring(raw, dtype=np.int64, sep=" ").reshape(len(chunks), per_face * 3)
+        ints = np.fromstring(raw, dtype=np.int64, sep=" ").reshape(
+            len(chunks), per_face * 3
+        )
         return ints[:, 0::3] - 1, ints[:, 1::3] - 1
 
     def general(chunks, mats):
@@ -193,8 +204,16 @@ def parse_obj(path):
                 out_vt.append((vts[0], vts[i], vts[i + 1]))
                 out_mat.append(mat)
         if not out_v:
-            return np.zeros((0, 3), np.int64), np.zeros((0, 3), np.int64), np.zeros(0, np.int32)
-        return np.array(out_v, np.int64), np.array(out_vt, np.int64), np.array(out_mat, np.int32)
+            return (
+                np.zeros((0, 3), np.int64),
+                np.zeros((0, 3), np.int64),
+                np.zeros(0, np.int32),
+            )
+        return (
+            np.array(out_v, np.int64),
+            np.array(out_vt, np.int64),
+            np.array(out_mat, np.int32),
+        )
 
     tri_v, tri_vt = fast(tri_chunks, 3)
     quad_v, quad_vt = fast(quad_chunks, 4)
@@ -203,13 +222,21 @@ def parse_obj(path):
 
     face_v = np.vstack([tri_v, quad_v[:, fan].reshape(-1, 3), other_v])
     face_vt = np.vstack([tri_vt, quad_vt[:, fan].reshape(-1, 3), other_vt])
-    face_mat = np.concatenate([
-        np.array(tri_mat, np.int32), np.repeat(np.array(quad_mat, np.int32), 2), other_m,
-    ])
+    face_mat = np.concatenate(
+        [
+            np.array(tri_mat, np.int32),
+            np.repeat(np.array(quad_mat, np.int32), 2),
+            other_m,
+        ]
+    )
     face_mat[face_mat < 0] = 0
     if len(face_v) and (face_v.min() < 0 or face_v.max() >= len(positions)):
-        raise ValueError("OBJ face references a missing vertex (relative indices are not supported)")
-    return ObjMesh(positions, uvs, face_v, face_vt, face_mat, mat_names, colors, mtllibs)
+        raise ValueError(
+            "OBJ face references a missing vertex (relative indices are not supported)"
+        )
+    return ObjMesh(
+        positions, uvs, face_v, face_vt, face_mat, mat_names, colors, mtllibs
+    )
 
 
 def parse_mtl(paths):
@@ -226,10 +253,12 @@ def parse_mtl(paths):
                 if not parts:
                     continue
                 if parts[0] == "newmtl" and len(parts) > 1:
-                    current = line.strip()[len("newmtl"):].strip()
+                    current = line.strip()[len("newmtl") :].strip()
                 elif parts[0] == "map_Kd" and current and len(parts) > 1:
                     # options precede the name, which may contain spaces
-                    whole = os.path.join(base, line.strip()[len("map_Kd"):].strip().replace("\\", "/"))
+                    whole = os.path.join(
+                        base, line.strip()[len("map_Kd") :].strip().replace("\\", "/")
+                    )
                     last = os.path.join(base, parts[-1].replace("\\", "/"))
                     textures[current] = whole if os.path.isfile(whole) else last
     return textures

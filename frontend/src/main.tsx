@@ -1,13 +1,17 @@
 import { ChakraProvider } from "@chakra-ui/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { RouterProvider, createRouter, createHashHistory } from "@tanstack/react-router"
+import {
+  RouterProvider,
+  createHashHistory,
+  createRouter,
+} from "@tanstack/react-router"
 import ReactDOM from "react-dom/client"
 import { routeTree } from "./routeTree.gen"
 
 import { StrictMode } from "react"
-import './main.css'
+import "./main.css"
 import theme from "./theme"
-import { enableHashHistory, getRouterBasePath } from './utils'
+import { enableHashHistory, getRouterBasePath } from "./utils"
 
 const queryClient = new QueryClient()
 

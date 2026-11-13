@@ -10,14 +10,18 @@ const target = resolve(root, "public/cesium")
 const marker = resolve(target, ".version")
 const folders = ["Assets", "ThirdParty", "Widgets", "Workers"]
 
-const { version } = JSON.parse(await readFile(resolve(root, "node_modules/cesium/package.json"), "utf8"))
+const { version } = JSON.parse(
+  await readFile(resolve(root, "node_modules/cesium/package.json"), "utf8"),
+)
 const current = await readFile(marker, "utf8").catch(() => "")
 if (current.trim() === version) {
   console.log(`cesium ${version} runtime assets already in ${target}`)
 } else {
   await rm(target, { recursive: true, force: true })
   for (const folder of folders) {
-    await cp(resolve(source, folder), resolve(target, folder), { recursive: true })
+    await cp(resolve(source, folder), resolve(target, folder), {
+      recursive: true,
+    })
   }
   await writeFile(marker, version)
   console.log(`copied cesium ${version} runtime assets to ${target}`)

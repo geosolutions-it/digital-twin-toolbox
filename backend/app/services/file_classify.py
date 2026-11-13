@@ -1,5 +1,6 @@
 """Pick a workflow for a bucket file: by extension, or for a .zip by its inner
 contents (central directory read via range requests, so a big batch stays cheap)."""
+
 import struct
 
 _EXT_WORKFLOW = {
@@ -46,7 +47,7 @@ def _zip_entry_names(storage, key):
 
     tail_start = size - tail_len
     if cd_offset >= tail_start:
-        cd = tail[cd_offset - tail_start: cd_offset - tail_start + cd_size]
+        cd = tail[cd_offset - tail_start : cd_offset - tail_start + cd_size]
     else:
         cd = storage.read_range(key, cd_offset, cd_size)
 
@@ -56,7 +57,7 @@ def _zip_entry_names(storage, key):
         if struct.unpack_from("<I", cd, pos)[0] != _CD_SIG:
             break
         name_len, extra_len, comment_len = struct.unpack_from("<HHH", cd, pos + 28)
-        name = cd[pos + 46: pos + 46 + name_len]
+        name = cd[pos + 46 : pos + 46 + name_len]
         names.append(name.decode("utf-8", "replace").lower())
         pos += 46 + name_len + extra_len + comment_len
     return names

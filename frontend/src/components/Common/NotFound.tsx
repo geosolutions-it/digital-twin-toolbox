@@ -4,11 +4,7 @@ import { Link } from "@tanstack/react-router"
 const NotFound = () => {
   return (
     <>
-      <Container
-        h="calc(var(--dtt-vh))"
-        justifyContent="center"
-        centerContent
-      >
+      <Container h="calc(var(--dtt-vh))" justifyContent="center" centerContent>
         <Container
           alignItems="stretch"
           justifyContent="center"

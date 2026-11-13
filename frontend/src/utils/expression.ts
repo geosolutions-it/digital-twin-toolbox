@@ -9,7 +9,10 @@ export type Feature = {
 
 export const FUNCS = ["$minZ", "$maxZ"]
 const CALLS: Record<string, string> = { lower: "lowercase", upper: "uppercase" }
-const CALL_NAMES: Record<string, string> = { lowercase: "lower", uppercase: "upper" }
+const CALL_NAMES: Record<string, string> = {
+  lowercase: "lower",
+  uppercase: "upper",
+}
 
 export class ExprError extends Error {
   constructor(
@@ -20,7 +23,12 @@ export class ExprError extends Error {
   }
 }
 
-type Token = { kind: "num" | "str" | "id" | "field" | "func" | "op"; text: string; value: any; at: number }
+type Token = {
+  kind: "num" | "str" | "id" | "field" | "func" | "op"
+  text: string
+  value: any
+  at: number
+}
 
 const IDENT = /[\p{L}_][\p{L}\p{N}_]*/uy
 const NUMBER = /(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?/y
@@ -42,7 +50,12 @@ function tokenize(text: string): Token[] {
     const num = at(NUMBER)
     const ident = at(IDENT)
     if (num) {
-      tokens.push({ kind: "num", text: num[0], value: Number(num[0]), at: start })
+      tokens.push({
+        kind: "num",
+        text: num[0],
+        value: Number(num[0]),
+        at: start,
+      })
       i += num[0].length
     } else if (ch === '"' || ch === "'") {
       let out = ""
@@ -53,17 +66,31 @@ function tokenize(text: string): Token[] {
       }
       if (i >= text.length) throw new ExprError("Unclosed quote", start)
       i++
-      tokens.push({ kind: "str", text: text.slice(start, i), value: out, at: start })
+      tokens.push({
+        kind: "str",
+        text: text.slice(start, i),
+        value: out,
+        at: start,
+      })
     } else if (ch === "[") {
       const end = text.indexOf("]", i)
       if (end < 0) throw new ExprError("Unclosed [", start)
-      tokens.push({ kind: "field", text: text.slice(start, end + 1), value: text.slice(i + 1, end), at: start })
+      tokens.push({
+        kind: "field",
+        text: text.slice(start, end + 1),
+        value: text.slice(i + 1, end),
+        at: start,
+      })
       i = end + 1
     } else if (ch === "$") {
       i++
       const word = at(IDENT)?.[0] ?? ""
       const name = `$${word}`
-      if (!FUNCS.includes(name)) throw new ExprError(`Unknown function ${name}, use ${FUNCS.join(" or ")}`, start)
+      if (!FUNCS.includes(name))
+        throw new ExprError(
+          `Unknown function ${name}, use ${FUNCS.join(" or ")}`,
+          start,
+        )
       tokens.push({ kind: "func", text: name, value: name, at: start })
       i += word.length
     } else if (ident) {
@@ -80,13 +107,21 @@ function tokenize(text: string): Token[] {
 }
 
 /** "" for an empty field; throws ExprError. */
-export function parseFormula(text: string, type: ExprType, fields?: string[]): Expr {
+export function parseFormula(
+  text: string,
+  type: ExprType,
+  fields?: string[],
+): Expr {
   if (!text.trim()) return ""
   let tokens: Token[]
   try {
     tokens = tokenize(text)
   } catch (e) {
-    if (type === "string" && e instanceof ExprError && !e.message.includes("quote")) {
+    if (
+      type === "string" &&
+      e instanceof ExprError &&
+      !e.message.includes("quote")
+    ) {
       throw new ExprError(`${e.message}, put plain text in quotes`, e.at)
     }
     throw e
@@ -95,7 +130,8 @@ export function parseFormula(text: string, type: ExprType, fields?: string[]): E
   const peek = () => tokens[pos]
   const isOp = (op: string) => peek()?.kind === "op" && peek().value === op
   const expect = (op: string) => {
-    if (!isOp(op)) throw new ExprError(`Expected "${op}"`, peek()?.at ?? text.length)
+    if (!isOp(op))
+      throw new ExprError(`Expected "${op}"`, peek()?.at ?? text.length)
     pos++
   }
   const plus = type === "string" ? "concat" : "+"
@@ -127,7 +163,7 @@ export function parseFormula(text: string, type: ExprType, fields?: string[]): E
 
   function field(tok: Token): Expr {
     if (fields && !fields.includes(tok.value)) {
-      const hint = type === "string" ? ', put plain text in quotes' : ""
+      const hint = type === "string" ? ", put plain text in quotes" : ""
       throw new ExprError(`Unknown attribute "${tok.value}"${hint}`, tok.at)
     }
     return ["property", tok.value]
@@ -161,15 +197,24 @@ export function parseFormula(text: string, type: ExprType, fields?: string[]): E
   }
 
   const result = sum()
-  if (pos < tokens.length) throw new ExprError(`Unexpected "${peek().text}"`, peek().at)
+  if (pos < tokens.length)
+    throw new ExprError(`Unexpected "${peek().text}"`, peek().at)
   return result
 }
 
-const PRECEDENCE: Record<string, number> = { "+": 1, "-": 1, concat: 1, "*": 2, "/": 2 }
+const PRECEDENCE: Record<string, number> = {
+  "+": 1,
+  "-": 1,
+  concat: 1,
+  "*": 2,
+  "/": 2,
+}
 
 function fieldText(name: unknown): string {
   const text = `${name ?? ""}`
-  return /^[\p{L}_][\p{L}\p{N}_]*$/u.test(text) && !CALLS[text.toLowerCase()] ? text : `[${text}]`
+  return /^[\p{L}_][\p{L}\p{N}_]*$/u.test(text) && !CALLS[text.toLowerCase()]
+    ? text
+    : `[${text}]`
 }
 
 /** Inverse of parseFormula. */
@@ -177,7 +222,12 @@ export function formulaText(value: unknown, type: ExprType): string {
   if (value === undefined || value === null || value === "") return ""
   if (typeof value === "number") return `${value}`
   if (typeof value === "string") {
-    if (type === "number" && value.trim() !== "" && !Number.isNaN(Number(value))) return value.trim()
+    if (
+      type === "number" &&
+      value.trim() !== "" &&
+      !Number.isNaN(Number(value))
+    )
+      return value.trim()
     return JSON.stringify(value)
   }
   if (!Array.isArray(value)) return ""
@@ -214,12 +264,20 @@ function zRange(feature: Feature): [number, number] | null {
       max = Math.max(max, z)
     } else c.forEach(visit)
   }
-  if (geometry.type === "Point" || geometry.type === "Polygon") visit(geometry.coordinates)
+  if (geometry.type === "Point" || geometry.type === "Polygon")
+    visit(geometry.coordinates)
   return min <= max ? [min, max] : null
 }
 
 function toFloat(v: unknown): number {
-  const n = typeof v === "number" ? v : typeof v === "boolean" ? Number(v) : typeof v === "string" && v.trim() ? Number(v) : Number.NaN
+  const n =
+    typeof v === "number"
+      ? v
+      : typeof v === "boolean"
+        ? Number(v)
+        : typeof v === "string" && v.trim()
+          ? Number(v)
+          : Number.NaN
   if (Number.isNaN(n)) throw new Error("not a number")
   return n
 }
@@ -227,7 +285,11 @@ function toFloat(v: unknown): number {
 const pyStr = (v: unknown) => (v === null || v === undefined ? "None" : `${v}`)
 
 /** Throws where the worker falls back to the default. */
-export function evaluate(type: ExprType | "", value: unknown, feature: Feature): any {
+export function evaluate(
+  type: ExprType | "",
+  value: unknown,
+  feature: Feature,
+): any {
   if (!Array.isArray(value)) {
     if (value === null || value === undefined) return null
     if (type === "string") return `${value}`
@@ -270,12 +332,20 @@ export function evaluate(type: ExprType | "", value: unknown, feature: Feature):
 export type ExprSummary = { values: any[]; fallback: number }
 
 /** null where the worker would use the default. */
-export function evaluateAll(type: ExprType, value: unknown, features: Feature[]): ExprSummary {
+export function evaluateAll(
+  type: ExprType,
+  value: unknown,
+  features: Feature[],
+): ExprSummary {
   let fallback = 0
   const values = features.map((feature) => {
     try {
       const v = evaluate(type, value, feature)
-      if (v === null || v === undefined || (typeof v === "number" && !Number.isFinite(v))) {
+      if (
+        v === null ||
+        v === undefined ||
+        (typeof v === "number" && !Number.isFinite(v))
+      ) {
         fallback++
         return null
       }

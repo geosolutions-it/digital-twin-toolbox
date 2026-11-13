@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.routing import APIRoute
 from pydantic.json_schema import models_json_schema
 from starlette.middleware.cors import CORSMiddleware
+
 from app.api.main import api_router
 from app.core.config import settings
 from app.models.config import CONFIG_MODELS

@@ -1,4 +1,5 @@
 """lon/lat/height -> local ENU metres and the ENU->ECEF tileset root transform."""
+
 import numpy as np
 from pyproj import Transformer
 
@@ -26,10 +27,22 @@ def enu_basis(lon_deg, lat_deg):
 def root_transform(origin_ecef, east, north, up):
     """Column-major 4x4 mapping local ENU (Z-up) metres to ECEF, for tileset root."""
     return [
-        float(east[0]), float(east[1]), float(east[2]), 0.0,
-        float(north[0]), float(north[1]), float(north[2]), 0.0,
-        float(up[0]), float(up[1]), float(up[2]), 0.0,
-        float(origin_ecef[0]), float(origin_ecef[1]), float(origin_ecef[2]), 1.0,
+        float(east[0]),
+        float(east[1]),
+        float(east[2]),
+        0.0,
+        float(north[0]),
+        float(north[1]),
+        float(north[2]),
+        0.0,
+        float(up[0]),
+        float(up[1]),
+        float(up[2]),
+        0.0,
+        float(origin_ecef[0]),
+        float(origin_ecef[1]),
+        float(origin_ecef[2]),
+        1.0,
     ]
 
 

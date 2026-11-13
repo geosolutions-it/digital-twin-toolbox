@@ -35,7 +35,9 @@ def sample(image, uv):
     """Nearest-neighbour sample; uv is OBJ convention (origin bottom-left)."""
     height, width = image.shape[:2]
     col = np.clip((np.clip(uv[:, 0], 0, 1) * width).astype(np.int32), 0, width - 1)
-    row = np.clip(((1.0 - np.clip(uv[:, 1], 0, 1)) * height).astype(np.int32), 0, height - 1)
+    row = np.clip(
+        ((1.0 - np.clip(uv[:, 1], 0, 1)) * height).astype(np.int32), 0, height - 1
+    )
     return image[row, col]
 
 
@@ -165,7 +167,9 @@ def paint_vertex_color(size, raster, hits, src_color_tri):
     filled = np.zeros((size, size), dtype=bool)
     if found.any():
         prim = hit_prim[found]
-        interp = np.einsum("ij,ijk->ik", weights[found], src_color_tri[prim].astype(np.float64))
+        interp = np.einsum(
+            "ij,ijk->ik", weights[found], src_color_tri[prim].astype(np.float64)
+        )
         rgb[rows[found], cols[found]] = np.clip(interp, 0, 255).astype(np.uint8)
         filled[rows[found], cols[found]] = True
     return rgb, filled
@@ -181,9 +185,14 @@ def dilate(rgb, filled, iterations=4):
         accum = np.zeros(rgb.shape, dtype=np.uint32)
         count = np.zeros(mask.shape, dtype=np.uint32)
         for axis, shift in ((0, 1), (0, -1), (1, 1), (1, -1)):
-            accum += np.roll(out, shift, axis=axis) * np.roll(mask, shift, axis=axis)[..., None]
+            accum += (
+                np.roll(out, shift, axis=axis)
+                * np.roll(mask, shift, axis=axis)[..., None]
+            )
             count += np.roll(mask, shift, axis=axis)
         usable = ~mask & (count > 0)
-        out[usable] = (accum // np.maximum(count, 1)[..., None])[usable].astype(np.uint8)
+        out[usable] = (accum // np.maximum(count, 1)[..., None])[usable].astype(
+            np.uint8
+        )
         mask |= usable
     return out

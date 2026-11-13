@@ -27,7 +27,9 @@ def test_streams_both_streams_and_returns_captured_output(caplog):
 
 def test_parsed_stdout_is_returned_but_not_logged(caplog):
     caplog.set_level(logging.INFO, logger=LOGGER)
-    result = sh('echo \'{"a": 1}\'; echo warn >&2', capture_output=True, log_stdout=False)
+    result = sh(
+        "echo '{\"a\": 1}'; echo warn >&2", capture_output=True, log_stdout=False
+    )
     assert result.stdout == b'{"a": 1}\n'
     assert lines(caplog) == ["warn"]
 
@@ -47,8 +49,15 @@ def test_progress_redraws_and_blank_lines_split(caplog):
 
 def test_stage_of_marks_matching_lines(caplog):
     caplog.set_level(logging.INFO, logger=LOGGER)
-    sh("echo plain; echo step 1", stage_of=lambda line: line.upper() if line.startswith("step") else None)
-    stages = [(r.getMessage(), getattr(r, "stage", None)) for r in caplog.records if r.name == LOGGER]
+    sh(
+        "echo plain; echo step 1",
+        stage_of=lambda line: line.upper() if line.startswith("step") else None,
+    )
+    stages = [
+        (r.getMessage(), getattr(r, "stage", None))
+        for r in caplog.records
+        if r.name == LOGGER
+    ]
     assert stages == [("plain", None), ("step 1", "STEP 1")]
 
 

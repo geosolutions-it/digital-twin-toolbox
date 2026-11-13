@@ -55,7 +55,9 @@ def test_owned_runs_and_writes_result(fake_db):
     result = run()
     assert result.state == SUCCESS
     assert calls["run"] == 1
-    assert fake_db["writes"] == [(PID, "t-1", {"task_status": SUCCESS, "task_result": {"ok": True}})]
+    assert fake_db["writes"] == [
+        (PID, "t-1", {"task_status": SUCCESS, "task_result": {"ok": True}})
+    ]
 
 
 def test_failure_writes_status_without_result(fake_db, monkeypatch):
@@ -151,6 +153,8 @@ def test_job_log_gets_start_and_end_lines(caplog, monkeypatch):
     assert messages[3].startswith("Failed after ")
 
 
-@pytest.mark.parametrize("seconds, text", [(4.4, "4 s"), (60, "1 min 00 s"), (1985, "33 min 05 s")])
+@pytest.mark.parametrize(
+    "seconds, text", [(4.4, "4 s"), (60, "1 min 00 s"), (1985, "33 min 05 s")]
+)
 def test_duration(seconds, text):
     assert main._duration(seconds) == text

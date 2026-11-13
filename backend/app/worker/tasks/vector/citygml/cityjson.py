@@ -49,24 +49,41 @@ def _objects(objects, verts, srs, max_lod, lod):
     for oid, obj in objects.items():
         if obj.get("parents") or obj.get("type") in _SKIP_TYPES:
             continue
-        geoms = [g for i in [oid, *_descendants(objects, oid, {oid})] for g in objects[i].get("geometry") or []]
+        geoms = [
+            g
+            for i in [oid, *_descendants(objects, oid, {oid})]
+            for g in objects[i].get("geometry") or []
+        ]
         lods = {_lod_value(g.get("lod")) for g in geoms} - {None}
-        lods = {v for v in lods if (max_lod is None or int(v) <= max_lod) and (lod is None or v == lod)}
+        lods = {
+            v
+            for v in lods
+            if (max_lod is None or int(v) <= max_lod) and (lod is None or v == lod)
+        }
         if not lods:
             continue
         target = max(lods)
-        polys = [p for g in geoms if _lod_value(g.get("lod")) == target for p in _polygons(g, verts)]
+        polys = [
+            p
+            for g in geoms
+            if _lod_value(g.get("lod")) == target
+            for p in _polygons(g, verts)
+        ]
         if not polys:
             continue
         props = {"gml_id": oid, "citygml_type": obj.get("type")}
-        props.update({k: v for k, v in (obj.get("attributes") or {}).items() if _scalar(v)})
+        props.update(
+            {k: v for k, v in (obj.get("attributes") or {}).items() if _scalar(v)}
+        )
         yield srs, props, polys
 
 
 def _vertices(doc, transform):
     verts = np.asarray(doc.get("vertices") or [], dtype=np.float64).reshape(-1, 3)
     if transform:
-        verts = verts * np.asarray(transform["scale"]) + np.asarray(transform["translate"])
+        verts = verts * np.asarray(transform["scale"]) + np.asarray(
+            transform["translate"]
+        )
     return verts
 
 
@@ -89,16 +106,26 @@ def iter_cityjson(source, max_lod=None, lod=None):
         if not isinstance(first, dict) or first.get("type") != "CityJSON":
             raise Exception("Not a CityJSON file")
         if first.get("CityObjects"):
-            yield from _objects(first["CityObjects"], _vertices(first, first.get("transform")),
-                                _reference_system(first), max_lod, lod)
+            yield from _objects(
+                first["CityObjects"],
+                _vertices(first, first.get("transform")),
+                _reference_system(first),
+                max_lod,
+                lod,
+            )
             return
         # CityJSONSeq: features share the header's transform
         srs = _reference_system(first)
         for line in f:
             if line.strip():
                 feat = json.loads(line)
-                yield from _objects(feat["CityObjects"], _vertices(feat, first.get("transform")),
-                                    srs, max_lod, lod)
+                yield from _objects(
+                    feat["CityObjects"],
+                    _vertices(feat, first.get("transform")),
+                    srs,
+                    max_lod,
+                    lod,
+                )
     finally:
         if isinstance(source, str):
             f.close()

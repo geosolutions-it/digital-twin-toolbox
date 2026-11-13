@@ -1,8 +1,9 @@
 import io
-import posixpath
 import mimetypes
+import posixpath
 import re
 import zipfile
+
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session
@@ -59,7 +60,7 @@ def _stream_zip(storage, keys, prefix):
     sink = _ZipSink()
     with zipfile.ZipFile(sink, "w", zipfile.ZIP_DEFLATED) as zf:
         for key in keys:
-            with zf.open(key[len(prefix):], "w") as dest:
+            with zf.open(key[len(prefix) :], "w") as dest:
                 for chunk in storage.iter_object(key):
                     dest.write(chunk)
                     data = sink.drain()
@@ -109,8 +110,11 @@ def serve_output_artifact(path: str, request: Request):
         name = _zip_name(storage, parts, prefix)
         if name is None:
             raise HTTPException(status_code=404)
-        keys = [k for k in storage.list(prefix)
-                if not k.endswith(".zip") and f"/{ARTIFACTS}/" not in k[len(prefix) - 1:]]
+        keys = [
+            k
+            for k in storage.list(prefix)
+            if not k.endswith(".zip") and f"/{ARTIFACTS}/" not in k[len(prefix) - 1 :]
+        ]
         if not keys:
             raise HTTPException(status_code=404)
         return StreamingResponse(

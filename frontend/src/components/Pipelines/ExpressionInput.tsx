@@ -18,10 +18,10 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react"
 import { FiChevronDown, FiX } from "react-icons/fi"
 import {
-  type ExprType,
-  type Feature,
   ExprError,
+  type ExprType,
   FUNCS,
+  type Feature,
   evaluateAll,
   formulaText,
   parseFormula,

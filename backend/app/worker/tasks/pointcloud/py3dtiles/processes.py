@@ -1,6 +1,6 @@
 import json
-import os
 import math
+import os
 import struct
 
 from app.worker.common.utils import run_subprocess
@@ -55,16 +55,22 @@ def _recompute_geometric_error(tileset_path):
         data = json.load(f)
 
     def visit(node):
-        for child in (node.get("children") or []):
+        for child in node.get("children") or []:
             visit(child)
         content = node.get("content") or {}
         uri = content.get("uri")
         if uri and uri.endswith(".json"):
             sub = _recompute_geometric_error(os.path.join(base_dir, uri))
-            node["geometricError"] = sub if sub is not None else node.get("geometricError", 0.0)
+            node["geometricError"] = (
+                sub if sub is not None else node.get("geometricError", 0.0)
+            )
         elif node.get("children"):
             sp = _node_spacing(node, base_dir)
-            node["geometricError"] = sp * GE_SPACING_SCALE if sp is not None else node.get("geometricError", 0.0)
+            node["geometricError"] = (
+                sp * GE_SPACING_SCALE
+                if sp is not None
+                else node.get("geometricError", 0.0)
+            )
         else:
             node["geometricError"] = 0.0
 
@@ -81,19 +87,26 @@ def py3dtiles_convert(input_path, output_path, srs_in, attributes=None):
     fields and declared in tileset.json properties."""
     attributes = attributes or {}
     cmd = [
-        'py3dtiles', 'convert', input_path,
-        '--overwrite', '--force-srs-in',
-        '--color_scale', "255",
-        '--out', output_path,
-        '--srs_in', srs_in,
-        '--srs_out', '4978',
+        "py3dtiles",
+        "convert",
+        input_path,
+        "--overwrite",
+        "--force-srs-in",
+        "--color_scale",
+        "255",
+        "--out",
+        output_path,
+        "--srs_in",
+        srs_in,
+        "--srs_out",
+        "4978",
     ]
     for name in attributes:
-        cmd += ['--extra-fields', name]
+        cmd += ["--extra-fields", name]
 
     run_subprocess(cmd)
 
-    tileset_json_path = os.path.join(output_path, 'tileset.json')
+    tileset_json_path = os.path.join(output_path, "tileset.json")
     _recompute_geometric_error(tileset_json_path)
     if attributes:
         with open(tileset_json_path) as f:

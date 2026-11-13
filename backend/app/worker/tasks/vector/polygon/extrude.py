@@ -1,4 +1,5 @@
 """Polygon extrusion: footprint rings -> prism triangle soup (top cap, walls, optional bottom cap)."""
+
 import mapbox_earcut
 import numpy as np
 
@@ -8,7 +9,9 @@ def _earcut(rings):
     xy = np.concatenate(rings).astype(np.float32)
     ends = np.cumsum([len(r) for r in rings]).astype(np.uint32)
     try:
-        return np.asarray(mapbox_earcut.triangulate_float32(xy, ends), dtype=np.int64).reshape(-1, 3)
+        return np.asarray(
+            mapbox_earcut.triangulate_float32(xy, ends), dtype=np.int64
+        ).reshape(-1, 3)
     except Exception:
         return np.empty((0, 3), dtype=np.int64)
 
@@ -24,7 +27,10 @@ def _walls(rings, z_low, z_high):
         if len(ring) < 2:
             continue
         a, b = ring[:-1], ring[1:]
-        lo, hi = np.full(len(a), z_low, dtype=np.float64), np.full(len(a), z_high, dtype=np.float64)
+        lo, hi = (
+            np.full(len(a), z_low, dtype=np.float64),
+            np.full(len(a), z_high, dtype=np.float64),
+        )
         bl, br = np.column_stack([a, lo]), np.column_stack([b, lo])
         tl, tr = np.column_stack([a, hi]), np.column_stack([b, hi])
         out.append(np.stack([bl, tl, br, br, tl, tr], axis=1).reshape(-1, 3))

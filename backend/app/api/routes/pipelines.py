@@ -1,27 +1,57 @@
-from app.api.deps import CurrentUser, SessionDep
-from fastapi import APIRouter, HTTPException, Query
-from typing import Any
-from sqlmodel import func, select
 import os
 import re
 import uuid
-from app.models.task import Pipeline, PipelineLog, PipelineLogsPublic, PipelinePublic, PipelinesPublic, PipelineBatchCreate, PipelineSourceCreate, Message, PipelinesActionTypes, PipelineUpdate, PipelineBatchCounts, PipelineBatchSummary, PipelineOverviewEntry, PipelinesOverview, PipelineCreated, PipelineBatchCreated, PipelineBatchUpdated, PipelineActionResult, PipelineBatchActionResult, FinalizeQueued
-from app.models.inspect import MeshBbox, VectorFields, VectorSample
+from typing import Any
 
-from app.services.pipeline_config import validate_pipeline_config
-from app.services.file_classify import BATCH_ACCEPTS, batch_targets, classify_bucket_file, SUPPORTED_EXTENSIONS
-from app.core.storage import get_storage, output_key, output_root, output_url
-from app.worker.common.logs import MAX_LINES
-from app.worker.main import celery, _maybe_finalize_batch, queue_batch_finalize
 from celery.result import AsyncResult
-from celery.states import REVOKED, PENDING, SUCCESS, STARTED, FAILURE
+from celery.states import FAILURE, PENDING, REVOKED, STARTED, SUCCESS
+from fastapi import APIRouter, HTTPException, Query
+from sqlmodel import func, select
+
+from app.api.deps import CurrentUser, SessionDep
+from app.core.storage import get_storage, output_key, output_root, output_url
+from app.models.inspect import MeshBbox, VectorFields, VectorSample
+from app.models.task import (
+    FinalizeQueued,
+    Message,
+    Pipeline,
+    PipelineActionResult,
+    PipelineBatchActionResult,
+    PipelineBatchCounts,
+    PipelineBatchCreate,
+    PipelineBatchCreated,
+    PipelineBatchSummary,
+    PipelineBatchUpdated,
+    PipelineCreated,
+    PipelineLog,
+    PipelineLogsPublic,
+    PipelineOverviewEntry,
+    PipelinePublic,
+    PipelinesActionTypes,
+    PipelineSourceCreate,
+    PipelinesOverview,
+    PipelinesPublic,
+    PipelineUpdate,
+)
+from app.services.file_classify import (
+    BATCH_ACCEPTS,
+    SUPPORTED_EXTENSIONS,
+    batch_targets,
+    classify_bucket_file,
+)
+from app.services.pipeline_config import validate_pipeline_config
+from app.worker.common.logs import MAX_LINES
+from app.worker.main import _maybe_finalize_batch, celery, queue_batch_finalize
 
 router = APIRouter()
+
 
 def _sync_lost_tasks(session) -> None:
     """Mark rows whose task died without reporting back (OOM, time limit) from the result backend."""
     rows = session.exec(
-        select(Pipeline).where(Pipeline.task_status.in_((PENDING, STARTED)), Pipeline.task_id.is_not(None))
+        select(Pipeline).where(
+            Pipeline.task_status.in_((PENDING, STARTED)), Pipeline.task_id.is_not(None)
+        )
     ).all()
     changed = []
     for pipeline in rows:
@@ -45,7 +75,10 @@ def _sync_lost_tasks(session) -> None:
 
 @router.get("/", response_model=PipelinesPublic)
 def read_pipelines(
-    session: SessionDep, skip: int = 0, limit: int = 100, batch_id: uuid.UUID | None = None
+    session: SessionDep,
+    skip: int = 0,
+    limit: int = 100,
+    batch_id: uuid.UUID | None = None,
 ) -> Any:
     """
     Retrieve pipelines. Pass batch_id to page through one batch's members.
@@ -76,10 +109,17 @@ def _with_stage(session, pipelines) -> list[PipelinePublic]:
             .where(PipelineLog.pipeline_id.in_(running), PipelineLog.stage.is_not(None))
             .group_by(PipelineLog.pipeline_id)
         )
-        stages = dict(session.exec(
-            select(PipelineLog.pipeline_id, PipelineLog.stage).where(PipelineLog.id.in_(latest))
-        ).all())
-    return [PipelinePublic.model_validate(p, update={"stage": stages.get(p.id)}) for p in pipelines]
+        stages = dict(
+            session.exec(
+                select(PipelineLog.pipeline_id, PipelineLog.stage).where(
+                    PipelineLog.id.in_(latest)
+                )
+            ).all()
+        )
+    return [
+        PipelinePublic.model_validate(p, update={"stage": stages.get(p.id)})
+        for p in pipelines
+    ]
 
 
 def _classify_status(status: str | None) -> str:
@@ -99,9 +139,7 @@ def _batch_label(title: str | None, batch_id) -> str:
 
 
 @router.get("/overview", response_model=PipelinesOverview)
-def read_pipelines_overview(
-    session: SessionDep, skip: int = 0, limit: int = 10
-) -> Any:
+def read_pipelines_overview(session: SessionDep, skip: int = 0, limit: int = 10) -> Any:
     """
     Top-level list for the pipelines screen: each batch is one folder entry with
     a rollup over all its members, standalone pipelines are their own entries.
@@ -136,7 +174,9 @@ def read_pipelines_overview(
                 }
                 batches[key] = b
             # representative = smallest title, matching the members' title ordering
-            if r.title is not None and (b["rep_title"] is None or r.title < b["rep_title"]):
+            if r.title is not None and (
+                b["rep_title"] is None or r.title < b["rep_title"]
+            ):
                 b["rep_title"] = r.title
                 b["rep_source"] = r.source
                 b["rep_data"] = r.data
@@ -159,7 +199,9 @@ def read_pipelines_overview(
                     label=label,
                     source=f"s3://…/{src_dir}/" if src_dir else None,
                     output_prefix=src.get("batch_output_prefix"),
-                    output_url=output_url(src["batch_output_prefix"]) if src.get("batch_output_prefix") else None,
+                    output_url=output_url(src["batch_output_prefix"])
+                    if src.get("batch_output_prefix")
+                    else None,
                     pipeline=src.get("pipeline") or "PointCloud",
                     sample_key=key or None,
                     data=b["rep_data"],
@@ -180,7 +222,10 @@ def read_pipelines_overview(
     if solo_ids:
         full = {
             p.id: p
-            for p in _with_stage(session, session.exec(select(Pipeline).where(Pipeline.id.in_(solo_ids))).all())
+            for p in _with_stage(
+                session,
+                session.exec(select(Pipeline).where(Pipeline.id.in_(solo_ids))).all(),
+            )
         }
 
     data = []
@@ -193,6 +238,7 @@ def read_pipelines_overview(
                 data.append(PipelineOverviewEntry(kind="pipeline", pipeline=pipeline))
 
     return PipelinesOverview(data=data, count=count)
+
 
 _SOURCE_TASK = {
     "PointCloud": "create_point_cloud_3dtiles",
@@ -221,12 +267,17 @@ def create_pipeline_source(
 
     pipeline_type = classify_bucket_file(storage, source_in.key)
     if source_in.pipeline == "Building" and pipeline_type != "Polygon":
-        raise HTTPException(status_code=422, detail=f"Buildings need a polygon footprint file: {source_in.key!r}")
+        raise HTTPException(
+            status_code=422,
+            detail=f"Buildings need a polygon footprint file: {source_in.key!r}",
+        )
     if source_in.pipeline in ("Instance", "Building") and pipeline_type == "Polygon":
         pipeline_type = source_in.pipeline
     dispatch_task = _SOURCE_TASK.get(pipeline_type)
     if dispatch_task is None:
-        raise HTTPException(status_code=422, detail=f"Unsupported file: {source_in.key!r}")
+        raise HTTPException(
+            status_code=422, detail=f"Unsupported file: {source_in.key!r}"
+        )
 
     try:
         data = validate_pipeline_config(pipeline_type, source_in.data)
@@ -234,7 +285,11 @@ def create_pipeline_source(
         raise HTTPException(status_code=422, detail=f"Invalid config: {e}")
 
     key = source_in.key
-    base_name = _slug(source_in.title) if source_in.title else os.path.splitext(os.path.basename(key))[0]
+    base_name = (
+        _slug(source_in.title)
+        if source_in.title
+        else os.path.splitext(os.path.basename(key))[0]
+    )
     output_base = _unique_output(storage, base_name)
     pipeline = Pipeline(
         title=source_in.title or os.path.basename(key),
@@ -255,7 +310,11 @@ def create_pipeline_source(
     session.commit()
     session.refresh(pipeline)
     # row is PENDING before the task exists, so a fast failure is never overwritten
-    celery.send_task(dispatch_task, kwargs={"pipeline_extended": pipeline.model_dump()}, task_id=pipeline.task_id)
+    celery.send_task(
+        dispatch_task,
+        kwargs={"pipeline_extended": pipeline.model_dump()},
+        task_id=pipeline.task_id,
+    )
 
     return {"id": str(pipeline.id)}
 
@@ -277,7 +336,9 @@ def create_pipeline_batch(
     per file. File types are detected from contents (zips are peeked).
     """
     if batch_in.pipeline not in BATCH_ACCEPTS:
-        raise HTTPException(status_code=422, detail=f"{batch_in.pipeline} does not run in a batch")
+        raise HTTPException(
+            status_code=422, detail=f"{batch_in.pipeline} does not run in a batch"
+        )
     try:
         data = validate_pipeline_config(batch_in.pipeline, batch_in.data)
     except ValueError as e:
@@ -285,7 +346,8 @@ def create_pipeline_batch(
     storage = get_storage()
     skip = output_root() + "/"
     candidates = [
-        k for k in storage.list(batch_in.prefix)
+        k
+        for k in storage.list(batch_in.prefix)
         if k.lower().endswith(SUPPORTED_EXTENSIONS) and not k.startswith(skip)
     ]
     classified = batch_targets(
@@ -293,7 +355,8 @@ def create_pipeline_batch(
     )
     if not classified:
         raise HTTPException(
-            status_code=404, detail=f"No {batch_in.pipeline} files under prefix {batch_in.prefix!r}"
+            status_code=404,
+            detail=f"No {batch_in.pipeline} files under prefix {batch_in.prefix!r}",
         )
 
     root = batch_in.prefix.strip("/")
@@ -302,7 +365,7 @@ def create_pipeline_batch(
     base_name = _slug(batch_in.title) if batch_in.title else (root or "batch")
     out_root = _unique_output(storage, base_name)
 
-    rels = [key[len(root):].lstrip("/") if root else key for key, _ in classified]
+    rels = [key[len(root) :].lstrip("/") if root else key for key, _ in classified]
     stems = [os.path.splitext(r)[0] for r in rels]
     batch_id = uuid.uuid4()
     created = []
@@ -310,7 +373,11 @@ def create_pipeline_batch(
         name = os.path.basename(key)
         ext = os.path.splitext(rel)[1]
         # same stem, different extension (x.las + x.laz) keeps the extension apart
-        output_base = f"{out_root}/{stem}_{ext[1:]}" if stems.count(stem) > 1 else f"{out_root}/{stem}"
+        output_base = (
+            f"{out_root}/{stem}_{ext[1:]}"
+            if stems.count(stem) > 1
+            else f"{out_root}/{stem}"
+        )
         pipeline = Pipeline(
             title=f"{batch_in.title} / {name}" if batch_in.title else name,
             data=data,
@@ -331,7 +398,11 @@ def create_pipeline_batch(
         session.add(pipeline)
         session.commit()
         session.refresh(pipeline)
-        celery.send_task(_SOURCE_TASK[ptype], kwargs={"pipeline_extended": pipeline.model_dump()}, task_id=pipeline.task_id)
+        celery.send_task(
+            _SOURCE_TASK[ptype],
+            kwargs={"pipeline_extended": pipeline.model_dump()},
+            task_id=pipeline.task_id,
+        )
         created.append(str(pipeline.id))
 
     return {
@@ -342,16 +413,14 @@ def create_pipeline_batch(
 
 
 @router.post("/batch/{batch_id}/finalize", response_model=FinalizeQueued)
-def finalize_pipeline_batch(
-    *, session: SessionDep, batch_id: uuid.UUID
-) -> Any:
+def finalize_pipeline_batch(*, session: SessionDep, batch_id: uuid.UUID) -> Any:
     """Rebuild the combined tileset for a batch from whatever child tilesets exist."""
     pipeline = session.exec(
         select(Pipeline).where(Pipeline.batch_id == batch_id).limit(1)
     ).first()
     if not pipeline:
         raise HTTPException(status_code=404, detail="Batch not found")
-    prefix = (pipeline.source or {}).get('batch_output_prefix')
+    prefix = (pipeline.source or {}).get("batch_output_prefix")
     if not prefix:
         raise HTTPException(status_code=422, detail="Batch has no output prefix")
     queue_batch_finalize(prefix)
@@ -374,7 +443,9 @@ def update_pipeline_batch(
     *, session: SessionDep, batch_id: uuid.UUID, pipeline_in: PipelineUpdate
 ) -> Any:
     """Apply one config to every pipeline in a batch."""
-    pipelines = session.exec(select(Pipeline).where(Pipeline.batch_id == batch_id)).all()
+    pipelines = session.exec(
+        select(Pipeline).where(Pipeline.batch_id == batch_id)
+    ).all()
     if not pipelines:
         raise HTTPException(status_code=404, detail="Batch not found")
     # members of a batch share one workflow
@@ -393,15 +464,16 @@ def _bucket_target(key: str | None, prefix: str | None, workflow: str) -> str:
     if prefix:
         storage = get_storage()
         for k in storage.list(prefix):
-            if k.lower().endswith(SUPPORTED_EXTENSIONS) and classify_bucket_file(storage, k) == workflow:
+            if (
+                k.lower().endswith(SUPPORTED_EXTENSIONS)
+                and classify_bucket_file(storage, k) == workflow
+            ):
                 return k
     raise HTTPException(status_code=404, detail=f"No {workflow.lower()} file found")
 
 
 @router.get("/vector-fields", response_model=VectorFields)
-def vector_fields(
-    *, key: str | None = None, prefix: str | None = None
-) -> Any:
+def vector_fields(*, key: str | None = None, prefix: str | None = None) -> Any:
     """Attribute schema and first-feature values of a bucket vector."""
     target = _bucket_target(key, prefix, "Polygon")
     try:
@@ -409,7 +481,9 @@ def vector_fields(
             "read_vector_fields", kwargs={"options": {"key": target}}
         ).get(timeout=30)
     except Exception as e:
-        raise HTTPException(status_code=422, detail=f"Could not read vector fields: {e}")
+        raise HTTPException(
+            status_code=422, detail=f"Could not read vector fields: {e}"
+        )
 
 
 @router.get("/vector-sample", response_model=VectorSample)
@@ -425,10 +499,14 @@ def vector_sample(
     try:
         return celery.send_task(
             "read_vector_sample",
-            kwargs={"options": {"key": target, "limit": limit, "ellipsoidal": ellipsoidal}},
+            kwargs={
+                "options": {"key": target, "limit": limit, "ellipsoidal": ellipsoidal}
+            },
         ).get(timeout=60)
     except Exception as e:
-        raise HTTPException(status_code=422, detail=f"Could not read vector sample: {e}")
+        raise HTTPException(
+            status_code=422, detail=f"Could not read vector sample: {e}"
+        )
 
 
 @router.get("/mesh-bbox", response_model=MeshBbox)
@@ -436,7 +514,9 @@ def mesh_bbox(*, key: str | None = None, prefix: str | None = None) -> Any:
     """Mesh size and origin offset in file axes."""
     target = _bucket_target(key, prefix, "Mesh")
     try:
-        bbox = celery.send_task("read_mesh_bbox", kwargs={"options": {"key": target}}).get(timeout=120)
+        bbox = celery.send_task(
+            "read_mesh_bbox", kwargs={"options": {"key": target}}
+        ).get(timeout=120)
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Could not read mesh: {e}")
     if not bbox:
@@ -452,31 +532,43 @@ def _revoke_running(pipeline: Pipeline) -> None:
             pass
 
 
-def _apply_pipeline_action(session, pipeline: Pipeline, action_type: PipelinesActionTypes) -> dict:
+def _apply_pipeline_action(
+    session, pipeline: Pipeline, action_type: PipelinesActionTypes
+) -> dict:
     """Run/cancel one pipeline, persisting the new task state. Returns the applied fields.
     Raises ValueError for unsupported configs; callers decide how to surface it."""
     pipeline_out = {}
-    if action_type == 'run' and pipeline.task_status not in (PENDING, STARTED):
-        ptype = (pipeline.source or {}).get('pipeline') or 'PointCloud'
+    if action_type == "run" and pipeline.task_status not in (PENDING, STARTED):
+        ptype = (pipeline.source or {}).get("pipeline") or "PointCloud"
         task_name = _SOURCE_TASK.get(ptype)
         if not task_name:
             raise ValueError(f"Unsupported source pipeline: {ptype}")
         data = validate_pipeline_config(ptype, pipeline.data)
-        pipeline_out = {"task_id": str(uuid.uuid4()), "task_status": PENDING, "task_result": None}
+        pipeline_out = {
+            "task_id": str(uuid.uuid4()),
+            "task_status": PENDING,
+            "task_result": None,
+        }
         pipeline.sqlmodel_update(pipeline_out)
         session.add(pipeline)
         session.commit()
         session.refresh(pipeline)
         payload = pipeline.model_dump()
-        payload['data'] = data
-        celery.send_task(task_name, kwargs={"pipeline_extended": payload}, task_id=pipeline.task_id)
+        payload["data"] = data
+        celery.send_task(
+            task_name, kwargs={"pipeline_extended": payload}, task_id=pipeline.task_id
+        )
 
-    if action_type == 'cancel' and pipeline.task_id and pipeline.task_status in (PENDING, STARTED):
+    if (
+        action_type == "cancel"
+        and pipeline.task_id
+        and pipeline.task_status in (PENDING, STARTED)
+    ):
         _revoke_running(pipeline)
         pipeline_out = {
             "task_id": pipeline.task_id,
             "task_status": REVOKED,
-            "task_result": None
+            "task_result": None,
         }
         pipeline.sqlmodel_update(pipeline_out)
         session.add(pipeline)
@@ -502,19 +594,23 @@ def process_pipeline_task(
     except HTTPException:
         raise
     except Exception:
-        raise HTTPException(status_code=500, detail="It was not possible to initialize the requested task")
-    return {
-        **pipeline_out,
-        'action_type': action_type
-    }
+        raise HTTPException(
+            status_code=500,
+            detail="It was not possible to initialize the requested task",
+        )
+    return {**pipeline_out, "action_type": action_type}
 
 
-@router.post("/batch/{batch_id}/task/{action_type}", response_model=PipelineBatchActionResult)
+@router.post(
+    "/batch/{batch_id}/task/{action_type}", response_model=PipelineBatchActionResult
+)
 def process_pipeline_batch_task(
     *, session: SessionDep, batch_id: uuid.UUID, action_type: PipelinesActionTypes
 ) -> Any:
     """Run/cancel every member of a batch, skipping rows the action does not apply to."""
-    pipelines = session.exec(select(Pipeline).where(Pipeline.batch_id == batch_id)).all()
+    pipelines = session.exec(
+        select(Pipeline).where(Pipeline.batch_id == batch_id)
+    ).all()
     if not pipelines:
         raise HTTPException(status_code=404, detail="Batch not found")
     affected = 0
@@ -525,21 +621,26 @@ def process_pipeline_batch_task(
         except Exception:
             # skip members the action cannot apply to (already running, nothing to cancel, bad config)
             session.rollback()
-    return {"batch_id": str(batch_id), "count": len(pipelines), "affected": affected, "action_type": action_type}
+    return {
+        "batch_id": str(batch_id),
+        "count": len(pipelines),
+        "affected": affected,
+        "action_type": action_type,
+    }
 
 
 @router.delete("/batch/{batch_id}")
-def delete_pipeline_batch(
-    session: SessionDep, batch_id: uuid.UUID
-) -> Message:
+def delete_pipeline_batch(session: SessionDep, batch_id: uuid.UUID) -> Message:
     """Delete every member of a batch and its combined output tree."""
-    pipelines = session.exec(select(Pipeline).where(Pipeline.batch_id == batch_id)).all()
+    pipelines = session.exec(
+        select(Pipeline).where(Pipeline.batch_id == batch_id)
+    ).all()
     if not pipelines:
         raise HTTPException(status_code=404, detail="Batch not found")
     batch_prefix = None
     for pipeline in pipelines:
         source = pipeline.source or {}
-        batch_prefix = batch_prefix or source.get('batch_output_prefix')
+        batch_prefix = batch_prefix or source.get("batch_output_prefix")
         _revoke_running(pipeline)
         session.delete(pipeline)
     session.commit()
@@ -574,6 +675,7 @@ def update_pipeline(
     session.refresh(pipeline)
     return pipeline
 
+
 @router.get("/{id}", response_model=PipelinePublic)
 def read_pipeline(session: SessionDep, id: uuid.UUID) -> Any:
     """
@@ -587,8 +689,11 @@ def read_pipeline(session: SessionDep, id: uuid.UUID) -> Any:
 
 @router.get("/{id}/logs", response_model=PipelineLogsPublic)
 def read_pipeline_logs(
-    session: SessionDep, _user: CurrentUser, id: uuid.UUID,
-    after: int = Query(0, ge=0), limit: int = Query(MAX_LINES, ge=1, le=MAX_LINES),
+    session: SessionDep,
+    _user: CurrentUser,
+    id: uuid.UUID,
+    after: int = Query(0, ge=0),
+    limit: int = Query(MAX_LINES, ge=1, le=MAX_LINES),
 ) -> Any:
     """
     Log lines of the pipeline's latest run with id > after, oldest first. Poll with the last id received.
@@ -605,9 +710,7 @@ def read_pipeline_logs(
 
 
 @router.delete("/{id}")
-def delete_pipeline(
-    session: SessionDep, id: uuid.UUID
-) -> Message:
+def delete_pipeline(session: SessionDep, id: uuid.UUID) -> Message:
     """
     Delete an pipeline.
     """
@@ -616,8 +719,8 @@ def delete_pipeline(
         raise HTTPException(status_code=404, detail="Pipeline not found")
 
     source = pipeline.source or {}
-    output_prefix = source.get('output_base') or output_key(str(pipeline.id))
-    batch_prefix = source.get('batch_output_prefix')
+    output_prefix = source.get("output_base") or output_key(str(pipeline.id))
+    batch_prefix = source.get("batch_output_prefix")
 
     _revoke_running(pipeline)
     session.delete(pipeline)

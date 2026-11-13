@@ -10,7 +10,9 @@ class _Storage:
         self.objects = {}
 
     def delete_prefix(self, prefix):
-        self.objects = {k: v for k, v in self.objects.items() if not k.startswith(prefix)}
+        self.objects = {
+            k: v for k, v in self.objects.items() if not k.startswith(prefix)
+        }
 
     def upload_dir(self, local, prefix):
         for root, _, files in os.walk(local):
@@ -38,11 +40,25 @@ def test_artifacts_go_next_to_the_tiles_and_replace_the_previous_run(tmp_path):
     city = _write(tmp_path / "roofer" / "x.city.jsonl", "cityjson")
     storage.objects["output/job/artifacts/stale.txt"] = b"old run"
 
-    result = publish_tiles(storage, str(tiles), "output/job", "tileset.json", {"buildings.city.jsonl": city})
+    result = publish_tiles(
+        storage,
+        str(tiles),
+        "output/job",
+        "tileset.json",
+        {"buildings.city.jsonl": city},
+    )
 
-    assert set(storage.objects) == {"output/job/tiles/tileset.json", "output/job/artifacts/buildings.city.jsonl"}
-    assert result["artifacts"] == [{"name": "buildings.city.jsonl", "url": "/api/v1/output/job/artifacts/buildings.city.jsonl",
-                                    "size": 8}]
+    assert set(storage.objects) == {
+        "output/job/tiles/tileset.json",
+        "output/job/artifacts/buildings.city.jsonl",
+    }
+    assert result["artifacts"] == [
+        {
+            "name": "buildings.city.jsonl",
+            "url": "/api/v1/output/job/artifacts/buildings.city.jsonl",
+            "size": 8,
+        }
+    ]
     assert result["download"].endswith("/job/tiles/download.zip")
 
     # a run without artifacts clears them

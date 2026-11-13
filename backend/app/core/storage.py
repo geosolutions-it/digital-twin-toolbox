@@ -6,6 +6,7 @@ Gateway; a cloud deploy points the S3_* settings at its own bucket. Workers down
 local scratch and upload outputs back, so no shared filesystem is required. The Storage
 interface stays thin so other object-store backends can be added later.
 """
+
 import io
 import os
 from abc import ABC, abstractmethod
@@ -22,7 +23,7 @@ def output_key(*parts) -> str:
 
 
 def output_url(key: str) -> str:
-    return f"{settings.API_V1_STR}/output/{key[len(output_root()) + 1:]}"
+    return f"{settings.API_V1_STR}/output/{key[len(output_root()) + 1 :]}"
 
 
 def _iter_files(local_dir: str):
@@ -69,8 +70,16 @@ class Storage(ABC):
 
 
 class S3Storage(Storage):
-    def __init__(self, bucket, endpoint_url=None, access_key=None, secret_key=None,
-                 region=None, addressing_style="path", create_bucket=False):
+    def __init__(
+        self,
+        bucket,
+        endpoint_url=None,
+        access_key=None,
+        secret_key=None,
+        region=None,
+        addressing_style="path",
+        create_bucket=False,
+    ):
         import boto3
         from botocore.config import Config
 
@@ -88,6 +97,7 @@ class S3Storage(Storage):
 
     def _ensure_bucket(self):
         from botocore.exceptions import ClientError
+
         try:
             self.client.head_bucket(Bucket=self.bucket)
         except ClientError:
@@ -129,7 +139,9 @@ class S3Storage(Storage):
 
     def read_range(self, key: str, start: int, length: int) -> bytes:
         rng = f"bytes={start}-{start + length - 1}"
-        return self.client.get_object(Bucket=self.bucket, Key=key, Range=rng)["Body"].read()
+        return self.client.get_object(Bucket=self.bucket, Key=key, Range=rng)[
+            "Body"
+        ].read()
 
     def list(self, prefix: str) -> list[str]:
         keys = []
@@ -144,14 +156,18 @@ class S3Storage(Storage):
             prefix = prefix + delimiter
         folders, files = [], []
         paginator = self.client.get_paginator("list_objects_v2")
-        for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix, Delimiter=delimiter):
+        for page in paginator.paginate(
+            Bucket=self.bucket, Prefix=prefix, Delimiter=delimiter
+        ):
             for cp in page.get("CommonPrefixes", []):
                 folders.append(cp["Prefix"])
             for obj in page.get("Contents", []):
                 key = obj["Key"]
                 if key == prefix:
                     continue
-                files.append({"key": key, "name": key[len(prefix):], "size": obj["Size"]})
+                files.append(
+                    {"key": key, "name": key[len(prefix) :], "size": obj["Size"]}
+                )
         return {"prefix": prefix, "folders": folders, "files": files}
 
     def delete_prefix(self, key_prefix: str) -> None:
@@ -161,7 +177,9 @@ class S3Storage(Storage):
             for obj in page.get("Contents", []):
                 batch.append({"Key": obj["Key"]})
                 if len(batch) == 1000:
-                    self.client.delete_objects(Bucket=self.bucket, Delete={"Objects": batch})
+                    self.client.delete_objects(
+                        Bucket=self.bucket, Delete={"Objects": batch}
+                    )
                     batch = []
         if batch:
             self.client.delete_objects(Bucket=self.bucket, Delete={"Objects": batch})
@@ -210,7 +228,7 @@ class _RangeFile(io.RawIOBase):
         if n <= 0:
             return 0
         data = self.storage.read_range(self.key, self.pos, n)
-        buffer[:len(data)] = data
+        buffer[: len(data)] = data
         self.pos += len(data)
         return len(data)
 

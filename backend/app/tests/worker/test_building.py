@@ -27,32 +27,63 @@ BOX = [(0, 0), (10, 0), (10, 10), (0, 10)]
 
 
 def _cityjsonseq(path):
-    verts = [[int(x * 1000), int(y * 1000), 50000] for x, y in BOX] + \
-            [[int(x * 1000), int(y * 1000), 60000] for x, y in BOX]
+    verts = [[int(x * 1000), int(y * 1000), 50000] for x, y in BOX] + [
+        [int(x * 1000), int(y * 1000), 60000] for x, y in BOX
+    ]
     walls = [[[i, (i + 1) % 4, 4 + (i + 1) % 4, 4 + i]] for i in range(4)]
     solid = {
-        "type": "Solid", "lod": "2.2",
+        "type": "Solid",
+        "lod": "2.2",
         "boundaries": [[[[3, 2, 1, 0]]] + walls + [[[4, 5, 6, 7]]]],
-        "semantics": {"surfaces": [{"type": "GroundSurface"}, {"type": "WallSurface"}, {"type": "RoofSurface"}],
-                      "values": [[0, 1, 1, 1, 1, 2]]},
+        "semantics": {
+            "surfaces": [
+                {"type": "GroundSurface"},
+                {"type": "WallSurface"},
+                {"type": "RoofSurface"},
+            ],
+            "values": [[0, 1, 1, 1, 1, 2]],
+        },
     }
     footprint = {"type": "MultiSurface", "lod": "0", "boundaries": [[[0, 1, 2, 3]]]}
-    header = {"type": "CityJSON", "version": "2.0", "CityObjects": {}, "vertices": [],
-              "metadata": {"referenceSystem": "https://www.opengis.net/def/crs/EPSG/0/25833"},
-              "transform": {"scale": [0.001, 0.001, 0.001], "translate": [X0, Y0, 0.0]}}
-    feature = {"type": "CityJSONFeature", "id": "b1", "vertices": verts, "CityObjects": {
-        "b1": {"type": "Building", "children": ["b1-0"], "geometry": [footprint],
-               "attributes": {"name": "box", "rf_h_ground": 50.0, "rf_t_run": 0.1, "rf_ridgelines": [[0, 1]]}},
-        "b1-0": {"type": "BuildingPart", "parents": ["b1"], "geometry": [solid]},
-    }}
+    header = {
+        "type": "CityJSON",
+        "version": "2.0",
+        "CityObjects": {},
+        "vertices": [],
+        "metadata": {"referenceSystem": "https://www.opengis.net/def/crs/EPSG/0/25833"},
+        "transform": {"scale": [0.001, 0.001, 0.001], "translate": [X0, Y0, 0.0]},
+    }
+    feature = {
+        "type": "CityJSONFeature",
+        "id": "b1",
+        "vertices": verts,
+        "CityObjects": {
+            "b1": {
+                "type": "Building",
+                "children": ["b1-0"],
+                "geometry": [footprint],
+                "attributes": {
+                    "name": "box",
+                    "rf_h_ground": 50.0,
+                    "rf_t_run": 0.1,
+                    "rf_ridgelines": [[0, 1]],
+                },
+            },
+            "b1-0": {"type": "BuildingPart", "parents": ["b1"], "geometry": [solid]},
+        },
+    }
     with open(path, "w") as f:
         f.write(json.dumps(header) + "\n" + json.dumps(feature) + "\n")
 
 
 def _raster(path, array, x0, y0, res, epsg=25833):
     bands = array.shape[0] if array.ndim == 3 else 1
-    dtype = {np.uint8: gdal.GDT_Byte, np.uint16: gdal.GDT_UInt16}.get(array.dtype.type, gdal.GDT_Float32)
-    ds = gdal.GetDriverByName("GTiff").Create(str(path), array.shape[-1], array.shape[-2], bands, dtype)
+    dtype = {np.uint8: gdal.GDT_Byte, np.uint16: gdal.GDT_UInt16}.get(
+        array.dtype.type, gdal.GDT_Float32
+    )
+    ds = gdal.GetDriverByName("GTiff").Create(
+        str(path), array.shape[-1], array.shape[-2], bands, dtype
+    )
     ds.SetGeoTransform((x0, res, 0, y0, 0, -res))
     srs = osr.SpatialReference()
     srs.ImportFromEPSG(epsg)
@@ -81,7 +112,12 @@ def test_read_roofer_keeps_attributes_and_the_requested_lod(tmp_path):
     _cityjsonseq(tmp_path / "a.city.jsonl")
     [(srs, props, polys)] = read_roofer([str(tmp_path / "a.city.jsonl")], "2.2")
     assert srs == "EPSG:25833"
-    assert props == {"gml_id": "b1", "citygml_type": "Building", "name": "box", "rf_h_ground": 50.0}
+    assert props == {
+        "gml_id": "b1",
+        "citygml_type": "Building",
+        "name": "box",
+        "rf_h_ground": 50.0,
+    }
     assert len(polys) == 6  # the solid, not the LoD 0 footprint
     np.testing.assert_allclose(polys[-1][0][0], [X0, Y0, 60.0])
     assert read_roofer([str(tmp_path / "a.city.jsonl")], "1.2") == []
@@ -144,7 +180,10 @@ def test_texturer_maps_roofs_into_the_orthophoto(tmp_path):
 
 
 def test_glb_carries_uvs_and_webp_when_textured():
-    tris = np.array([[0, 0, 10], [10, 0, 10], [10, 10, 10], [0, 0, 0], [10, 0, 0], [10, 0, 10]], dtype=float)
+    tris = np.array(
+        [[0, 0, 10], [10, 0, 10], [10, 10, 10], [0, 0, 0], [10, 0, 0], [10, 0, 10]],
+        dtype=float,
+    )
 
     class Texturer:
         calls = 0
@@ -159,26 +198,51 @@ def test_glb_carries_uvs_and_webp_when_textured():
 
     texturer = Texturer()
     schema = [{"name": "a", "kind": "number"}]
-    assert glb_bytes(tris, [6], [{"a": 1}], schema, texturer=texturer, size_limit=100) is None
+    assert (
+        glb_bytes(tris, [6], [{"a": 1}], schema, texturer=texturer, size_limit=100)
+        is None
+    )
     assert texturer.calls == 0  # an oversized tile never builds its texture
-    data = glb_bytes(tris, [6], [{"a": 1}], schema, texturer=texturer, base_color=[0.7, 0.7, 0.7, 1.0])
+    data = glb_bytes(
+        tris,
+        [6],
+        [{"a": 1}],
+        schema,
+        texturer=texturer,
+        base_color=[0.7, 0.7, 0.7, 1.0],
+    )
     length = struct.unpack("<I", data[12:16])[0]
-    gltf = json.loads(data[20:20 + length])
+    gltf = json.loads(data[20 : 20 + length])
     assert "TEXCOORD_0" in gltf["meshes"][0]["primitives"][0]["attributes"]
     assert "EXT_texture_webp" in gltf["extensionsRequired"]
-    assert gltf["materials"][0]["pbrMetallicRoughness"]["baseColorTexture"] == {"index": 0}
+    assert gltf["materials"][0]["pbrMetallicRoughness"]["baseColorTexture"] == {
+        "index": 0
+    }
 
-    plain = glb_bytes(tris, [6], [{"a": 1}], [{"name": "a", "kind": "number"}], base_color=[0.7, 0.7, 0.7, 1.0])
-    gltf = json.loads(plain[20:20 + struct.unpack("<I", plain[12:16])[0]])
+    plain = glb_bytes(
+        tris,
+        [6],
+        [{"a": 1}],
+        [{"name": "a", "kind": "number"}],
+        base_color=[0.7, 0.7, 0.7, 1.0],
+    )
+    gltf = json.loads(plain[20 : 20 + struct.unpack("<I", plain[12:16])[0]])
     assert "TEXCOORD_0" not in gltf["meshes"][0]["primitives"][0]["attributes"]
-    assert gltf["materials"][0]["pbrMetallicRoughness"]["baseColorFactor"] == [0.7, 0.7, 0.7, 1.0]
+    assert gltf["materials"][0]["pbrMetallicRoughness"]["baseColorFactor"] == [
+        0.7,
+        0.7,
+        0.7,
+        1.0,
+    ]
 
 
 @pytest.mark.skipif(shutil.which("roofer") is None, reason="roofer not installed")
 def test_roofer_is_runnable():
     import subprocess
 
-    out = subprocess.run(["roofer", "--version"], capture_output=True, text=True, check=True)
+    out = subprocess.run(
+        ["roofer", "--version"], capture_output=True, text=True, check=True
+    )
     assert "roofer" in out.stdout
 
 
@@ -186,7 +250,9 @@ class _TileStorage:
     """LAS headers only; downloads write the key name."""
 
     def __init__(self, tiles):
-        self.tiles = tiles  # key -> (minx, miny, maxx, maxy) or None for a broken header
+        self.tiles = (
+            tiles  # key -> (minx, miny, maxx, maxy) or None for a broken header
+        )
 
     def list(self, prefix):
         return [k for k in self.tiles if k.startswith(prefix)]
@@ -198,7 +264,7 @@ class _TileStorage:
         head = bytearray(227)
         head[:4] = b"LASF"
         struct.pack_into("<6d", head, 179, b[2], b[0], b[3], b[1], 10.0, 0.0)
-        return bytes(head[start:start + length])
+        return bytes(head[start : start + length])
 
     def download_file(self, key, dest):
         with open(dest, "w") as f:
@@ -208,18 +274,30 @@ class _TileStorage:
 def test_point_cloud_folder_keeps_only_tiles_near_the_footprints(tmp_path):
     from app.worker.tasks.vector.building.task import _download_point_cloud
 
-    storage = _TileStorage({
-        "las/a.laz": (0, 0, 500, 500),          # under the footprints
-        "las/b.laz": (510, 0, 1000, 500),       # 10 m away: inside the margin
-        "las/c.laz": (5000, 5000, 5500, 5500),  # far away
-        "las/d.laz": None,                      # unreadable header: kept
-        "las/readme.txt": (0, 0, 1, 1),
-    })
+    storage = _TileStorage(
+        {
+            "las/a.laz": (0, 0, 500, 500),  # under the footprints
+            "las/b.laz": (510, 0, 1000, 500),  # 10 m away: inside the margin
+            "las/c.laz": (5000, 5000, 5500, 5500),  # far away
+            "las/d.laz": None,  # unreadable header: kept
+            "las/readme.txt": (0, 0, 1, 1),
+        }
+    )
     paths = _download_point_cloud(storage, "las/", str(tmp_path), (100, 100, 500, 400))
-    assert sorted(open(p).read() for p in paths) == ["las/a.laz", "las/b.laz", "las/d.laz"]
+    assert sorted(open(p).read() for p in paths) == [
+        "las/a.laz",
+        "las/b.laz",
+        "las/d.laz",
+    ]
     with pytest.raises(Exception, match="same CRS"):
-        _download_point_cloud(_TileStorage({"las/c.laz": (5000, 5000, 5500, 5500), "las/e.laz": (9000, 0, 9100, 1)}),
-                              "las/", str(tmp_path), (100, 100, 500, 400))
+        _download_point_cloud(
+            _TileStorage(
+                {"las/c.laz": (5000, 5000, 5500, 5500), "las/e.laz": (9000, 0, 9100, 1)}
+            ),
+            "las/",
+            str(tmp_path),
+            (100, 100, 500, 400),
+        )
 
 
 def test_tiler_splits_leaves_wider_than_the_texture_reach(tmp_path):
@@ -228,12 +306,17 @@ def test_tiler_splits_leaves_wider_than_the_texture_reach(tmp_path):
     # two buildings 1 km apart
     def box(x):
         return np.array([[x, 0, 0], [x + 10, 0, 0], [x + 10, 10, 0]], dtype=float)
-    feats = [{"mesh": box(x), "centroid": np.array([x + 5.0, 5.0]), "properties": {"i": i}}
-             for i, x in enumerate((0.0, 1000.0))]
+
+    feats = [
+        {"mesh": box(x), "centroid": np.array([x + 5.0, 5.0]), "properties": {"i": i}}
+        for i, x in enumerate((0.0, 1000.0))
+    ]
     identity = [1.0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 1.0]
     _, stats = build_tileset(feats, str(tmp_path / "a"), identity)
     assert len(stats) == 1
-    _, stats = build_tileset(feats, str(tmp_path / "b"), identity, max_leaf_extent=500.0)
+    _, stats = build_tileset(
+        feats, str(tmp_path / "b"), identity, max_leaf_extent=500.0
+    )
     leaves = json.load(open(tmp_path / "b" / "tileset.json"))["root"]["children"]
     assert len(leaves) == 2 and all(not c.get("children") for c in leaves)
 
@@ -253,10 +336,15 @@ def test_tiler_parent_error_covers_its_texture(tmp_path):
 
     def box(x):
         return np.array([[x, 0, 0], [x + 10, 0, 0], [x + 10, 10, 0]], dtype=float)
-    feats = [{"mesh": box(x), "centroid": np.array([x + 5.0, 5.0]), "properties": {"i": i}}
-             for i, x in enumerate((0.0, 1000.0))]
+
+    feats = [
+        {"mesh": box(x), "centroid": np.array([x + 5.0, 5.0]), "properties": {"i": i}}
+        for i, x in enumerate((0.0, 1000.0))
+    ]
     identity = [1.0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 1.0]
-    build_tileset(feats, str(tmp_path), identity, texturer=Texturer(), max_leaf_extent=500.0)
+    build_tileset(
+        feats, str(tmp_path), identity, texturer=Texturer(), max_leaf_extent=500.0
+    )
     root = json.load(open(tmp_path / "tileset.json"))["root"]
     assert "content" in root and root["geometricError"] == 3.0 * 8
     assert all(c["geometricError"] == 0.0 for c in root["children"])
@@ -287,7 +375,9 @@ def test_texturer_stretches_16_bit_orthophotos(tmp_path):
     rgb[:, 0, 0] = 4000  # full range in every band
     _raster(tmp_path / "ortho.tif", rgb, X0 - 5, Y0 + 15, 0.5)
     roof = enu[[4, 5, 6, 4, 6, 7]].reshape(2, 3, 3)
-    assert OrthoTexturer(str(tmp_path / "ortho.tif"), frame).roof_colors([roof]) == ["#ff0000"]
+    assert OrthoTexturer(str(tmp_path / "ortho.tif"), frame).roof_colors([roof]) == [
+        "#ff0000"
+    ]
 
 
 def test_grow_is_a_square_dilation():
@@ -297,17 +387,35 @@ def test_grow_is_a_square_dilation():
     m[5, 4] = True
     m[0, 8] = True
     out = _grow(m, 2)
-    assert out[3:8, 2:7].all() and out.sum() == 25 + 9  # the corner pixel grows inside the image only
+    assert (
+        out[3:8, 2:7].all() and out.sum() == 25 + 9
+    )  # the corner pixel grows inside the image only
 
 
-@pytest.mark.parametrize("line, stage", [
-    ("[2026-11-12 16:42:37.503] [stdout] [info] [cropper] Tile 0: cropped 20 buildings",
-     "Roofer: Tile 0: cropped 20 buildings"),
-    ("[2026-11-12 16:42:40.268] [stdout] [info] [serializer] Tile 3: wrote 20 buildings",
-     "Roofer: Tile 3: wrote 20 buildings"),
-    ("[2026-11-12 16:42:29.678] [stdout] [info] Cropping pointcloud ...", "Roofer: cropping point cloud"),
-    ("[2026-11-12 16:42:29.663] [stdout] [info] Number of source footprints: 20", None),
-    ("[2026-11-12 16:42:40.260] [stdout] [info] [reconstructor] Finished reconstruction: processed 20", None),
-])
+@pytest.mark.parametrize(
+    "line, stage",
+    [
+        (
+            "[2026-11-12 16:42:37.503] [stdout] [info] [cropper] Tile 0: cropped 20 buildings",
+            "Roofer: Tile 0: cropped 20 buildings",
+        ),
+        (
+            "[2026-11-12 16:42:40.268] [stdout] [info] [serializer] Tile 3: wrote 20 buildings",
+            "Roofer: Tile 3: wrote 20 buildings",
+        ),
+        (
+            "[2026-11-12 16:42:29.678] [stdout] [info] Cropping pointcloud ...",
+            "Roofer: cropping point cloud",
+        ),
+        (
+            "[2026-11-12 16:42:29.663] [stdout] [info] Number of source footprints: 20",
+            None,
+        ),
+        (
+            "[2026-11-12 16:42:40.260] [stdout] [info] [reconstructor] Finished reconstruction: processed 20",
+            None,
+        ),
+    ],
+)
 def test_roofer_stage(line, stage):
     assert building_task._roofer_stage(line) == stage

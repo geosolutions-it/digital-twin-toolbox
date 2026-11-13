@@ -3,6 +3,7 @@
 Pydantic ValidationError subclasses ValueError, so a bad config maps to HTTP 422 via the
 route's existing ValueError handler.
 """
+
 from app.models.config import CONFIG_MODELS
 
 

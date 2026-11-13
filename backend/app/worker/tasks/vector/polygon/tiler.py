@@ -1,5 +1,6 @@
 """Size-bounded 3D Tiles 1.1 tileset (REPLACE): full-detail leaves, parents keep the larger features
 simplified, never fused; geometricError covers both the simplification and the texel size."""
+
 import os
 
 import numpy as np
@@ -10,7 +11,7 @@ from app.worker.tasks.vector.polygon.writer import glb_bytes
 
 _EST_BYTES_PER_VERTEX = 12
 _MIN_EXTENT = 2.0
-_CELL_STEP = 2 ** 0.5
+_CELL_STEP = 2**0.5
 _CELL_DIVISOR = 4.0
 # a texel spans ~2 px at the SSE 16 switch
 _TEXEL_ERROR = 8.0
@@ -29,7 +30,9 @@ def cluster(soup, d, vertex_fid):
     cell_fid = np.zeros(n, dtype=np.int64)
     cell_fid[inv] = vertex_fid
     tri = inv.reshape(-1, 3)
-    tri = tri[(tri[:, 0] != tri[:, 1]) & (tri[:, 1] != tri[:, 2]) & (tri[:, 0] != tri[:, 2])]
+    tri = tri[
+        (tri[:, 0] != tri[:, 1]) & (tri[:, 1] != tri[:, 2]) & (tri[:, 0] != tri[:, 2])
+    ]
     if len(tri):
         _, keep = np.unique(np.sort(tri, axis=1), axis=0, return_index=True)
         tri = tri[np.sort(keep)]
@@ -52,7 +55,9 @@ def _generalize(items, e):
     coarse, out_fid, moved, vanished = cluster(soup, e / _CELL_DIVISOR, fid)
     if len(vanished):
         coarse = np.concatenate([coarse] + [items[i]["mesh"] for i in vanished], axis=0)
-        out_fid = np.concatenate([out_fid] + [np.full(len(items[i]["mesh"]), i) for i in vanished])
+        out_fid = np.concatenate(
+            [out_fid] + [np.full(len(items[i]["mesh"]), i) for i in vanished]
+        )
         # glb_bytes wants vertices grouped by feature
         order = np.argsort(out_fid.reshape(-1, 3)[:, 0], kind="stable")
         coarse = coarse.reshape(-1, 3, 3)[order].reshape(-1, 3)
@@ -73,8 +78,16 @@ def _split(items):
 
 
 class _Builder:
-    def __init__(self, out_dir, schema, max_bytes, max_depth, texturer=None, base_color=None,
-                 max_leaf_extent=None):
+    def __init__(
+        self,
+        out_dir,
+        schema,
+        max_bytes,
+        max_depth,
+        texturer=None,
+        base_color=None,
+        max_leaf_extent=None,
+    ):
         self.out_dir = out_dir
         self.max_leaf_extent = max_leaf_extent
         self.schema = schema
@@ -96,8 +109,15 @@ class _Builder:
 
     def _encode(self, soup, counts, props, **kwargs):
         """None when the untextured tile exceeds size_limit; the texture is added only to tiles that fit."""
-        return glb_bytes(soup, counts, props, self.schema, texturer=self.texturer, base_color=self.base_color,
-                         **kwargs)
+        return glb_bytes(
+            soup,
+            counts,
+            props,
+            self.schema,
+            texturer=self.texturer,
+            base_color=self.base_color,
+            **kwargs,
+        )
 
     def _too_wide(self, items):
         if not self.max_leaf_extent:
@@ -108,16 +128,25 @@ class _Builder:
 
     def node(self, items, depth):
         """-> (tile json, geometric error, aabb min, aabb max, size threshold e)"""
-        est = sum(len(it["mesh"]) for it in items) * _EST_BYTES_PER_VERTEX + sum(it["meta_bytes"] for it in items)
+        est = sum(len(it["mesh"]) for it in items) * _EST_BYTES_PER_VERTEX + sum(
+            it["meta_bytes"] for it in items
+        )
         can_split = len(items) > 1 and depth < self.max_depth
         if not can_split or (est <= self.max_bytes * 1.5 and not self._too_wide(items)):
             soup = np.concatenate([it["mesh"] for it in items], axis=0)
-            data = self._encode(soup, [len(it["mesh"]) for it in items], [it["properties"] for it in items],
-                                size_limit=self.max_bytes if can_split else None)
+            data = self._encode(
+                soup,
+                [len(it["mesh"]) for it in items],
+                [it["properties"] for it in items],
+                size_limit=self.max_bytes if can_split else None,
+            )
             if data is not None:
                 mn, mx = soup.min(axis=0), soup.max(axis=0)
-                tile = {"boundingVolume": {"box": box(mn, mx)}, "geometricError": 0.0,
-                        "content": {"uri": self._write(data)}}
+                tile = {
+                    "boundingVolume": {"box": box(mn, mx)},
+                    "geometricError": 0.0,
+                    "content": {"uri": self._write(data)},
+                }
                 return tile, 0.0, mn, mx, 0.0
 
         children = [self.node(part, depth + 1) for part in _split(items)]
@@ -131,7 +160,14 @@ class _Builder:
                 break
             alive, counts = np.unique(out_fid, return_counts=True)
             props = [items[i]["properties"] for i in alive]
-            data = self._encode(coarse, counts.tolist(), props, max_step=e / 40.0, detail=e, size_limit=self.max_bytes)
+            data = self._encode(
+                coarse,
+                counts.tolist(),
+                props,
+                max_step=e / 40.0,
+                detail=e,
+                size_limit=self.max_bytes,
+            )
             if data is not None:
                 break
             e *= _CELL_STEP
@@ -140,8 +176,11 @@ class _Builder:
             if texel:
                 error = max(error, texel * _TEXEL_ERROR)
         error = max(error, max(c[1] for c in children))
-        tile = {"boundingVolume": {"box": box(mn, mx)}, "geometricError": error,
-                "children": [c[0] for c in children]}
+        tile = {
+            "boundingVolume": {"box": box(mn, mx)},
+            "geometricError": error,
+            "children": [c[0] for c in children],
+        }
         if data is not None:
             tile["content"] = {"uri": self._write(data)}
         return tile, error, mn, mx, e
@@ -151,23 +190,50 @@ def _meta_bytes(props):
     return sum(len(str(v).encode("utf-8")) + 4 for v in (props or {}).values())
 
 
-def build_tileset(features, output_dir, transform, max_tile_bytes=400 * 1024, max_depth=16,
-                  texturer=None, base_color=None, max_leaf_extent=None):
+def build_tileset(
+    features,
+    output_dir,
+    transform,
+    max_tile_bytes=400 * 1024,
+    max_depth=16,
+    texturer=None,
+    base_color=None,
+    max_leaf_extent=None,
+):
     """features: dicts with mesh ((N,3) ENU triangle soup), 2D centroid and properties."""
     os.makedirs(output_dir, exist_ok=True)
-    items = [{**f, "meta_bytes": _meta_bytes(f["properties"]),
-              "extent": float(np.linalg.norm(f["mesh"].max(axis=0) - f["mesh"].min(axis=0))),
-              "xy_min": f["mesh"][:, :2].min(axis=0), "xy_max": f["mesh"][:, :2].max(axis=0)}
-             for f in features if len(f["mesh"])]
+    items = [
+        {
+            **f,
+            "meta_bytes": _meta_bytes(f["properties"]),
+            "extent": float(
+                np.linalg.norm(f["mesh"].max(axis=0) - f["mesh"].min(axis=0))
+            ),
+            "xy_min": f["mesh"][:, :2].min(axis=0),
+            "xy_max": f["mesh"][:, :2].max(axis=0),
+        }
+        for f in features
+        if len(f["mesh"])
+    ]
     if not items:
         raise ValueError("No features to tile")
 
     schema = infer_schema([it["properties"] for it in items])
-    builder = _Builder(output_dir, schema, int(max_tile_bytes), max_depth, texturer, base_color, max_leaf_extent)
+    builder = _Builder(
+        output_dir,
+        schema,
+        int(max_tile_bytes),
+        max_depth,
+        texturer,
+        base_color,
+        max_leaf_extent,
+    )
     root, root_error, mn, mx, _ = builder.node(items, 0)
     root["refine"] = "REPLACE"
     metadata = tileset_metadata([it["properties"] for it in items], schema)
     # Cesium skips the root while the tileset error is below the SSE threshold
-    error = root_error * 2.0 if root_error > 0 else max(float(np.linalg.norm(mx - mn)), 1.0)
+    error = (
+        root_error * 2.0 if root_error > 0 else max(float(np.linalg.norm(mx - mn)), 1.0)
+    )
     tileset = write_tileset(output_dir, root, transform, error, metadata)
     return tileset, builder.stats
