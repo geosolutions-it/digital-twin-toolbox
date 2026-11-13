@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 import uuid
@@ -53,6 +54,8 @@ from app.services.pipeline_lifecycle import (
     revoke_running,
     sync_lost_tasks,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -538,7 +541,9 @@ def delete_pipeline_batch(session: SessionDep, batch_id: uuid.UUID) -> Message:
         try:
             get_storage().delete_prefix(batch_prefix + "/")
         except Exception:
-            pass
+            logger.warning(
+                "Could not delete batch output %s", batch_prefix, exc_info=True
+            )
 
     return Message(message=f"Deleted {len(pipelines)} pipelines")
 
@@ -625,7 +630,9 @@ def delete_pipeline(session: SessionDep, id: uuid.UUID) -> Message:
     try:
         get_storage().delete_prefix(output_prefix + "/")
     except Exception:
-        pass
+        logger.warning(
+            "Could not delete pipeline output %s", output_prefix, exc_info=True
+        )
 
     # rebuild the combined tileset so it stops referencing the removed child
     if batch_prefix:

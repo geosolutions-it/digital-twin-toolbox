@@ -1,9 +1,12 @@
 import io
 import json
+import logging
 
 from app.core.storage import get_storage, output_url
 from app.worker.main import celery
 from app.worker.tasks.common.tiles3d import build_parent_tileset
+
+logger = logging.getLogger(__name__)
 
 
 @celery.task(name="finalize_tileset_batch")
@@ -25,7 +28,7 @@ def finalize_tileset_batch(*_args, output_prefix, base=None):
         try:
             storage.delete_prefix(parent_key)
         except Exception:
-            pass
+            logger.warning("Could not delete stale %s", parent_key, exc_info=True)
         return {"tileset": None, "count": 0}
 
     parent = build_parent_tileset(children)

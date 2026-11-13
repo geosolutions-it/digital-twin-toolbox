@@ -168,3 +168,16 @@ def test_unknown_ids_are_404(client, fake_celery):
     assert client.delete(f"{BASE}/{missing}").status_code == 404
     assert client.delete(f"{BASE}/batch/{missing}").status_code == 404
     assert client.post(f"{BASE}/batch/{missing}/finalize").status_code == 404
+
+
+def test_delete_logs_when_the_output_cannot_be_removed(
+    client, db, make_pipeline, storage, fake_celery, caplog, monkeypatch
+):
+    def fail(prefix):
+        raise ConnectionError("bucket unreachable")
+
+    monkeypatch.setattr(storage, "delete_prefix", fail)
+    row_id = make_pipeline(source=mesh_source()).id
+    assert client.delete(f"{BASE}/{row_id}").status_code == 200
+    assert fresh(db, row_id) is None
+    assert "Could not delete pipeline output output/model" in caplog.text
