@@ -1,9 +1,11 @@
 import sentry_sdk
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
+from pydantic.json_schema import models_json_schema
 from starlette.middleware.cors import CORSMiddleware
 from app.api.main import api_router
 from app.core.config import settings
+from app.models.config import CONFIG_MODELS
 
 
 def custom_generate_unique_id(route: APIRoute) -> str:
@@ -32,3 +34,18 @@ if settings.BACKEND_CORS_ORIGINS:
     )
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
+
+def _openapi() -> dict:
+    # config models are validated from a plain dict, so no route references them
+    if app.openapi_schema is None:
+        schema = FastAPI.openapi(app)
+        _, extra = models_json_schema(
+            [(m, "validation") for m in CONFIG_MODELS.values()],
+            ref_template="#/components/schemas/{model}",
+        )
+        schema["components"]["schemas"].update(extra["$defs"])
+    return app.openapi_schema
+
+
+app.openapi = _openapi  # type: ignore[method-assign]

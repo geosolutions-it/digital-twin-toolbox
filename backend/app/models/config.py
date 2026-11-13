@@ -1,5 +1,10 @@
 """Typed per-pipeline-type config, replacing the untyped JSONB `data` blob."""
-from pydantic import BaseModel, ConfigDict, field_validator
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+# a constant, or an expression array evaluated per feature by worker/common/expression.py
+Expression = float | str | list[Any]
 
 
 class PointCloudConfig(BaseModel):
@@ -22,7 +27,7 @@ class PointCloudConfig(BaseModel):
         return v
 
 
-AXES = ("X", "Y", "Z", "NEGATIVE_X", "NEGATIVE_Y", "NEGATIVE_Z")
+Axis = Literal["X", "Y", "Z", "NEGATIVE_X", "NEGATIVE_Y", "NEGATIVE_Z"]
 
 
 class MeshConfig(BaseModel):
@@ -39,21 +44,14 @@ class MeshConfig(BaseModel):
     max_geometric_error: float | None = 256
     decimate_last_depth_level: bool = True
     # file axes mapped to north (forward) and up
-    forward_axis: str = "Y"
-    up_axis: str = "Z"
+    forward_axis: Axis = "Y"
+    up_axis: Axis = "Z"
 
     @field_validator("max_geometric_error", mode="before")
     @classmethod
     def _blank_is_none(cls, v):
         if v is None or (isinstance(v, str) and v.strip() == ""):
             return None
-        return v
-
-    @field_validator("forward_axis", "up_axis")
-    @classmethod
-    def _axis(cls, v):
-        if v not in AXES:
-            raise ValueError(f"axis must be one of {', '.join(AXES)}")
         return v
 
     @field_validator("depth")
@@ -100,7 +98,7 @@ class CityGMLConfig(BaseModel):
         return v
 
 
-BUILDING_LODS = ("1.2", "1.3", "2.2")
+BuildingLod = Literal["1.2", "1.3", "2.2"]
 
 
 class BuildingConfig(BaseModel):
@@ -111,7 +109,7 @@ class BuildingConfig(BaseModel):
     point_cloud: str = ""
     orthophoto: str | None = None
     dtm: str | None = None
-    lod: str = "2.2"
+    lod: BuildingLod = "2.2"
     building_class: int = 6
     ground_class: int = 2
     to_ellipsoidal_height: bool = False
@@ -136,10 +134,7 @@ class BuildingConfig(BaseModel):
     @field_validator("lod", mode="before")
     @classmethod
     def _lod(cls, v):
-        v = str(v or "2.2")
-        if v not in BUILDING_LODS:
-            raise ValueError(f"lod must be one of {', '.join(BUILDING_LODS)}")
-        return v
+        return str(v or "2.2")
 
     @field_validator("texture_resolution")
     @classmethod
@@ -147,3 +142,75 @@ class BuildingConfig(BaseModel):
         if v is not None and v <= 0:
             raise ValueError("texture_resolution must be positive")
         return v
+
+
+class PolygonConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    lower_limit_height: Expression | None = None
+    upper_limit_height: Expression | None = None
+    to_ellipsoidal_height: bool = False
+    remove_bottom_surface: bool = True
+    max_tile_size_kb: float = Field(400, gt=0)
+
+    @field_validator("lower_limit_height", "upper_limit_height", mode="before")
+    @classmethod
+    def _blank_is_none(cls, v):
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return None
+        return v
+
+
+class TerrainConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    to_ellipsoidal_height: bool = False
+    # vertical CRS of the DEM heights
+    source_vertical_epsg: int = 3855
+    min_zoom: int = Field(0, ge=0)
+    # None: from the DEM resolution
+    max_zoom: int | None = Field(None, ge=0)
+    vertex_normals: bool = True
+    # vector key of the water mask
+    water_key: str | None = None
+
+    @field_validator("max_zoom", "water_key", mode="before")
+    @classmethod
+    def _blank_is_none(cls, v):
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return None
+        return v
+
+
+class InstanceConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    # glb name, appended to models_prefix
+    model: str | list[Any] = "model.glb"
+    models_prefix: str = ""
+    # degrees
+    rotation: Expression = 0.0
+    scale: Expression = 1.0
+    # None: the point's own height
+    elevation: Expression | None = None
+    to_ellipsoidal_height: bool = False
+    max_tile_size_kb: float = Field(1024, gt=0)
+    max_geometric_error: float = Field(500, gt=0)
+
+    @field_validator("elevation", mode="before")
+    @classmethod
+    def _blank_is_none(cls, v):
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return None
+        return v
+
+
+CONFIG_MODELS: dict[str, type[BaseModel]] = {
+    "PointCloud": PointCloudConfig,
+    "Polygon": PolygonConfig,
+    "Terrain": TerrainConfig,
+    "Instance": InstanceConfig,
+    "Mesh": MeshConfig,
+    "CityGML": CityGMLConfig,
+    "Building": BuildingConfig,
+}

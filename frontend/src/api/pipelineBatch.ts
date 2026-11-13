@@ -1,63 +1,53 @@
 import axios from "axios"
 import { API_BASE } from "./config"
-
-export interface PipelineBatchRequest {
-  prefix: string
-  pipeline?: string
-  data?: Record<string, unknown> | null
-  title?: string | null
-}
-
-export interface PipelineBatchResponse {
-  batch_id: string
-  count: number
-  pipeline_ids: string[]
-}
+import type {
+  FinalizeQueued,
+  Message,
+  MeshBbox,
+  PipelineBatchActionResult,
+  PipelineBatchCreate,
+  PipelineBatchCreated,
+  PipelineBatchUpdated,
+  PipelineConfigInput,
+  PipelineCreated,
+  PipelinePublic,
+  PipelinesActionTypes,
+  PipelineSourceCreate,
+  VectorFields,
+  VectorSample,
+} from "./types"
 
 export async function createPipelineBatch(
-  body: PipelineBatchRequest,
-): Promise<PipelineBatchResponse> {
+  body: PipelineBatchCreate,
+): Promise<PipelineBatchCreated> {
   const res = await axios.post(`${API_BASE}/api/v1/pipelines/batch`, body)
   return res.data
 }
 
-export interface PipelineSourceRequest {
-  key: string
-  pipeline?: string
-  data?: Record<string, unknown> | null
-  title?: string | null
-}
-
 export async function createPipelineSource(
-  body: PipelineSourceRequest,
-): Promise<{ id: string }> {
+  body: PipelineSourceCreate,
+): Promise<PipelineCreated> {
   const res = await axios.post(`${API_BASE}/api/v1/pipelines/source`, body)
   return res.data
 }
 
 export async function updatePipelineConfig(
   id: string,
-  data: Record<string, unknown> | null,
-): Promise<unknown> {
+  data: PipelineConfigInput,
+): Promise<PipelinePublic> {
   const res = await axios.put(`${API_BASE}/api/v1/pipelines/${id}`, { data })
   return res.data
 }
 
 export async function updateBatchConfig(
   batchId: string,
-  data: Record<string, unknown> | null,
-): Promise<{ batch_id: string; count: number }> {
+  data: PipelineConfigInput,
+): Promise<PipelineBatchUpdated> {
   const res = await axios.put(
     `${API_BASE}/api/v1/pipelines/batch/${batchId}`,
     { data },
   )
   return res.data
-}
-
-export interface VectorFields {
-  count: number
-  fields: { name: string; type: string }[]
-  properties: Record<string, unknown>
 }
 
 export async function getVectorFields(params: {
@@ -71,17 +61,6 @@ export async function getVectorFields(params: {
     `${API_BASE}/api/v1/pipelines/vector-fields?${qs.toString()}`,
   )
   return res.data
-}
-
-export type SampleFeature = {
-  type: "Feature"
-  geometry: { type: string; coordinates: any } | null
-  properties: Record<string, unknown> | null
-}
-
-export type VectorSample = {
-  type: "FeatureCollection"
-  features: SampleFeature[]
 }
 
 export async function getVectorSample(params: {
@@ -101,14 +80,6 @@ export async function getVectorSample(params: {
   return res.data
 }
 
-export type MeshBbox = {
-  key: string
-  /** file axes, metres */
-  size: [number, number, number]
-  /** bbox centre relative to the model origin */
-  offset: [number, number, number]
-}
-
 export async function getMeshBbox(params: { key?: string; prefix?: string }): Promise<MeshBbox> {
   const res = await axios.get(`${API_BASE}/api/v1/pipelines/mesh-bbox`, {
     params: { key: params.key, prefix: params.prefix },
@@ -116,7 +87,7 @@ export async function getMeshBbox(params: { key?: string; prefix?: string }): Pr
   return res.data
 }
 
-export async function finalizePipelineBatch(batchId: string): Promise<{ ok: boolean }> {
+export async function finalizePipelineBatch(batchId: string): Promise<FinalizeQueued> {
   const res = await axios.post(
     `${API_BASE}/api/v1/pipelines/batch/${batchId}/finalize`,
     {},
@@ -126,8 +97,8 @@ export async function finalizePipelineBatch(batchId: string): Promise<{ ok: bool
 
 export async function processPipelineBatchTask(
   batchId: string,
-  actionType: "run" | "cancel",
-): Promise<{ batch_id: string; count: number; affected: number }> {
+  actionType: PipelinesActionTypes,
+): Promise<PipelineBatchActionResult> {
   const res = await axios.post(
     `${API_BASE}/api/v1/pipelines/batch/${batchId}/task/${actionType}`,
   )
@@ -136,7 +107,7 @@ export async function processPipelineBatchTask(
 
 export async function deletePipelineBatch(
   batchId: string,
-): Promise<{ message: string }> {
+): Promise<Message> {
   const res = await axios.delete(
     `${API_BASE}/api/v1/pipelines/batch/${batchId}`,
   )

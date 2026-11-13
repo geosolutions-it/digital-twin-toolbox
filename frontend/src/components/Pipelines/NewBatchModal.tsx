@@ -32,6 +32,19 @@ import {
   updatePipelineConfig,
 } from "../../api/pipelineBatch"
 import { processPipelineTask } from "../../api/pipelines"
+import type {
+  Axis,
+  BuildingConfig,
+  BuildingLod,
+  CityGMLConfig,
+  InstanceConfig,
+  MeshConfig,
+  PipelineConfigInput,
+  PipelineType,
+  PointCloudConfig,
+  PolygonConfig,
+  TerrainConfig,
+} from "../../api/types"
 import useCustomToast from "../../hooks/useCustomToast"
 import ExpressionInput, { isInvalidExpression } from "./ExpressionInput"
 import StorageKeyInput, { useStorageListing } from "./StorageKeyInput"
@@ -39,20 +52,12 @@ import type { PreviewKind } from "./PreviewMap"
 
 const PreviewMap = lazy(() => import("./PreviewMap"))
 
-type PipelineType =
-  | "PointCloud"
-  | "Polygon"
-  | "Terrain"
-  | "Instance"
-  | "Mesh"
-  | "CityGML"
-  | "Building"
 
 // worker downloads water as a single file
 const VECTOR_EXTENSIONS = [".gpkg", ".geojson", ".json", ".fgb"]
 const RASTER_EXTENSIONS = [".tif", ".tiff", ".jp2"]
 
-const AXES = [
+const AXES: { value: Axis; label: string }[] = [
   { value: "X", label: "X" },
   { value: "Y", label: "Y" },
   { value: "Z", label: "Z" },
@@ -100,8 +105,8 @@ interface BatchFormValues {
   latitude?: string
   longitude?: string
   altitude?: string
-  forward_axis?: string
-  up_axis?: string
+  forward_axis?: Axis
+  up_axis?: Axis
   depth?: string
   tile_faces_target?: string
   texture_image_size?: string
@@ -165,17 +170,25 @@ const EMPTY: BatchFormValues = {
   texture_resolution: "",
 }
 
+const BUILDING_LODS: readonly BuildingLod[] = ["1.2", "1.3", "2.2"]
+
+function isBuildingLod(v: string | undefined): v is BuildingLod {
+  return BUILDING_LODS.includes(v as BuildingLod)
+}
+
 function buildData(
   values: BatchFormValues,
   type: PipelineType,
-): Record<string, unknown> {
-  const data: Record<string, unknown> = {}
+): PipelineConfigInput {
   if (type === "Mesh") {
-    data.latitude = Number(values.latitude || 0)
-    data.longitude = Number(values.longitude || 0)
-    data.altitude = Number(values.altitude || 0)
-    data.forward_axis = values.forward_axis || "Y"
-    data.up_axis = values.up_axis || "Z"
+    const data: Partial<MeshConfig> = {
+      latitude: Number(values.latitude || 0),
+      longitude: Number(values.longitude || 0),
+      altitude: Number(values.altitude || 0),
+      forward_axis: values.forward_axis || "Y",
+      up_axis: values.up_axis || "Z",
+      decimate_last_depth_level: !!values.decimate_last_depth_level,
+    }
     if (values.depth) data.depth = Number(values.depth)
     if (values.tile_faces_target)
       data.tile_faces_target = Number(values.tile_faces_target)
@@ -183,17 +196,19 @@ function buildData(
       data.texture_image_size = Number(values.texture_image_size)
     if (values.max_geometric_error)
       data.max_geometric_error = Number(values.max_geometric_error)
-    data.decimate_last_depth_level = !!values.decimate_last_depth_level
     return data
   }
   if (type === "Terrain") {
+    const data: Partial<TerrainConfig> = {
+      vertex_normals: !!values.vertex_normals,
+    }
     if (values.to_ellipsoidal_height) data.to_ellipsoidal_height = true
     if (values.max_zoom) data.max_zoom = Number(values.max_zoom)
-    data.vertex_normals = !!values.vertex_normals
     if (values.water_key) data.water_key = values.water_key
     return data
   }
   if (type === "Instance") {
+    const data: Partial<InstanceConfig> = {}
     if (values.model) data.model = values.model
     if (values.models_prefix) data.models_prefix = values.models_prefix
     const scale = heightValue(values.scale)
@@ -210,12 +225,12 @@ function buildData(
     return data
   }
   if (type === "Building") {
-    data.point_cloud = values.point_cloud
+    const data: Partial<BuildingConfig> = {
+      point_cloud: values.point_cloud,
+      lod: isBuildingLod(values.lod) ? values.lod : "2.2",
+    }
     if (values.orthophoto) data.orthophoto = values.orthophoto
     if (values.dtm) data.dtm = values.dtm
-    data.lod = ["1.2", "1.3", "2.2"].includes(values.lod ?? "")
-      ? values.lod
-      : "2.2"
     if (values.building_class)
       data.building_class = Number(values.building_class)
     if (values.ground_class) data.ground_class = Number(values.ground_class)
@@ -227,6 +242,7 @@ function buildData(
     return data
   }
   if (type === "CityGML") {
+    const data: Partial<CityGMLConfig> = {}
     if (values.lod) data.lod = Number(values.lod)
     if (values.orthophoto) data.orthophoto = values.orthophoto
     if (values.orthophoto && values.texture_resolution)
@@ -240,16 +256,19 @@ function buildData(
     return data
   }
   if (type === "Polygon") {
+    const data: Partial<PolygonConfig> = {
+      remove_bottom_surface: !!values.remove_bottom_surface,
+    }
     const upper = heightValue(values.upper_limit_height)
     const lower = heightValue(values.lower_limit_height)
     if (upper !== undefined) data.upper_limit_height = upper
     if (lower !== undefined) data.lower_limit_height = lower
     if (values.to_ellipsoidal_height) data.to_ellipsoidal_height = true
-    data.remove_bottom_surface = !!values.remove_bottom_surface
     if (values.max_tile_size_kb)
       data.max_tile_size_kb = Number(values.max_tile_size_kb)
     return data
   }
+  const data: Partial<PointCloudConfig> = {}
   if (values.sample_radius) data.sample_radius = Number(values.sample_radius)
   if (values.to_ellipsoidal_height) data.to_ellipsoidal_height = true
   if (values.ground_classification) data.ground_classification = true
@@ -347,7 +366,7 @@ const NewBatchModal = ({
   const sampleFeatures = sample.data?.features
   // point layers can only be instanced
   const type: PipelineType =
-    baseType === "Polygon" && (vectorFields as any)?.geometry_type === "Point"
+    baseType === "Polygon" && vectorFields?.geometry_type === "Point"
       ? "Instance"
       : baseType
   const modelsPrefix = watch("models_prefix") ?? ""
@@ -1287,4 +1306,4 @@ const NewBatchModal = ({
 }
 
 export default NewBatchModal
-export type { BatchFormValues, PipelineType }
+export type { BatchFormValues }

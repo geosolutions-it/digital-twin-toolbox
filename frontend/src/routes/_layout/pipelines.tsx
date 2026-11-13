@@ -69,12 +69,14 @@ import {
 import type {
   PipelineBatchCounts,
   PipelineBatchSummary,
+  AnyPipelineConfig,
   PipelineOverviewEntry,
+  PipelinePublic,
+  PipelineType,
 } from "../../api/types"
 import useCustomToast from "../../hooks/useCustomToast"
 import NewBatchModal, {
   type BatchFormValues,
-  type PipelineType,
 } from "../../components/Pipelines/NewBatchModal"
 import PageHeader from "../../components/Common/PageHeader"
 import LogsDrawer from "../../components/Pipelines/LogsDrawer"
@@ -296,9 +298,13 @@ function pipelineType(p: Pipeline): PipelineType {
   return "PointCloud"
 }
 
-function dataToValues(d: any): Partial<BatchFormValues> {
-  const num = (v: any) => (typeof v === "number" ? String(v) : "")
-  const expr = (v: any) => (Array.isArray(v) ? v : typeof v === "number" ? String(v) : "")
+function dataToValues(
+  data: PipelinePublic["data"] | undefined,
+): Partial<BatchFormValues> {
+  // stored rows predate validation, so values are still checked at runtime
+  const d = (data ?? {}) as AnyPipelineConfig
+  const num = (v: unknown) => (typeof v === "number" ? String(v) : "")
+  const expr = (v: unknown) => (Array.isArray(v) ? v : typeof v === "number" ? String(v) : "")
   return {
     sample_radius: d?.sample_radius != null ? String(d.sample_radius) : "",
     colorization_image: d?.colorization_image || "",

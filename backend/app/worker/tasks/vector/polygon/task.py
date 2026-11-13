@@ -5,6 +5,7 @@ import tempfile
 import numpy as np
 
 from app.core.storage import get_storage, output_key
+from app.models.config import PolygonConfig
 from app.worker.common.expression import parse_expression
 from app.worker.main import celery, PipelineDatabaseTask
 from app.worker.common.geo import LocalFrame
@@ -21,11 +22,11 @@ def _ensure_z(coords):
     return [_ensure_z(c) for c in coords]
 
 
-def _read_raw_features(path, config, default_config):
+def _read_raw_features(path, config):
     """Open the vector with OGR, reproject to WGS84 (optionally ellipsoidal), and
     collect per-feature footprints + resolved heights. Returns (features, (lo, hi))."""
     ds, layer = open_layer(path)
-    to_ellipsoidal = config.get('to_ellipsoidal_height', False)
+    to_ellipsoidal = config.to_ellipsoidal_height
     transform = wgs84_transform(layer, to_ellipsoidal)
     names = field_names(layer)
 
@@ -51,8 +52,8 @@ def _read_raw_features(path, config, default_config):
 
         properties = {name: coerce(feat.GetField(name)) for name in names}
         feature_for_expr = {'type': 'Feature', 'properties': properties, 'geometry': geometry}
-        lower = parse_expression('number', config['lower_limit_height'], feature_for_expr, default_config['lower_limit_height'])
-        upper = parse_expression('number', config['upper_limit_height'], feature_for_expr, default_config['upper_limit_height'])
+        lower = parse_expression('number', config.lower_limit_height, feature_for_expr)
+        upper = parse_expression('number', config.upper_limit_height, feature_for_expr)
 
         parts = [_ensure_z(p) for p in parts]
         for poly in parts:
@@ -65,7 +66,7 @@ def _read_raw_features(path, config, default_config):
             'parts': parts,
             'lower': lower,
             'upper': upper,
-            'remove_bottom': config['remove_bottom_surface'],
+            'remove_bottom': config.remove_bottom_surface,
             'properties': properties,
         })
 
@@ -125,15 +126,7 @@ def create_polygon_3dtiles(pipeline_extended):
     if not source.get('key'):
         raise Exception("Polygon pipeline requires a bucket source")
 
-    pipeline_config = pipeline_extended.get('data') or {}
-    default_config = {
-        'lower_limit_height': None,
-        'upper_limit_height': None,
-        'to_ellipsoidal_height': False,
-        'remove_bottom_surface': True,
-        'max_tile_size_kb': 400,
-    }
-    config = {**default_config, **pipeline_config}
+    config = PolygonConfig(**(pipeline_extended.get('data') or {}))
 
     storage = get_storage()
     out_base = source.get('output_base') or output_key(pipeline_id)
@@ -142,7 +135,7 @@ def create_polygon_3dtiles(pipeline_extended):
         log_stage("Downloading input")
         input_path = resolve_input(source, storage, scratch)
         log_stage("Reading features")
-        raw, (lo, hi) = _read_raw_features(input_path, config, default_config)
+        raw, (lo, hi) = _read_raw_features(input_path, config)
         if not raw:
             raise Exception("No polygon features to tile")
 
@@ -152,8 +145,7 @@ def create_polygon_3dtiles(pipeline_extended):
         features = _build_meshes(raw, frame)
 
         tiles_dir = os.path.join(scratch, 'tiles')
-        max_kb = float(parse_expression('number', config['max_tile_size_kb'], {}, default_config['max_tile_size_kb']))
         log_stage(f"Tiling {len(features)} features")
-        build_tileset(features, tiles_dir, frame.transform(), max_tile_bytes=max_kb * 1024)
+        build_tileset(features, tiles_dir, frame.transform(), max_tile_bytes=config.max_tile_size_kb * 1024)
 
         return publish_tiles(storage, tiles_dir, out_base, 'tileset.json')

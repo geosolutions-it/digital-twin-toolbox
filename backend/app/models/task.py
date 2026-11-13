@@ -1,11 +1,14 @@
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 from enum import Enum
 
 from sqlalchemy import BigInteger, DateTime, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
+
+
+PipelineType = Literal["PointCloud", "Polygon", "Terrain", "Instance", "Mesh", "CityGML", "Building"]
 
 
 class PipelineBase(SQLModel):
@@ -57,14 +60,14 @@ class PipelinePublic(PipelineBase):
 
 class PipelineBatchCreate(SQLModel):
     prefix: str
-    pipeline: str = "PointCloud"
+    pipeline: PipelineType = "PointCloud"
     data: Optional[dict] = None
     title: str | None = None
 
 
 class PipelineSourceCreate(SQLModel):
     key: str
-    pipeline: str = "PointCloud"
+    pipeline: PipelineType = "PointCloud"
     data: Optional[dict] = None
     title: str | None = None
 
@@ -87,7 +90,7 @@ class PipelineBatchSummary(SQLModel):
     source: str | None = None
     output_prefix: str | None = None
     output_url: str | None = None
-    pipeline: str | None = None
+    pipeline: PipelineType | None = None
     sample_key: str | None = None
     data: Optional[dict] = None
     total: int
@@ -95,8 +98,7 @@ class PipelineBatchSummary(SQLModel):
 
 
 class PipelineOverviewEntry(SQLModel):
-    # kind is "batch" (folder) or "pipeline" (standalone row)
-    kind: str
+    kind: Literal["batch", "pipeline"]
     batch: PipelineBatchSummary | None = None
     pipeline: PipelinePublic | None = None
 
@@ -113,6 +115,40 @@ class PipelineUpdate(SQLModel):
 class PipelinesActionTypes(str, Enum):
     run = "run"
     cancel = "cancel"
+
+
+class PipelineCreated(SQLModel):
+    id: uuid.UUID
+
+
+class PipelineBatchCreated(SQLModel):
+    batch_id: uuid.UUID
+    count: int
+    pipeline_ids: list[uuid.UUID]
+
+
+class PipelineBatchUpdated(SQLModel):
+    batch_id: uuid.UUID
+    count: int
+
+
+class PipelineActionResult(SQLModel):
+    action_type: PipelinesActionTypes
+    # unset when the action did not apply (already running, nothing to cancel)
+    task_id: str | None = None
+    task_status: str | None = None
+    task_result: dict | None = None
+
+
+class PipelineBatchActionResult(SQLModel):
+    batch_id: uuid.UUID
+    count: int
+    affected: int
+    action_type: PipelinesActionTypes
+
+
+class FinalizeQueued(SQLModel):
+    ok: bool
 
 
 class Message(SQLModel):

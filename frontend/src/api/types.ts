@@ -1,64 +1,58 @@
-export type Message = {
-  message: string
-}
+import type { components } from "./schema.gen"
 
-export type PipelinePublic = {
-  title: string
-  data: Record<string, unknown> | null
-  task_id: string | null
-  task_status: string | null
-  task_result: Record<string, unknown> | null
-  id: string
-  owner_id: string
-  stage?: string | null
-}
+type S = components["schemas"]
 
-export type PipelineLogLine = {
-  id: number
-  created_at: string
-  level: string
-  message: string
-  stage: string | null
-}
+export type Message = S["Message"]
+export type PipelinePublic = S["PipelinePublic"]
+export type PipelineLogLine = S["PipelineLogPublic"]
+export type PipelineLogs = S["PipelineLogsPublic"]
+export type PipelinesActionTypes = S["PipelinesActionTypes"]
+export type PipelinesPublic = S["PipelinesPublic"]
+export type PipelineBatchCounts = S["PipelineBatchCounts"]
+export type PipelineBatchSummary = S["PipelineBatchSummary"]
+export type PipelineOverviewEntry = S["PipelineOverviewEntry"]
+export type PipelinesOverview = S["PipelinesOverview"]
+export type PipelineBatchCreate = S["PipelineBatchCreate"]
+export type PipelineSourceCreate = S["PipelineSourceCreate"]
+export type PipelineType = NonNullable<PipelineSourceCreate["pipeline"]>
+export type PipelineCreated = S["PipelineCreated"]
+export type PipelineBatchCreated = S["PipelineBatchCreated"]
+export type PipelineBatchUpdated = S["PipelineBatchUpdated"]
+export type PipelineActionResult = S["PipelineActionResult"]
+export type PipelineBatchActionResult = S["PipelineBatchActionResult"]
+export type FinalizeQueued = S["FinalizeQueued"]
 
-export type PipelineLogs = {
-  data: Array<PipelineLogLine>
-}
+export type VectorFields = S["VectorFields"]
+export type VectorSample = S["VectorSample"]
+export type SampleFeature = S["SampleFeature"]
+export type MeshBbox = S["MeshBbox"]
 
-export type PipelinesActionTypes = "run" | "cancel"
+export type PointCloudConfig = S["PointCloudConfig"]
+export type MeshConfig = S["MeshConfig"]
+export type CityGMLConfig = S["CityGMLConfig"]
+export type BuildingConfig = S["BuildingConfig"]
+export type Axis = MeshConfig["forward_axis"]
+export type BuildingLod = BuildingConfig["lod"]
+export type PolygonConfig = S["PolygonConfig"]
+export type TerrainConfig = S["TerrainConfig"]
+export type InstanceConfig = S["InstanceConfig"]
 
-export type PipelinesPublic = {
-  data: Array<PipelinePublic>
-  count: number
-}
+export type PipelineConfig =
+  | PointCloudConfig
+  | PolygonConfig
+  | TerrainConfig
+  | InstanceConfig
+  | MeshConfig
+  | CityGMLConfig
+  | BuildingConfig
 
-export type PipelineBatchCounts = {
-  success: number
-  running: number
-  ready: number
-  failed: number
-}
+// openapi-typescript marks defaulted fields required; a sent config may omit them
+export type PipelineConfigInput = Partial<PipelineConfig>
 
-export type PipelineBatchSummary = {
-  batch_id: string
-  label: string
-  source: string | null
-  output_prefix: string | null
-  output_url?: string | null
-  pipeline: string | null
-  sample_key: string | null
-  data: Record<string, unknown> | null
-  total: number
-  counts: PipelineBatchCounts
-}
+type KeysOfUnion<T> = T extends T ? keyof T : never
+type ValueInUnion<T, K extends PropertyKey> = T extends Record<K, infer V> ? V : never
 
-export type PipelineOverviewEntry = {
-  kind: "batch" | "pipeline"
-  batch: PipelineBatchSummary | null
-  pipeline: PipelinePublic | null
-}
-
-export type PipelinesOverview = {
-  data: Array<PipelineOverviewEntry>
-  count: number
+// every key of every pipeline config, for code that reads a stored config of any type
+export type AnyPipelineConfig = {
+  [K in KeysOfUnion<PipelineConfig>]?: ValueInUnion<PipelineConfig, K>
 }

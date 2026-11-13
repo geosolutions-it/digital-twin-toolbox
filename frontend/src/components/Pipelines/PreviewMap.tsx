@@ -2,7 +2,7 @@ import { Box, IconButton, Text, Tooltip, VStack } from "@chakra-ui/react"
 import * as Cesium from "cesium"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { FiCrosshair } from "react-icons/fi"
-import type { MeshBbox, SampleFeature } from "../../api/pipelineBatch"
+import type { Axis, MeshBbox, SampleFeature } from "../../api/types"
 import { modelUrl } from "../../api/storageBrowser"
 import { createViewer } from "../../utils/cesium"
 import { type ExprType, evaluate } from "../../utils/expression"
@@ -24,7 +24,7 @@ const EDGE = Cesium.Color.WHITE.withAlpha(0.5)
 const MESH_FILL = Cesium.Color.fromCssColorString("#f6ad55").withAlpha(0.35)
 const MESH_EDGE = Cesium.Color.fromCssColorString("#dd6b20")
 const MISSING = Cesium.Color.fromCssColorString("#e53e3e")
-const AXIS_VECTORS: Record<string, number[]> = {
+const AXIS_VECTORS: Record<Axis, number[]> = {
   X: [1, 0, 0],
   Y: [0, 1, 0],
   Z: [0, 0, 1],
@@ -58,8 +58,8 @@ function evalOr(
 
 function polygonParts(feature: SampleFeature): number[][][][] {
   const g = feature.geometry
-  if (g?.type === "Polygon") return [g.coordinates]
-  if (g?.type === "MultiPolygon") return g.coordinates
+  if (g?.type === "Polygon") return [g.coordinates as number[][][]]
+  if (g?.type === "MultiPolygon") return g.coordinates as number[][][][]
   return []
 }
 
@@ -67,7 +67,7 @@ const ringPositions = (ring: number[][]) =>
   Cesium.Cartesian3.fromDegreesArray(ring.flatMap((c) => [c[0], c[1]]))
 
 /** ENU extent of the mesh bbox; mirrors reader.axis_matrix. */
-function meshExtent(bbox: MeshBbox, forward: string, up: string) {
+function meshExtent(bbox: MeshBbox, forward: Axis, up: Axis) {
   const f = AXIS_VECTORS[forward] ?? AXIS_VECTORS.Y
   const u = AXIS_VECTORS[up] ?? AXIS_VECTORS.Z
   if (Math.abs(f[0] * u[0] + f[1] * u[1] + f[2] * u[2]) > 0.5) return null
@@ -275,7 +275,7 @@ export default function PreviewMap({
     if (!viewer || kind !== "Instance" || !instanceValid) return
     ;(features ?? []).forEach((feature, i) => {
       const entity = featureEntities.current[i]?.[0]
-      const coords = feature.geometry?.coordinates
+      const coords = feature.geometry?.coordinates as number[] | undefined
       if (!entity || !coords) return
       const scale = Number(evalOr("number", values.scale, feature, 1))
       const rotation = Number(evalOr("number", values.rotation, feature, 0))

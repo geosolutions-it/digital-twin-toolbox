@@ -2,6 +2,7 @@ import axios from "axios"
 import { API_BASE } from "./config"
 import type {
   Message,
+  PipelineActionResult,
   PipelineLogs,
   PipelinesActionTypes,
   PipelinesOverview,
@@ -48,7 +49,7 @@ export async function deletePipeline(id: string): Promise<Message> {
 export async function processPipelineTask(
   id: string,
   actionType: PipelinesActionTypes,
-): Promise<unknown> {
+): Promise<PipelineActionResult> {
   const res = await axios.post(
     `${API_BASE}/api/v1/pipelines/${id}/task/${actionType}`,
   )

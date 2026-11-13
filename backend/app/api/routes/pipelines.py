@@ -5,7 +5,8 @@ from sqlmodel import func, select
 import os
 import re
 import uuid
-from app.models.task import Pipeline, PipelineLog, PipelineLogsPublic, PipelinePublic, PipelinesPublic, PipelineBatchCreate, PipelineSourceCreate, Message, PipelinesActionTypes, PipelineUpdate, PipelineBatchCounts, PipelineBatchSummary, PipelineOverviewEntry, PipelinesOverview
+from app.models.task import Pipeline, PipelineLog, PipelineLogsPublic, PipelinePublic, PipelinesPublic, PipelineBatchCreate, PipelineSourceCreate, Message, PipelinesActionTypes, PipelineUpdate, PipelineBatchCounts, PipelineBatchSummary, PipelineOverviewEntry, PipelinesOverview, PipelineCreated, PipelineBatchCreated, PipelineBatchUpdated, PipelineActionResult, PipelineBatchActionResult, FinalizeQueued
+from app.models.inspect import MeshBbox, VectorFields, VectorSample
 
 from app.services.pipeline_config import validate_pipeline_config
 from app.services.file_classify import BATCH_ACCEPTS, batch_targets, classify_bucket_file, SUPPORTED_EXTENSIONS
@@ -210,7 +211,7 @@ def _slug(value: str) -> str:
     return value or "batch"
 
 
-@router.post("/source", response_model=Any)
+@router.post("/source", response_model=PipelineCreated)
 def create_pipeline_source(
     *, session: SessionDep, current_user: CurrentUser, source_in: PipelineSourceCreate
 ) -> Any:
@@ -268,7 +269,7 @@ def _unique_output(storage, name: str) -> str:
     return output_key(out)
 
 
-@router.post("/batch", response_model=Any)
+@router.post("/batch", response_model=PipelineBatchCreated)
 def create_pipeline_batch(
     *, session: SessionDep, current_user: CurrentUser, batch_in: PipelineBatchCreate
 ) -> Any:
@@ -341,7 +342,7 @@ def create_pipeline_batch(
     }
 
 
-@router.post("/batch/{batch_id}/finalize", response_model=Any)
+@router.post("/batch/{batch_id}/finalize", response_model=FinalizeQueued)
 def finalize_pipeline_batch(
     *, session: SessionDep, batch_id: uuid.UUID
 ) -> Any:
@@ -361,7 +362,18 @@ def finalize_pipeline_batch(
     return {"ok": True}
 
 
-@router.put("/batch/{batch_id}", response_model=Any)
+def _validated_update(pipeline: Pipeline, pipeline_in: PipelineUpdate) -> dict:
+    update_dict = pipeline_in.model_dump(exclude_unset=True)
+    if "data" in update_dict:
+        ptype = (pipeline.source or {}).get("pipeline") or "PointCloud"
+        try:
+            update_dict["data"] = validate_pipeline_config(ptype, update_dict["data"])
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=f"Invalid config: {e}")
+    return update_dict
+
+
+@router.put("/batch/{batch_id}", response_model=PipelineBatchUpdated)
 def update_pipeline_batch(
     *, session: SessionDep, batch_id: uuid.UUID, pipeline_in: PipelineUpdate
 ) -> Any:
@@ -369,7 +381,8 @@ def update_pipeline_batch(
     pipelines = session.exec(select(Pipeline).where(Pipeline.batch_id == batch_id)).all()
     if not pipelines:
         raise HTTPException(status_code=404, detail="Batch not found")
-    update_dict = pipeline_in.model_dump(exclude_unset=True)
+    # members of a batch share one workflow
+    update_dict = _validated_update(pipelines[0], pipeline_in)
     for pipeline in pipelines:
         pipeline.sqlmodel_update(update_dict)
         session.add(pipeline)
@@ -389,7 +402,7 @@ def _bucket_target(key: str | None, prefix: str | None, workflow: str) -> str:
     raise HTTPException(status_code=404, detail=f"No {workflow.lower()} file found")
 
 
-@router.get("/vector-fields", response_model=Any)
+@router.get("/vector-fields", response_model=VectorFields)
 def vector_fields(
     *, key: str | None = None, prefix: str | None = None
 ) -> Any:
@@ -403,7 +416,7 @@ def vector_fields(
         raise HTTPException(status_code=422, detail=f"Could not read vector fields: {e}")
 
 
-@router.get("/vector-sample", response_model=Any)
+@router.get("/vector-sample", response_model=VectorSample)
 def vector_sample(
     *,
     key: str | None = None,
@@ -422,7 +435,7 @@ def vector_sample(
         raise HTTPException(status_code=422, detail=f"Could not read vector sample: {e}")
 
 
-@router.get("/mesh-bbox", response_model=Any)
+@router.get("/mesh-bbox", response_model=MeshBbox)
 def mesh_bbox(*, key: str | None = None, prefix: str | None = None) -> Any:
     """Mesh size and origin offset in file axes."""
     target = _bucket_target(key, prefix, "Mesh")
@@ -476,7 +489,7 @@ def _apply_pipeline_action(session, pipeline: Pipeline, action_type: PipelinesAc
     return pipeline_out
 
 
-@router.post("/{id}/task/{action_type}", response_model=Any)
+@router.post("/{id}/task/{action_type}", response_model=PipelineActionResult)
 def process_pipeline_task(
     *, session: SessionDep, id: uuid.UUID, action_type: PipelinesActionTypes
 ) -> Any:
@@ -500,7 +513,7 @@ def process_pipeline_task(
     }
 
 
-@router.post("/batch/{batch_id}/task/{action_type}", response_model=Any)
+@router.post("/batch/{batch_id}/task/{action_type}", response_model=PipelineBatchActionResult)
 def process_pipeline_batch_task(
     *, session: SessionDep, batch_id: uuid.UUID, action_type: PipelinesActionTypes
 ) -> Any:
@@ -558,7 +571,7 @@ def update_pipeline(
     pipeline = session.get(Pipeline, id)
     if not pipeline:
         raise HTTPException(status_code=404, detail="Pipeline not found")
-    update_dict = pipeline_in.model_dump(exclude_unset=True)
+    update_dict = _validated_update(pipeline, pipeline_in)
     pipeline.sqlmodel_update(update_dict)
     session.add(pipeline)
     session.commit()

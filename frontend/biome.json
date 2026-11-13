@@ -6,7 +6,8 @@
   "files": {
     "ignore": [
       "node_modules",
-      "src/routeTree.gen.ts"
+      "src/routeTree.gen.ts",
+      "src/api/schema.gen.ts"
     ]
   },
   "linter": {
