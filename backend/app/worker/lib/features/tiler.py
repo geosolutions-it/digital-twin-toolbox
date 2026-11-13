@@ -2,6 +2,7 @@
 simplified, never fused; geometricError covers both the simplification and the texel size."""
 
 import os
+from typing import NamedTuple
 
 import numpy as np
 
@@ -77,6 +78,15 @@ def _split(items):
     return [q for q in out if q]
 
 
+class _Node(NamedTuple):
+    tile: dict
+    error: float
+    lo: np.ndarray
+    hi: np.ndarray
+    # features smaller than this were left out of the simplified content; 0 for full detail
+    threshold: float
+
+
 class _Builder:
     def __init__(
         self,
@@ -127,7 +137,6 @@ class _Builder:
         return bool((hi - lo).max() > self.max_leaf_extent)
 
     def node(self, items, depth):
-        """-> (tile json, geometric error, aabb min, aabb max, size threshold e)"""
         est = sum(len(it["mesh"]) for it in items) * _EST_BYTES_PER_VERTEX + sum(
             it["meta_bytes"] for it in items
         )
@@ -147,12 +156,12 @@ class _Builder:
                     "geometricError": 0.0,
                     "content": {"uri": self._write(data)},
                 }
-                return tile, 0.0, mn, mx, 0.0
+                return _Node(tile, 0.0, mn, mx, 0.0)
 
         children = [self.node(part, depth + 1) for part in _split(items)]
-        mn = np.min([c[2] for c in children], axis=0)
-        mx = np.max([c[3] for c in children], axis=0)
-        e = max(max(c[4] for c in children), _MIN_EXTENT)
+        mn = np.min([c.lo for c in children], axis=0)
+        mx = np.max([c.hi for c in children], axis=0)
+        e = max(max(c.threshold for c in children), _MIN_EXTENT)
         while True:
             coarse, out_fid, error = _generalize(items, e)
             data = None
@@ -175,15 +184,15 @@ class _Builder:
             texel = self.texturer.texel(coarse.reshape(-1, 3, 3), e)
             if texel:
                 error = max(error, texel * _TEXEL_ERROR)
-        error = max(error, max(c[1] for c in children))
+        error = max(error, max(c.error for c in children))
         tile = {
             "boundingVolume": {"box": box(mn, mx)},
             "geometricError": error,
-            "children": [c[0] for c in children],
+            "children": [c.tile for c in children],
         }
         if data is not None:
             tile["content"] = {"uri": self._write(data)}
-        return tile, error, mn, mx, e
+        return _Node(tile, error, mn, mx, e)
 
 
 def _meta_bytes(props):
