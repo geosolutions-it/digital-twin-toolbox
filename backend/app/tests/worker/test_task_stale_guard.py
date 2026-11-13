@@ -5,6 +5,7 @@ import pytest
 from celery.states import FAILURE, IGNORED, STARTED, SUCCESS
 from sqlalchemy.dialects import postgresql
 
+from app.services import pipeline_lifecycle as lifecycle
 from app.worker import main
 from app.worker.main import PipelineDatabaseTask, celery
 
@@ -30,8 +31,8 @@ def fake_db(monkeypatch):
     def write(pipeline_id, task_id, values):
         state["writes"].append((pipeline_id, task_id, values))
 
-    monkeypatch.setattr(main, "_claim_row", claim)
-    monkeypatch.setattr(main, "_write_result", write)
+    monkeypatch.setattr(main, "claim_row", claim)
+    monkeypatch.setattr(main, "write_result", write)
     monkeypatch.setattr(main, "capture_pipeline_log", lambda _pid: nullcontext())
     return state
 
@@ -82,7 +83,7 @@ def _sql(stmt):
 
 
 def test_owned_update_is_conditional_and_keeps_task_id():
-    sql = _sql(main._owned_update(PID, "t-1", {"task_status": STARTED}))
+    sql = _sql(lifecycle.owned_update(PID, "t-1", {"task_status": STARTED}))
     where = sql.split("WHERE", 1)[1]
     assert "pipeline.task_id =" in where
     assert "pipeline.task_status IS DISTINCT FROM" in where
@@ -120,19 +121,19 @@ class FakeSession:
 @pytest.mark.parametrize("rowcount, owned", [(1, True), (0, False)])
 def test_claim_row_reports_ownership(monkeypatch, rowcount, owned):
     monkeypatch.undo()
-    monkeypatch.setattr(main, "Session", FakeSession)
+    monkeypatch.setattr(lifecycle, "Session", FakeSession)
     monkeypatch.setattr(FakeSession, "rowcount", rowcount)
-    assert main._claim_row(PID, "t-1") is owned
+    assert lifecycle.claim_row(PID, "t-1") is owned
 
 
 @pytest.mark.parametrize("rowcount, finalized", [(1, 1), (0, 0)])
 def test_write_result_finalizes_only_when_owned(monkeypatch, rowcount, finalized):
     monkeypatch.undo()
     seen = []
-    monkeypatch.setattr(main, "Session", FakeSession)
+    monkeypatch.setattr(lifecycle, "Session", FakeSession)
     monkeypatch.setattr(FakeSession, "rowcount", rowcount)
-    monkeypatch.setattr(main, "_maybe_finalize_batch", lambda s, p: seen.append(p))
-    main._write_result(PID, "t-1", {"task_status": SUCCESS})
+    monkeypatch.setattr(lifecycle, "maybe_finalize_batch", lambda s, p: seen.append(p))
+    lifecycle.write_result(PID, "t-1", {"task_status": SUCCESS})
     assert len(seen) == finalized
 
 

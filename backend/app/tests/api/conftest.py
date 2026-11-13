@@ -7,11 +7,12 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 from app.api.routes import pipelines as pipelines_routes
+from app.core.celery_app import celery
 from app.core.db import engine, init_db
 from app.main import app
 from app.models.pipeline import Pipeline
 from app.models.user import User
-from app.worker.main import celery
+from app.services import pipeline_lifecycle
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -134,5 +135,5 @@ class FakeCelery:
 def fake_celery(monkeypatch) -> FakeCelery:
     fake = FakeCelery()
     monkeypatch.setattr(celery, "send_task", fake.send_task)
-    monkeypatch.setattr(pipelines_routes, "AsyncResult", fake.async_result)
+    monkeypatch.setattr(pipeline_lifecycle, "AsyncResult", fake.async_result)
     return fake

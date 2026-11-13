@@ -11,9 +11,8 @@ from sqlmodel import Session
 
 from app.core.config import settings
 from app.core.db import engine
-from app.models.pipeline import PipelineLog
+from app.models.pipeline import MAX_LOG_LINES, PipelineLog
 
-MAX_LINES = 5000
 FLUSH_SECONDS = 1.0
 FLUSH_LINES = 100
 MAX_MESSAGE = 4000
@@ -65,7 +64,7 @@ def _write_rows(pipeline_id, rows):
             select(PipelineLog.id)
             .where(PipelineLog.pipeline_id == pipeline_id)
             .order_by(PipelineLog.id.desc())
-            .offset(MAX_LINES)
+            .offset(MAX_LOG_LINES)
             .limit(1)
             .scalar_subquery()
         )

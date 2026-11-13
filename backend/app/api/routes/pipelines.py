@@ -3,15 +3,16 @@ import re
 import uuid
 from typing import Any
 
-from celery.result import AsyncResult
-from celery.states import FAILURE, PENDING, REVOKED, STARTED, SUCCESS
+from celery.states import SUCCESS
 from fastapi import APIRouter, HTTPException, Query
 from sqlmodel import func, select
 
 from app.api.deps import CurrentUser, SessionDep
+from app.core.celery_app import celery
 from app.core.storage import get_storage, output_key, output_root, output_url
 from app.models.inspect import MeshBbox, VectorFields, VectorSample
 from app.models.pipeline import (
+    MAX_LOG_LINES,
     FinalizeQueued,
     Message,
     Pipeline,
@@ -41,37 +42,16 @@ from app.models.pipeline_types import (
     validate_pipeline_config,
 )
 from app.services.file_classify import SUPPORTED_EXTENSIONS, classify_bucket_file
-from app.worker.common.logs import MAX_LINES
-from app.worker.main import _maybe_finalize_batch, celery, queue_batch_finalize
+from app.services.pipeline_lifecycle import (
+    IN_PROGRESS,
+    apply_action,
+    create_and_dispatch,
+    queue_batch_finalize,
+    revoke_running,
+    sync_lost_tasks,
+)
 
 router = APIRouter()
-
-
-def _sync_lost_tasks(session) -> None:
-    """Mark rows whose task died without reporting back (OOM, time limit) from the result backend."""
-    rows = session.exec(
-        select(Pipeline).where(
-            Pipeline.task_status.in_((PENDING, STARTED)), Pipeline.task_id.is_not(None)
-        )
-    ).all()
-    changed = []
-    for pipeline in rows:
-        try:
-            state = AsyncResult(pipeline.task_id, app=celery).state
-        except Exception:
-            continue
-        if state in (FAILURE, REVOKED):
-            pipeline.sqlmodel_update({"task_status": state, "task_result": None})
-            session.add(pipeline)
-            changed.append(pipeline)
-    if not changed:
-        return
-    session.commit()
-    finalized = set()
-    for pipeline in changed:
-        if pipeline.batch_id and pipeline.batch_id not in finalized:
-            finalized.add(pipeline.batch_id)
-            _maybe_finalize_batch(session, pipeline)
 
 
 @router.get("/", response_model=PipelinesPublic)
@@ -84,7 +64,7 @@ def read_pipelines(
     """
     Retrieve pipelines. Pass batch_id to page through one batch's members.
     """
-    _sync_lost_tasks(session)
+    sync_lost_tasks(session)
     count_statement = select(func.count()).select_from(Pipeline)
     statement = select(Pipeline)
     if batch_id is not None:
@@ -97,12 +77,8 @@ def read_pipelines(
     return PipelinesPublic(data=_with_stage(session, pipelines), count=count)
 
 
-# in-progress (PENDING/STARTED) mirrors the frontend's isCeleryTaskInProgress
-_IN_PROGRESS = (PENDING, STARTED)
-
-
 def _with_stage(session, pipelines) -> list[PipelinePublic]:
-    running = [p.id for p in pipelines if p.task_status in _IN_PROGRESS]
+    running = [p.id for p in pipelines if p.task_status in IN_PROGRESS]
     stages = {}
     if running:
         latest = (
@@ -126,7 +102,7 @@ def _with_stage(session, pipelines) -> list[PipelinePublic]:
 def _classify_status(status: str | None) -> str:
     if status == SUCCESS:
         return "success"
-    if status in _IN_PROGRESS:
+    if status in IN_PROGRESS:
         return "running"
     if not status:
         return "ready"
@@ -146,7 +122,7 @@ def read_pipelines_overview(session: SessionDep, skip: int = 0, limit: int = 10)
     a rollup over all its members, standalone pipelines are their own entries.
     Paginates over entries (folders + solo), not raw pipeline rows.
     """
-    _sync_lost_tasks(session)
+    sync_lost_tasks(session)
     rows = session.exec(
         select(
             Pipeline.id,
@@ -273,32 +249,18 @@ def create_pipeline_source(
         if source_in.title
         else os.path.splitext(os.path.basename(key))[0]
     )
-    output_base = _unique_output(storage, base_name)
-    pipeline = Pipeline(
+    pipeline = create_and_dispatch(
+        session,
         title=source_in.title or os.path.basename(key),
         data=data,
-        task_id=str(uuid.uuid4()),
-        task_status=PENDING,
-        task_result=None,
         source={
             "key": key,
             "extension": os.path.splitext(key)[1],
-            "output_base": output_base,
+            "output_base": _unique_output(storage, base_name),
             "pipeline": pipeline_type,
         },
-        batch_id=None,
         owner_id=current_user.id,
     )
-    session.add(pipeline)
-    session.commit()
-    session.refresh(pipeline)
-    # row is PENDING before the task exists, so a fast failure is never overwritten
-    celery.send_task(
-        PIPELINES[pipeline_type].task,
-        kwargs={"pipeline_extended": pipeline.model_dump()},
-        task_id=pipeline.task_id,
-    )
-
     return {"id": str(pipeline.id)}
 
 
@@ -361,12 +323,10 @@ def create_pipeline_batch(
             if stems.count(stem) > 1
             else f"{out_root}/{stem}"
         )
-        pipeline = Pipeline(
+        pipeline = create_and_dispatch(
+            session,
             title=f"{batch_in.title} / {name}" if batch_in.title else name,
             data=data,
-            task_id=str(uuid.uuid4()),
-            task_status=PENDING,
-            task_result=None,
             source={
                 "key": key,
                 "extension": os.path.splitext(key)[1],
@@ -375,16 +335,8 @@ def create_pipeline_batch(
                 "batch_output_url": output_url(out_root),
                 "pipeline": ptype,
             },
-            batch_id=batch_id,
             owner_id=current_user.id,
-        )
-        session.add(pipeline)
-        session.commit()
-        session.refresh(pipeline)
-        celery.send_task(
-            PIPELINES[ptype].task,
-            kwargs={"pipeline_extended": pipeline.model_dump()},
-            task_id=pipeline.task_id,
+            batch_id=batch_id,
         )
         created.append(str(pipeline.id))
 
@@ -507,57 +459,6 @@ def mesh_bbox(*, key: str | None = None, prefix: str | None = None) -> Any:
     return {"key": target, **bbox}
 
 
-def _revoke_running(pipeline: Pipeline) -> None:
-    if pipeline.task_id and pipeline.task_status in (PENDING, STARTED):
-        try:
-            AsyncResult(pipeline.task_id, app=celery).revoke(terminate=True)
-        except Exception:
-            pass
-
-
-def _apply_pipeline_action(
-    session, pipeline: Pipeline, action_type: PipelinesActionTypes
-) -> dict:
-    """Run/cancel one pipeline, persisting the new task state. Returns the applied fields.
-    Raises ValueError for unsupported configs; callers decide how to surface it."""
-    pipeline_out = {}
-    if action_type == "run" and pipeline.task_status not in (PENDING, STARTED):
-        ptype = pipeline_type_of(pipeline.source)
-        task_name = PIPELINES[ptype].task
-        data = validate_pipeline_config(ptype, pipeline.data)
-        pipeline_out = {
-            "task_id": str(uuid.uuid4()),
-            "task_status": PENDING,
-            "task_result": None,
-        }
-        pipeline.sqlmodel_update(pipeline_out)
-        session.add(pipeline)
-        session.commit()
-        session.refresh(pipeline)
-        payload = pipeline.model_dump()
-        payload["data"] = data
-        celery.send_task(
-            task_name, kwargs={"pipeline_extended": payload}, task_id=pipeline.task_id
-        )
-
-    if (
-        action_type == "cancel"
-        and pipeline.task_id
-        and pipeline.task_status in (PENDING, STARTED)
-    ):
-        _revoke_running(pipeline)
-        pipeline_out = {
-            "task_id": pipeline.task_id,
-            "task_status": REVOKED,
-            "task_result": None,
-        }
-        pipeline.sqlmodel_update(pipeline_out)
-        session.add(pipeline)
-        session.commit()
-        session.refresh(pipeline)
-    return pipeline_out
-
-
 @router.post("/{id}/task/{action_type}", response_model=PipelineActionResult)
 def process_pipeline_task(
     *, session: SessionDep, id: uuid.UUID, action_type: PipelinesActionTypes
@@ -569,7 +470,7 @@ def process_pipeline_task(
     if not pipeline:
         raise HTTPException(status_code=404, detail="Pipeline not found")
     try:
-        pipeline_out = _apply_pipeline_action(session, pipeline, action_type)
+        pipeline_out = apply_action(session, pipeline, action_type)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=f"Unsupported pipeline config: {e}")
     except HTTPException:
@@ -597,7 +498,7 @@ def process_pipeline_batch_task(
     affected = 0
     for pipeline in pipelines:
         try:
-            if _apply_pipeline_action(session, pipeline, action_type):
+            if apply_action(session, pipeline, action_type):
                 affected += 1
         except Exception:
             # skip members the action cannot apply to (already running, nothing to cancel, bad config)
@@ -622,7 +523,7 @@ def delete_pipeline_batch(session: SessionDep, batch_id: uuid.UUID) -> Message:
     for pipeline in pipelines:
         source = pipeline.source or {}
         batch_prefix = batch_prefix or source.get("batch_output_prefix")
-        _revoke_running(pipeline)
+        revoke_running(pipeline)
         session.delete(pipeline)
     session.commit()
 
@@ -674,7 +575,7 @@ def read_pipeline_logs(
     _user: CurrentUser,
     id: uuid.UUID,
     after: int = Query(0, ge=0),
-    limit: int = Query(MAX_LINES, ge=1, le=MAX_LINES),
+    limit: int = Query(MAX_LOG_LINES, ge=1, le=MAX_LOG_LINES),
 ) -> Any:
     """
     Log lines of the pipeline's latest run with id > after, oldest first. Poll with the last id received.
@@ -703,7 +604,7 @@ def delete_pipeline(session: SessionDep, id: uuid.UUID) -> Message:
     output_prefix = source.get("output_base") or output_key(str(pipeline.id))
     batch_prefix = source.get("batch_output_prefix")
 
-    _revoke_running(pipeline)
+    revoke_running(pipeline)
     session.delete(pipeline)
     session.commit()
 

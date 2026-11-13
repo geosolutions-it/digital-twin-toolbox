@@ -2,13 +2,13 @@ from typing import get_args
 
 import pytest
 
+from app.core.celery_app import TASK_QUEUES
 from app.models.pipeline_types import (
     PIPELINES,
     PipelineType,
     batch_targets,
     resolve_pipeline,
 )
-from app.worker.tasks import TASK_QUEUES
 
 MIXED = [
     ("f/a.laz", "PointCloud"),

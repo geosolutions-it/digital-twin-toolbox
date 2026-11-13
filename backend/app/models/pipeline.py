@@ -27,6 +27,10 @@ class Pipeline(PipelineBase, table=True):
     )
 
 
+# lines kept per run: the worker drops older ones, the API pages up to this many
+MAX_LOG_LINES = 5000
+
+
 class PipelineLog(SQLModel, table=True):
     __tablename__ = "pipeline_log"
 

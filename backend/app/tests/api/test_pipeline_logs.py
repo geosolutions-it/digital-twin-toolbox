@@ -100,7 +100,7 @@ def test_deleting_the_pipeline_deletes_its_log(db: Session, pipeline):
 def test_worker_write_keeps_the_newest_lines(db: Session, pipeline, monkeypatch):
     from app.worker.common import logs
 
-    monkeypatch.setattr(logs, "MAX_LINES", 3)
+    monkeypatch.setattr(logs, "MAX_LOG_LINES", 3)
     now = datetime.now(timezone.utc)
     logs._write_rows(
         pipeline.id,
