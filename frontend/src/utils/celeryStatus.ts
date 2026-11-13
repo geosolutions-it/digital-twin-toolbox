@@ -1,4 +1,4 @@
-export const CELERY_IN_PROGRESS_STATUSES = ["PENDING", "STARTED"] as const
+const CELERY_IN_PROGRESS_STATUSES = ["PENDING", "STARTED"] as const
 
 export function isCeleryTaskInProgress(status?: string | null): boolean {
   return (CELERY_IN_PROGRESS_STATUSES as readonly string[]).includes(

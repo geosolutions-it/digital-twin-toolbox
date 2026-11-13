@@ -115,6 +115,13 @@ class PipelineDatabaseTask(Task):
         _write_result(pipeline_extended['id'], task_id, values)
 
 
+def queue_batch_finalize(output_prefix):
+    celery.send_task(
+        'finalize_tileset_batch',
+        kwargs={'output_prefix': output_prefix, 'base': settings.API_V1_STR},
+    )
+
+
 def _maybe_finalize_batch(session, pipeline):
     """When the last sibling of a batch reaches a terminal state, stitch the combined tileset."""
     if not pipeline.batch_id:
@@ -125,10 +132,7 @@ def _maybe_finalize_batch(session, pipeline):
     siblings = session.exec(select(Pipeline).where(Pipeline.batch_id == pipeline.batch_id)).all()
     if not all(s.task_status in (SUCCESS, FAILURE, REVOKED) for s in siblings):
         return
-    celery.send_task(
-        'finalize_tileset_batch',
-        kwargs={'output_prefix': prefix, 'base': settings.API_V1_STR},
-    )
+    queue_batch_finalize(prefix)
 
 
 _SCRATCH_NAME = re.compile(r"^tmp[a-z0-9_]{8}$")

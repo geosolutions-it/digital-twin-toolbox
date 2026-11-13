@@ -27,7 +27,6 @@ api = [
     "httpx>=0.25.1,<1.0.0",
 ]
 vector = [
-    "earcut>=1.1.5,<2.0.0",
     "mapbox-earcut>=1.0.3,<2.0.0",
     "pymartini>=0.4.4,<1.0.0",
     "quantized-mesh-tile>=0.7.0,<1.0.0",

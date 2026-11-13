@@ -66,13 +66,14 @@ import {
   readPipelines,
   readPipelinesOverview,
 } from "../../api"
-import type {
-  PipelineBatchCounts,
-  PipelineBatchSummary,
-  AnyPipelineConfig,
-  PipelineOverviewEntry,
-  PipelinePublic,
-  PipelineType,
+import {
+  type AnyPipelineConfig,
+  isPipelineType,
+  type PipelineBatchCounts,
+  type PipelineBatchSummary,
+  type PipelineOverviewEntry,
+  type PipelinePublic,
+  type PipelineType,
 } from "../../api/types"
 import useCustomToast from "../../hooks/useCustomToast"
 import NewBatchModal, {
@@ -252,7 +253,7 @@ function StatusCell({ status, stage }: { status?: string | null; stage?: string 
   )
 }
 
-function LogsButton({ pipeline }: { pipeline: Pipeline }) {
+function LogsButton({ pipeline }: { pipeline: PipelinePublic }) {
   const logs = useDisclosure()
   return (
     <>
@@ -278,24 +279,19 @@ function LogsButton({ pipeline }: { pipeline: Pipeline }) {
   )
 }
 
-type Pipeline = any
+// JSON columns the API does not type yet
+type PipelineSource = { key?: string; pipeline?: string }
+type TaskResult = { tileset?: string; download?: string; artifacts?: Artifact[] }
+
+const sourceOf = (p: PipelinePublic) => p.source as PipelineSource | null | undefined
 
 type EditTarget =
   | { kind: "single"; id: string; label: string; type: PipelineType; sampleKey?: string; values: Partial<BatchFormValues> }
   | { kind: "batch"; batchId: string; label: string; type: PipelineType; sampleKey?: string; values: Partial<BatchFormValues> }
 
-function pipelineType(p: Pipeline): PipelineType {
-  const t = p?.source?.pipeline
-  if (
-    t === "Polygon" ||
-    t === "Terrain" ||
-    t === "Instance" ||
-    t === "Mesh" ||
-    t === "CityGML" ||
-    t === "Building"
-  )
-    return t
-  return "PointCloud"
+function pipelineType(p: PipelinePublic): PipelineType {
+  const t = sourceOf(p)?.pipeline
+  return isPipelineType(t) ? t : "PointCloud"
 }
 
 function dataToValues(
@@ -423,19 +419,20 @@ function ArtifactsMenu({ artifacts }: { artifacts: Artifact[] }) {
 }
 
 interface RowProps {
-  pipeline: Pipeline
+  pipeline: PipelinePublic
   selected: Set<string>
   onToggle: (id: string) => void
   onAction: (ids: string[], action: RowAction) => void
-  onEdit?: (pipeline: Pipeline) => void
+  onEdit?: (pipeline: PipelinePublic) => void
   dim?: boolean
   indent?: boolean
 }
 
 function PipelineRow({ pipeline, selected, onToggle, onAction, onEdit, dim, indent }: RowProps) {
   const running = isCeleryTaskInProgress(pipeline.task_status)
-  const download = `${API_BASE}${pipeline?.task_result?.download}`
-  const source = pipeline.source
+  const result = pipeline.task_result as TaskResult | null
+  const download = `${API_BASE}${result?.download}`
+  const source = sourceOf(pipeline)
   const subtitle = source?.key ? `s3://…/${source.key}` : "no input"
   const isSel = selected.has(pipeline.id)
   return (
@@ -467,14 +464,14 @@ function PipelineRow({ pipeline, selected, onToggle, onAction, onEdit, dim, inde
       <Td textAlign="right">
         <HStack spacing={1} justify="flex-end">
           {pipeline.task_id && <LogsButton pipeline={pipeline} />}
-          {!!pipeline.task_result?.artifacts?.length && (
-            <ArtifactsMenu artifacts={pipeline.task_result.artifacts} />
+          {!!result?.artifacts?.length && (
+            <ArtifactsMenu artifacts={result.artifacts} />
           )}
-          {pipeline.task_result?.tileset && (
+          {result?.tileset && (
             <Tooltip label="Open tileset">
               <IconButton
                 as="a"
-                href={`${API_BASE}${pipeline.task_result.tileset}`}
+                href={`${API_BASE}${result.tileset}`}
                 target="_blank"
                 rel="noreferrer"
                 aria-label="Open tileset"
@@ -484,7 +481,7 @@ function PipelineRow({ pipeline, selected, onToggle, onAction, onEdit, dim, inde
               />
             </Tooltip>
           )}
-          {pipeline.task_result && (
+          {result && (
             <Tooltip label="Download 3D Tiles">
               <IconButton
                 as="a"
@@ -917,8 +914,8 @@ function PipelinesTable() {
   })
   const onBatchAction = (batchId: string, action: BatchAction) => batchAct.mutate({ batchId, action })
 
-  const editPipeline = (p: Pipeline) =>
-    setEditTarget({ kind: "single", id: p.id, label: p.title, type: pipelineType(p), sampleKey: p?.source?.key, values: dataToValues(p.data) })
+  const editPipeline = (p: PipelinePublic) =>
+    setEditTarget({ kind: "single", id: p.id, label: p.title, type: pipelineType(p), sampleKey: sourceOf(p)?.key, values: dataToValues(p.data) })
   const editBatch = (summary: PipelineBatchSummary) =>
     setEditTarget({
       kind: "batch",

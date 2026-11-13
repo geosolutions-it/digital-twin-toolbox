@@ -15,6 +15,21 @@ export type PipelinesOverview = S["PipelinesOverview"]
 export type PipelineBatchCreate = S["PipelineBatchCreate"]
 export type PipelineSourceCreate = S["PipelineSourceCreate"]
 export type PipelineType = NonNullable<PipelineSourceCreate["pipeline"]>
+
+// a Record so a pipeline type added to the backend fails tsc until listed here
+const PIPELINE_TYPES: Record<PipelineType, true> = {
+  PointCloud: true,
+  Polygon: true,
+  Terrain: true,
+  Instance: true,
+  Mesh: true,
+  CityGML: true,
+  Building: true,
+}
+
+export function isPipelineType(v: unknown): v is PipelineType {
+  return typeof v === "string" && Object.prototype.hasOwnProperty.call(PIPELINE_TYPES, v)
+}
 export type PipelineCreated = S["PipelineCreated"]
 export type PipelineBatchCreated = S["PipelineBatchCreated"]
 export type PipelineBatchUpdated = S["PipelineBatchUpdated"]
@@ -37,7 +52,7 @@ export type PolygonConfig = S["PolygonConfig"]
 export type TerrainConfig = S["TerrainConfig"]
 export type InstanceConfig = S["InstanceConfig"]
 
-export type PipelineConfig =
+type PipelineConfig =
   | PointCloudConfig
   | PolygonConfig
   | TerrainConfig

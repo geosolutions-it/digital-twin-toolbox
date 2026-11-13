@@ -120,7 +120,6 @@ pointcloud = [
     { name = "py3dtiles", extra = ["las", "ply"] },
 ]
 vector = [
-    { name = "earcut" },
     { name = "mapbox-earcut" },
     { name = "pymartini" },
     { name = "quantized-mesh-tile" },
@@ -180,7 +179,6 @@ pointcloud = [
     { name = "py3dtiles", extras = ["las", "ply"], specifier = ">=12.1.1,<13.0.0" },
 ]
 vector = [
-    { name = "earcut", specifier = ">=1.1.5,<2.0.0" },
     { name = "mapbox-earcut", specifier = ">=1.0.3,<2.0.0" },
     { name = "pymartini", specifier = ">=0.4.4,<1.0.0" },
     { name = "quantized-mesh-tile", specifier = ">=0.7.0,<1.0.0" },
@@ -850,15 +848,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/76/49/900383b471c645a3c
 wheels = [
     { url = "https://files.pythonhosted.org/packages/1e/0c/5346358b3a20275d256978c35203ddc2c8617f78c1b23795b79ba22ced6d/dnspython-2.9.2-py3-none-any.whl", hash = "sha256:af15f7d385a6ae2fb35a796fde2138004c8c42c7389090e2addc83e3b3340fd8", size = 360455, upload-time = "2026-11-03T23:56:52.088Z" },
 ]
-
-[[package]]
-name = "earcut"
-version = "1.1.5"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "numpy" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/d8/cd/47b84c0381bb13c3d76f68a49d5c16c7aecda29adebb34fa38730315abd7/earcut-1.1.5.tar.gz", hash = "sha256:21c55b032fe0b90658e7f305e1ee408cb4f76782c5066d86273adfb4b6cc23e0", size = 9135, upload-time = "2022-08-15T14:34:48.628Z" }
 
 [[package]]
 name = "email-validator"

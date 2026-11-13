@@ -11,9 +11,8 @@ from app.models.inspect import MeshBbox, VectorFields, VectorSample
 from app.services.pipeline_config import validate_pipeline_config
 from app.services.file_classify import BATCH_ACCEPTS, batch_targets, classify_bucket_file, SUPPORTED_EXTENSIONS
 from app.core.storage import get_storage, output_key, output_root, output_url
-from app.core.config import settings
 from app.worker.common.logs import MAX_LINES
-from app.worker.main import celery, _maybe_finalize_batch
+from app.worker.main import celery, _maybe_finalize_batch, queue_batch_finalize
 from celery.result import AsyncResult
 from celery.states import REVOKED, PENDING, SUCCESS, STARTED, FAILURE
 
@@ -355,10 +354,7 @@ def finalize_pipeline_batch(
     prefix = (pipeline.source or {}).get('batch_output_prefix')
     if not prefix:
         raise HTTPException(status_code=422, detail="Batch has no output prefix")
-    celery.send_task(
-        'finalize_tileset_batch',
-        kwargs={'output_prefix': prefix, 'base': settings.API_V1_STR},
-    )
+    queue_batch_finalize(prefix)
     return {"ok": True}
 
 
@@ -476,7 +472,7 @@ def _apply_pipeline_action(session, pipeline: Pipeline, action_type: PipelinesAc
         celery.send_task(task_name, kwargs={"pipeline_extended": payload}, task_id=pipeline.task_id)
 
     if action_type == 'cancel' and pipeline.task_id and pipeline.task_status in (PENDING, STARTED):
-        AsyncResult(pipeline.task_id, app=celery).revoke(terminate=True)
+        _revoke_running(pipeline)
         pipeline_out = {
             "task_id": pipeline.task_id,
             "task_status": REVOKED,
@@ -634,9 +630,6 @@ def delete_pipeline(
 
     # rebuild the combined tileset so it stops referencing the removed child
     if batch_prefix:
-        celery.send_task(
-            'finalize_tileset_batch',
-            kwargs={'output_prefix': batch_prefix, 'base': settings.API_V1_STR},
-        )
+        queue_batch_finalize(batch_prefix)
 
     return Message(message="Pipeline deleted successfully")
