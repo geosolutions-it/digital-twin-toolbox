@@ -1,4 +1,5 @@
 import uuid
+from contextlib import nullcontext
 
 import pytest
 from celery.states import FAILURE, IGNORED, STARTED, SUCCESS
@@ -31,6 +32,7 @@ def fake_db(monkeypatch):
 
     monkeypatch.setattr(main, "_claim_row", claim)
     monkeypatch.setattr(main, "_write_result", write)
+    monkeypatch.setattr(main, "capture_pipeline_log", lambda _pid: nullcontext())
     return state
 
 
@@ -130,3 +132,24 @@ def test_write_result_finalizes_only_when_owned(monkeypatch, rowcount, finalized
     monkeypatch.setattr(main, "_maybe_finalize_batch", lambda s, p: seen.append(p))
     main._write_result(PID, "t-1", {"task_status": SUCCESS})
     assert len(seen) == finalized
+
+
+def test_job_log_gets_start_and_end_lines(fake_db, caplog, monkeypatch):
+    caplog.set_level("INFO", logger="app.worker.main")
+    run()
+
+    def boom(**_kwargs):
+        raise RuntimeError("x")
+
+    monkeypatch.setattr(guarded, "run", boom)
+    run(task_id="t-3")
+    messages = [r.getMessage() for r in caplog.records if r.name == "app.worker.main"]
+    assert messages[0] == "Started test_stale_guard_task"
+    assert messages[1].startswith("Finished in ")
+    assert messages[2] == "Started test_stale_guard_task"
+    assert messages[3].startswith("Failed after ")
+
+
+@pytest.mark.parametrize("seconds, text", [(4.4, "4 s"), (60, "1 min 00 s"), (1985, "33 min 05 s")])
+def test_duration(seconds, text):
+    assert main._duration(seconds) == text

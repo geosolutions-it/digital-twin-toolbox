@@ -10,6 +10,19 @@ export type PipelinePublic = {
   task_result: Record<string, unknown> | null
   id: string
   owner_id: string
+  stage?: string | null
+}
+
+export type PipelineLogLine = {
+  id: number
+  created_at: string
+  level: string
+  message: string
+  stage: string | null
+}
+
+export type PipelineLogs = {
+  data: Array<PipelineLogLine>
 }
 
 export type PipelinesActionTypes = "run" | "cancel"

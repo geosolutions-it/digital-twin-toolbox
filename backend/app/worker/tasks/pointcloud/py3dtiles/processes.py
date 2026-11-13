@@ -91,17 +91,13 @@ def py3dtiles_convert(input_path, output_path, srs_in, attributes=None):
     for name in attributes:
         cmd += ['--extra-fields', name]
 
-    res = run_subprocess(cmd, capture_output=True, text=True)
+    run_subprocess(cmd)
 
     tileset_json_path = os.path.join(output_path, 'tileset.json')
-    try:
-        _recompute_geometric_error(tileset_json_path)
-        if attributes:
-            with open(tileset_json_path) as f:
-                data = json.load(f)
-            data["properties"] = attributes
-            with open(tileset_json_path, "w") as f:
-                json.dump(data, f)
-    except Exception as e:
-        print(res.stderr)
-        raise e
+    _recompute_geometric_error(tileset_json_path)
+    if attributes:
+        with open(tileset_json_path) as f:
+            data = json.load(f)
+        data["properties"] = attributes
+        with open(tileset_json_path, "w") as f:
+            json.dump(data, f)

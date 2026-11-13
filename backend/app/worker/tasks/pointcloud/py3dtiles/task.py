@@ -1,14 +1,19 @@
+import logging
 import os
 import tempfile
 
 from app.core.storage import get_storage, output_key, output_url
 from app.models.config import PointCloudConfig
+from app.worker.common.logs import log_stage
 from app.worker.main import celery, PipelineDatabaseTask
 from app.worker.tasks.pointcloud.pdal.processes import (
     process_las,
     detect_point_attributes, resolve_crs_from_file, compute_auto_sample_radius,
 )
 from app.worker.tasks.pointcloud.py3dtiles.processes import py3dtiles_convert
+
+
+logger = logging.getLogger(__name__)
 
 
 def _materialize(storage, key, scratch, name):
@@ -51,6 +56,7 @@ def create_point_cloud_3dtiles(pipeline_extended):
     out_base = source.get('output_base') or output_key(pipeline_id)
 
     with tempfile.TemporaryDirectory() as scratch:
+        log_stage("Downloading point cloud")
         input_file = _materialize(storage, input_key, scratch, f"index{extension}")
 
         horizontal_epsg, vertical_epsg = _resolve_crs(pipeline_extended, input_file)
@@ -63,6 +69,7 @@ def create_point_cloud_3dtiles(pipeline_extended):
 
         colorization_image_path = None
         if config.colorization_image:
+            log_stage("Downloading colorization raster")
             colorization_image_path = _resolve_colorization_path(
                 storage, config.colorization_image, scratch
             )
@@ -72,8 +79,11 @@ def create_point_cloud_3dtiles(pipeline_extended):
         # no radius given: auto-pick one from the cloud's spacing to drop redundant points
         sample_radius = config.sample_radius
         if sample_radius is None:
+            log_stage("Measuring point spacing")
             sample_radius = compute_auto_sample_radius(scratch, input_file)
+            logger.info("Auto sample radius: %s", sample_radius)
 
+        log_stage("Processing with PDAL")
         processed_file = process_las(
             scratch, input_file,
             sample_radius=sample_radius,
@@ -86,8 +96,10 @@ def create_point_cloud_3dtiles(pipeline_extended):
         attributes = detect_point_attributes(processed_file, force_classification=config.ground_classification)
 
         tiles_dir = os.path.join(scratch, 'tiles')
+        log_stage("Tiling with py3dtiles")
         py3dtiles_convert(processed_file, tiles_dir, f'{horizontal_epsg}', attributes=attributes)
 
+        log_stage("Uploading tiles")
         storage.delete_prefix(f"{out_base}/tiles/")
         storage.upload_dir(tiles_dir, f"{out_base}/tiles")
 

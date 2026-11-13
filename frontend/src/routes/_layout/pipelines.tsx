@@ -55,6 +55,7 @@ import {
   FiSearch,
   FiSettings,
   FiSquare,
+  FiTerminal,
   FiTrash,
 } from "react-icons/fi"
 import { z } from "zod"
@@ -76,6 +77,7 @@ import NewBatchModal, {
   type PipelineType,
 } from "../../components/Pipelines/NewBatchModal"
 import PageHeader from "../../components/Common/PageHeader"
+import LogsDrawer from "../../components/Pipelines/LogsDrawer"
 import {
   deletePipelineBatch,
   finalizePipelineBatch,
@@ -224,13 +226,14 @@ function getOverviewQueryOptions({ page }: { page: number }) {
   }
 }
 
-function StatusCell({ status }: { status?: string | null }) {
+function StatusCell({ status, stage }: { status?: string | null; stage?: string | null }) {
+  const running = isCeleryTaskInProgress(status)
   return (
-    <Flex direction="column" gap={1} maxW="160px">
+    <Flex direction="column" gap={1} maxW="180px">
       <Badge colorScheme={celeryTaskStatusColor(status)} width="fit-content">
         {celeryTaskStatusLabel(status)}
       </Badge>
-      {isCeleryTaskInProgress(status) && (
+      {running && (
         <Progress
           size="xs"
           isIndeterminate
@@ -238,7 +241,38 @@ function StatusCell({ status }: { status?: string | null }) {
           colorScheme={celeryTaskStatusColor(status)}
         />
       )}
+      {running && stage && (
+        <Text fontSize="xs" color="gray.500" isTruncated title={stage}>
+          {stage}
+        </Text>
+      )}
     </Flex>
+  )
+}
+
+function LogsButton({ pipeline }: { pipeline: Pipeline }) {
+  const logs = useDisclosure()
+  return (
+    <>
+      <Tooltip label="Logs">
+        <IconButton
+          aria-label="Logs"
+          icon={<FiTerminal />}
+          size="xs"
+          variant="ghost"
+          onClick={logs.onOpen}
+        />
+      </Tooltip>
+      <LogsDrawer
+        key={pipeline.task_id}
+        pipelineId={pipeline.id}
+        title={pipeline.title}
+        status={pipeline.task_status}
+        stage={pipeline.stage}
+        isOpen={logs.isOpen}
+        onClose={logs.onClose}
+      />
+    </>
   )
 }
 
@@ -422,10 +456,11 @@ function PipelineRow({ pipeline, selected, onToggle, onAction, onEdit, dim, inde
         </Flex>
       </Td>
       <Td>
-        <StatusCell status={pipeline.task_status} />
+        <StatusCell status={pipeline.task_status} stage={pipeline.stage} />
       </Td>
       <Td textAlign="right">
         <HStack spacing={1} justify="flex-end">
+          {pipeline.task_id && <LogsButton pipeline={pipeline} />}
           {!!pipeline.task_result?.artifacts?.length && (
             <ArtifactsMenu artifacts={pipeline.task_result.artifacts} />
           )}

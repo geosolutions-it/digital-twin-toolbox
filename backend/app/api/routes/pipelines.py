@@ -5,12 +5,13 @@ from sqlmodel import func, select
 import os
 import re
 import uuid
-from app.models.task import Pipeline, PipelinePublic, PipelinesPublic, PipelineBatchCreate, PipelineSourceCreate, Message, PipelinesActionTypes, PipelineUpdate, PipelineBatchCounts, PipelineBatchSummary, PipelineOverviewEntry, PipelinesOverview
+from app.models.task import Pipeline, PipelineLog, PipelineLogsPublic, PipelinePublic, PipelinesPublic, PipelineBatchCreate, PipelineSourceCreate, Message, PipelinesActionTypes, PipelineUpdate, PipelineBatchCounts, PipelineBatchSummary, PipelineOverviewEntry, PipelinesOverview
 
 from app.services.pipeline_config import validate_pipeline_config
 from app.services.file_classify import BATCH_ACCEPTS, batch_targets, classify_bucket_file, SUPPORTED_EXTENSIONS
 from app.core.storage import get_storage, output_key, output_root, output_url
 from app.core.config import settings
+from app.worker.common.logs import MAX_LINES
 from app.worker.main import celery, _maybe_finalize_batch
 from celery.result import AsyncResult
 from celery.states import REVOKED, PENDING, SUCCESS, STARTED, FAILURE
@@ -59,11 +60,26 @@ def read_pipelines(
     statement = statement.order_by(Pipeline.title.asc()).offset(skip).limit(limit)
     pipelines = session.exec(statement).all()
 
-    return PipelinesPublic(data=pipelines, count=count)
+    return PipelinesPublic(data=_with_stage(session, pipelines), count=count)
 
 
 # in-progress (PENDING/STARTED) mirrors the frontend's isCeleryTaskInProgress
 _IN_PROGRESS = (PENDING, STARTED)
+
+
+def _with_stage(session, pipelines) -> list[PipelinePublic]:
+    running = [p.id for p in pipelines if p.task_status in _IN_PROGRESS]
+    stages = {}
+    if running:
+        latest = (
+            select(func.max(PipelineLog.id))
+            .where(PipelineLog.pipeline_id.in_(running), PipelineLog.stage.is_not(None))
+            .group_by(PipelineLog.pipeline_id)
+        )
+        stages = dict(session.exec(
+            select(PipelineLog.pipeline_id, PipelineLog.stage).where(PipelineLog.id.in_(latest))
+        ).all())
+    return [PipelinePublic.model_validate(p, update={"stage": stages.get(p.id)}) for p in pipelines]
 
 
 def _classify_status(status: str | None) -> str:
@@ -164,7 +180,7 @@ def read_pipelines_overview(
     if solo_ids:
         full = {
             p.id: p
-            for p in session.exec(select(Pipeline).where(Pipeline.id.in_(solo_ids))).all()
+            for p in _with_stage(session, session.exec(select(Pipeline).where(Pipeline.id.in_(solo_ids))).all())
         }
 
     data = []
@@ -558,6 +574,26 @@ def read_pipeline(session: SessionDep, id: uuid.UUID) -> Any:
     if not pipeline:
         raise HTTPException(status_code=404, detail="Pipeline not found")
     return pipeline
+
+
+@router.get("/{id}/logs", response_model=PipelineLogsPublic)
+def read_pipeline_logs(
+    session: SessionDep, _user: CurrentUser, id: uuid.UUID,
+    after: int = Query(0, ge=0), limit: int = Query(MAX_LINES, ge=1, le=MAX_LINES),
+) -> Any:
+    """
+    Log lines of the pipeline's latest run with id > after, oldest first. Poll with the last id received.
+    """
+    if session.get(Pipeline, id) is None:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+    statement = (
+        select(PipelineLog)
+        .where(PipelineLog.pipeline_id == id, PipelineLog.id > after)
+        .order_by(PipelineLog.id)
+        .limit(limit)
+    )
+    return PipelineLogsPublic(data=session.exec(statement).all())
+
 
 @router.delete("/{id}")
 def delete_pipeline(

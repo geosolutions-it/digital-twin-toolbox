@@ -11,6 +11,7 @@ from app.worker.common.geo import LocalFrame
 from app.worker.tasks.vector.polygon.tiler import build_tileset
 from app.worker.tasks.vector.polygon.extrude import extrude
 from app.worker.tasks.vector.source import coerce, field_names, open_layer, resolve_input, wgs84_transform
+from app.worker.common.logs import log_stage
 from app.worker.common.output import publish_tiles
 
 
@@ -138,17 +139,21 @@ def create_polygon_3dtiles(pipeline_extended):
     out_base = source.get('output_base') or output_key(pipeline_id)
 
     with tempfile.TemporaryDirectory() as scratch:
+        log_stage("Downloading input")
         input_path = resolve_input(source, storage, scratch)
+        log_stage("Reading features")
         raw, (lo, hi) = _read_raw_features(input_path, config, default_config)
         if not raw:
             raise Exception("No polygon features to tile")
 
         frame = LocalFrame.from_bounds(lo, hi)
 
+        log_stage(f"Building meshes for {len(raw)} features")
         features = _build_meshes(raw, frame)
 
         tiles_dir = os.path.join(scratch, 'tiles')
         max_kb = float(parse_expression('number', config['max_tile_size_kb'], {}, default_config['max_tile_size_kb']))
+        log_stage(f"Tiling {len(features)} features")
         build_tileset(features, tiles_dir, frame.transform(), max_tile_bytes=max_kb * 1024)
 
         return publish_tiles(storage, tiles_dir, out_base, 'tileset.json')

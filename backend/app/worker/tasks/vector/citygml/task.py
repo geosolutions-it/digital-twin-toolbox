@@ -6,6 +6,7 @@ import numpy as np
 from app.core.storage import get_storage, output_key
 from app.models.config import CityGMLConfig
 from app.worker.common.geo import LocalFrame
+from app.worker.common.logs import log_stage
 from app.worker.common.output import publish_tiles
 from app.worker.main import PipelineDatabaseTask, celery
 from app.worker.tasks.vector.citygml.crs import (
@@ -99,13 +100,16 @@ def create_citygml_3dtiles(pipeline_extended):
     with tempfile.TemporaryDirectory() as scratch:
         ext = os.path.splitext(key)[1].lower()
         local = os.path.join(scratch, 'index' + (ext if ext in _INPUT_EXTENSIONS else '.gml'))
+        log_stage("Downloading city model")
         storage.download_file(key, local)
         orthophoto = None
         if config.orthophoto:
+            log_stage("Downloading orthophoto")
             orthophoto = os.path.join(scratch, 'orthophoto' + os.path.splitext(config.orthophoto)[1].lower())
             storage.download_file(config.orthophoto, orthophoto)
         project = Projector(config.horizontal_epsg, config.to_ellipsoidal_height, config.vertical_epsg)
         tiles_dir = os.path.join(scratch, 'tiles')
+        log_stage("Reading and tiling city objects")
         tile_city_objects(iter_city_objects(local, config.lod), project, tiles_dir, config.max_tile_size_kb,
                           orthophoto, config.texture_resolution)
         return publish_tiles(storage, tiles_dir, out_base, 'tileset.json')

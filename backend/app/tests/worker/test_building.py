@@ -13,6 +13,7 @@ from osgeo import osr  # noqa: E402
 
 from app.models.config import BuildingConfig  # noqa: E402
 from app.worker.common.geo import LocalFrame  # noqa: E402
+from app.worker.tasks.vector.building import task as building_task  # noqa: E402
 from app.worker.tasks.vector.building.task import (  # noqa: E402
     read_roofer,
     sink_to_dtm,
@@ -297,3 +298,16 @@ def test_grow_is_a_square_dilation():
     m[0, 8] = True
     out = _grow(m, 2)
     assert out[3:8, 2:7].all() and out.sum() == 25 + 9  # the corner pixel grows inside the image only
+
+
+@pytest.mark.parametrize("line, stage", [
+    ("[2026-11-12 16:42:37.503] [stdout] [info] [cropper] Tile 0: cropped 20 buildings",
+     "Roofer: Tile 0: cropped 20 buildings"),
+    ("[2026-11-12 16:42:40.268] [stdout] [info] [serializer] Tile 3: wrote 20 buildings",
+     "Roofer: Tile 3: wrote 20 buildings"),
+    ("[2026-11-12 16:42:29.678] [stdout] [info] Cropping pointcloud ...", "Roofer: cropping point cloud"),
+    ("[2026-11-12 16:42:29.663] [stdout] [info] Number of source footprints: 20", None),
+    ("[2026-11-12 16:42:40.260] [stdout] [info] [reconstructor] Finished reconstruction: processed 20", None),
+])
+def test_roofer_stage(line, stage):
+    assert building_task._roofer_stage(line) == stage

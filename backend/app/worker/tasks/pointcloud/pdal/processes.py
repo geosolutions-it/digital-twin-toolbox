@@ -15,7 +15,7 @@ AUTO_SAMPLE_PERCENTILE = 90
 def pdal_metadata(file_path):
     result = run_subprocess(
         ['pdal', 'info', file_path, '--metadata'],
-        capture_output=True,
+        capture_output=True, log_stdout=False,
     )
     return json.loads(result.stdout.decode("utf-8"))
 
@@ -23,7 +23,7 @@ def pdal_metadata(file_path):
 def pdal_stats(file_path):
     result = run_subprocess(
         ['pdal', 'info', file_path, '--stats'],
-        capture_output=True,
+        capture_output=True, log_stdout=False,
     )
     return json.loads(result.stdout.decode("utf-8"))
 
@@ -104,10 +104,9 @@ def process_las(work_dir, input_path, sample_radius=None, to_ellipsoidal_height=
     with open(pipeline_process_path, "w") as f:
         json.dump(pipeline, f)
 
-    res = run_subprocess(['pdal', 'pipeline', pipeline_process_path], capture_output=True, text=True)
+    run_subprocess(['pdal', 'pipeline', pipeline_process_path])
 
     if not os.path.isfile(output_processed_laz_path):
-        print(res.stderr)
         raise Exception("Processed LAS not created")
 
     return output_processed_laz_path
@@ -127,7 +126,7 @@ def compute_auto_sample_radius(work_dir, input_path):
     with open(pipeline_path, "w") as f:
         json.dump(pipeline, f)
 
-    run_subprocess(['pdal', 'pipeline', pipeline_path], capture_output=True, text=True)
+    run_subprocess(['pdal', 'pipeline', pipeline_path])
     if not os.path.isfile(nn_csv):
         return None
 

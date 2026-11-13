@@ -4,15 +4,17 @@ import re
 import shutil
 import tempfile
 import threading
+import time
 import uuid
-from sqlmodel import Session, select, update
+from sqlmodel import Session, delete, select, update
 from celery import Celery, Task
-from celery.exceptions import Ignore
+from celery.exceptions import Ignore, TaskPredicate
 from celery.signals import worker_init, worker_ready
 from app.core.db import engine
 from app.core.config import settings
-from app.models.task import Pipeline
+from app.models.task import Pipeline, PipelineLog
 from app.models.user import User  # noqa - registers user table for FK resolution
+from app.worker.common.logs import capture_pipeline_log
 from app.worker.tasks import TASK_QUEUES
 from celery.states import SUCCESS, FAILURE, REVOKED, STARTED
 
@@ -45,11 +47,15 @@ def _owned_update(pipeline_id, task_id, values):
 
 
 def _claim_row(pipeline_id, task_id) -> bool:
-    """Mark the row STARTED if this task still owns it. False when cancelled, replaced or deleted."""
+    """Mark the row STARTED and drop the previous run's log if this task still owns it. False when cancelled,
+    replaced or deleted."""
     with Session(engine) as session:
         result = session.exec(_owned_update(pipeline_id, task_id, {"task_status": STARTED}))
+        claimed = result.rowcount == 1
+        if claimed:
+            session.exec(delete(PipelineLog).where(PipelineLog.pipeline_id == uuid.UUID(str(pipeline_id))))
         session.commit()
-        return result.rowcount == 1
+        return claimed
 
 
 def _write_result(pipeline_id, task_id, values, status=None) -> bool:
@@ -68,6 +74,11 @@ def _write_result(pipeline_id, task_id, values, status=None) -> bool:
         return True
 
 
+def _duration(seconds):
+    minutes, seconds = divmod(round(seconds), 60)
+    return f"{minutes} min {seconds:02d} s" if minutes else f"{seconds} s"
+
+
 class PipelineDatabaseTask(Task):
     """The pipeline row is the source of truth: a task acts on it only while row.task_id is its own id."""
     abstract = True
@@ -78,6 +89,19 @@ class PipelineDatabaseTask(Task):
             # id read before super().__call__ (its request has none); Ignore skips run and after_return
             if not _claim_row(pipeline_extended['id'], self.request.id):
                 raise Ignore()
+            with capture_pipeline_log(pipeline_extended['id']):
+                started = time.monotonic()
+                logger.info("Started %s", self.name)
+                try:
+                    result = super().__call__(*args, **kwargs)
+                except TaskPredicate:
+                    raise
+                except Exception:
+                    # Celery logs the failure after this returns, outside the job log
+                    logger.exception("Failed after %s", _duration(time.monotonic() - started))
+                    raise
+                logger.info("Finished in %s", _duration(time.monotonic() - started))
+                return result
         return super().__call__(*args, **kwargs)
 
     def after_return(self, status, retval, task_id, args, kwargs, einfo):

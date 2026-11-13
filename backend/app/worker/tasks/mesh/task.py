@@ -5,6 +5,7 @@ import tempfile
 
 from app.core.storage import get_storage, output_key
 from app.models.config import MeshConfig
+from app.worker.common.logs import log_stage
 from app.worker.common.output import publish_tiles
 from app.worker.common.utils import run_subprocess
 from app.worker.main import celery, PipelineDatabaseTask
@@ -44,6 +45,7 @@ def create_mesh_3dtiles(pipeline_extended):
     out_base = source.get('output_base') or output_key(pipeline_extended['id'])
 
     with tempfile.TemporaryDirectory() as scratch:
+        log_stage("Downloading mesh")
         local = _materialize(storage, input_key, scratch, f"index{extension}")
         tiles_dir = os.path.join(scratch, 'tiles')
         params = {
@@ -52,5 +54,6 @@ def create_mesh_3dtiles(pipeline_extended):
             'output_dir': tiles_dir,
             'workers': _tiling_workers(),
         }
+        log_stage("Tiling mesh")
         run_subprocess([sys.executable, '-m', 'app.worker.tasks.mesh.tiler', json.dumps(params)], check=True)
         return publish_tiles(storage, tiles_dir, out_base, 'tileset.json')

@@ -7,6 +7,7 @@ export function isCeleryTaskInProgress(status?: string | null): boolean {
 }
 
 export function celeryTaskStatusLabel(status?: string | null): string {
+  if (status === "STARTED") return "RUNNING"
   if (isCeleryTaskInProgress(status)) return "PENDING"
   return status ?? "READY"
 }

@@ -2,10 +2,13 @@
 import os
 
 from app.core.storage import output_url
+from app.worker.common.logs import log_stage
 
 
 def publish_tiles(storage, tiles_dir, out_base, entry, artifacts=None):
     """artifacts: {name: local path}; both folders are replaced on every run."""
+    files = sum(len(names) for _, _, names in os.walk(tiles_dir))
+    log_stage(f"Uploading {files} tile files")
     storage.delete_prefix(f"{out_base}/tiles/")
     storage.upload_dir(tiles_dir, f"{out_base}/tiles")
     storage.delete_prefix(f"{out_base}/artifacts/")

@@ -1,7 +1,9 @@
 import uuid
+from datetime import datetime
 from typing import Optional
 from enum import Enum
 
+from sqlalchemy import BigInteger, DateTime, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
@@ -23,9 +25,34 @@ class Pipeline(PipelineBase, table=True):
     )
 
 
+class PipelineLog(SQLModel, table=True):
+    __tablename__ = "pipeline_log"
+
+    id: int | None = Field(default=None, primary_key=True, sa_type=BigInteger)
+    pipeline_id: uuid.UUID = Field(foreign_key="pipeline.id", nullable=False, ondelete="CASCADE", index=True)
+    created_at: datetime = Field(sa_type=DateTime(timezone=True))
+    level: str = Field(max_length=10)
+    message: str = Field(sa_type=Text)
+    stage: str | None = Field(default=None, max_length=255)
+
+
+class PipelineLogPublic(SQLModel):
+    id: int
+    created_at: datetime
+    level: str
+    message: str
+    stage: str | None = None
+
+
+class PipelineLogsPublic(SQLModel):
+    data: list[PipelineLogPublic]
+
+
 class PipelinePublic(PipelineBase):
     id: uuid.UUID
     owner_id: uuid.UUID
+    # latest stage logged by a running job
+    stage: str | None = None
 
 
 class PipelineBatchCreate(SQLModel):

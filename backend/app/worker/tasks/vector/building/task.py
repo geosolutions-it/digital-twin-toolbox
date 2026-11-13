@@ -1,5 +1,6 @@
 import glob
 import os
+import re
 import struct
 import tempfile
 
@@ -9,6 +10,7 @@ from pyproj import CRS
 
 from app.core.storage import get_storage, output_key
 from app.models.config import BuildingConfig
+from app.worker.common.logs import log_stage
 from app.worker.common.output import publish_tiles
 from app.worker.common.utils import run_subprocess
 from app.worker.main import PipelineDatabaseTask, celery
@@ -23,6 +25,10 @@ _POINT_CLOUD_EXT = (".las", ".laz")
 _TILE_MARGIN = 20.0
 _LAS_HEADER = 227
 _SKIP = {"rf_t_run", "rf_ridgelines", "rf_pc_select", "rf_pc_source", "rf_pc_year"}
+# "[time] [stdout] [info] [cropper] Tile 0: cropped 20 buildings"
+_ROOFER_STEP = re.compile(
+    r"^(?:\[[^\]]*\] ){3}(?:\[(?:cropper|reconstructor|sorter|serializer)\] (Tile .*)|(Cropping|Analysing) pointcloud)"
+)
 
 
 def _las_bounds(storage, key):
@@ -69,16 +75,22 @@ def _srs_argument(srs):
     return f"EPSG:{epsg}" if epsg else srs.ExportToWkt()
 
 
+def _roofer_stage(line):
+    match = _ROOFER_STEP.match(line)
+    if not match:
+        return None
+    return f"Roofer: {match.group(1) or match.group(2).lower() + ' point cloud'}"
+
+
 def _run_roofer(footprints, clouds, srs, config, scratch):
     out = os.path.join(scratch, "roofer")
     cmd = ["roofer", f"--lod{config.lod.replace('.', '')}", "--srs", _srs_argument(srs),
            "--bld-class", str(config.building_class), "--grnd-class", str(config.ground_class),
            *clouds, footprints, out]
     # roofer writes roofer.log.json to its cwd
-    result = run_subprocess(cmd, capture_output=True, text=True, cwd=scratch)
+    result = run_subprocess(cmd, cwd=scratch, stage_of=_roofer_stage)
     if result.returncode != 0:
-        tail = "\n".join((result.stderr or result.stdout or "").strip().splitlines()[-5:])
-        raise Exception(f"Roofer failed: {tail}")
+        raise Exception(f"Roofer failed with exit code {result.returncode}, see the job log")
     paths = sorted(glob.glob(os.path.join(out, "*.city.jsonl")))
     if not paths:
         raise Exception("Roofer wrote no buildings: check that the point cloud covers the footprints "
@@ -151,6 +163,7 @@ def create_building_3dtiles(pipeline_extended):
     out_base = source.get("output_base") or output_key(pipeline_extended["id"])
 
     with tempfile.TemporaryDirectory() as scratch:
+        log_stage("Reading footprints")
         footprints = resolve_input(source, storage, scratch)
         ds, layer = open_layer(footprints)
         if layer.GetSpatialRef() is None:
@@ -161,20 +174,27 @@ def create_building_3dtiles(pipeline_extended):
         minx, maxx, miny, maxy = layer.GetExtent()
         del ds, layer
 
+        log_stage("Downloading point cloud")
         clouds = _download_point_cloud(storage, config.point_cloud, scratch, (minx, miny, maxx, maxy))
+        log_stage(f"Roofer: starting on {len(clouds)} point cloud file(s)")
         jsonl = _run_roofer(footprints, clouds, srs, config, scratch)
+        log_stage("Reading buildings")
         objects = read_roofer(jsonl, config.lod)
         if not objects:
             raise Exception(f"No building reconstructed at LoD {config.lod}")
         if config.dtm:
+            log_stage("Fitting walls to the DTM")
             sink_to_dtm(objects, _download(storage, config.dtm, scratch, "dtm"), srs.ExportToWkt())
 
         # Roofer's CityJSON cannot name a CRS given as WKT
         def project(_srs_name, pts):
             return np.array(transform.TransformPoints(pts))
 
+        if config.orthophoto:
+            log_stage("Downloading orthophoto")
         orthophoto = _download(storage, config.orthophoto, scratch, "orthophoto") if config.orthophoto else None
         tiles_dir = os.path.join(scratch, "tiles")
+        log_stage(f"Tiling {len(objects)} buildings")
         tile_city_objects(objects, project, tiles_dir, config.max_tile_size_kb, orthophoto,
                           config.texture_resolution)
         artifacts = {f"buildings{'' if len(jsonl) == 1 else f'-{i}'}.city.jsonl": path for i, path in enumerate(jsonl)}

@@ -11,6 +11,7 @@ from app.worker.common.gltf import infer_schema
 from app.worker.tasks.vector.instance import reader
 from app.worker.tasks.vector.instance.tiler import build_instance_tileset
 from app.worker.tasks.vector.source import resolve_input
+from app.worker.common.logs import log_stage
 from app.worker.common.output import publish_tiles
 
 
@@ -52,10 +53,13 @@ def create_point_instance_3dtiles(pipeline_extended):
     out_base = source.get('output_base') or output_key(pipeline_id)
 
     with tempfile.TemporaryDirectory() as scratch:
+        log_stage("Downloading input")
         input_path = resolve_input(source, storage, scratch)
+        log_stage("Reading points")
         features, (lo, hi) = reader.read_points(input_path, bool(config['to_ellipsoidal_height']))
         if not features:
             raise Exception("No point features to tile")
+        log_stage(f"Placing models on {len(features)} points")
 
         frame = LocalFrame.from_bounds(lo, hi)
         model_cache = {}
@@ -87,6 +91,7 @@ def create_point_instance_3dtiles(pipeline_extended):
         max_ge = float(parse_expression('number', config['max_geometric_error'], {}, default_config['max_geometric_error']))
 
         tiles_dir = os.path.join(scratch, 'tiles')
+        log_stage(f"Tiling {len(records)} instances")
         build_instance_tileset(records, tiles_dir, frame.transform(), model_cache, schema,
                                max_tile_bytes=max_kb * 1024, max_geometric_error=max_ge)
 
