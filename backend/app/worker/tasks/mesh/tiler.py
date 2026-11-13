@@ -227,7 +227,7 @@ def run(params):
     frame = LocalFrame(params.get("longitude", 0), params.get("latitude", 0), params.get("altitude", 0))
     write_tileset(output_dir, root, frame.transform(), top_ge)
 
-    total = sum(os.path.getsize(os.path.join(output_dir, f"{l}_{y}_{x}.glb")) for l, y, x in tiles)
+    total = sum(os.path.getsize(os.path.join(output_dir, f"{level}_{y}_{x}.glb")) for level, y, x in tiles)
     logger.info(f"done: {len(tiles)} tiles, {total / 1e6:.1f} MB, {time.time() - started:.0f}s")
     return {"tiles": len(tiles), "bytes": total, "size": (hi - lo).tolist()}
 

@@ -55,7 +55,7 @@ def run_subprocess(cmd, check=False, capture_output=False, text=False, cwd=None,
     except ProcessLookupError:
         pgid = None
 
-    def _kill_group(signum, frame):
+    def _kill_group(signum, _frame):
         if pgid is not None:
             try:
                 os.killpg(pgid, signal.SIGKILL)

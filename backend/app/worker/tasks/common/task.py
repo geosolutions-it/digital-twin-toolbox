@@ -7,7 +7,7 @@ from app.worker.tasks.common.tiles3d import build_parent_tileset
 
 
 @celery.task(name="finalize_tileset_batch")
-def finalize_tileset_batch(*args, output_prefix, base=None):
+def finalize_tileset_batch(*_args, output_prefix, base=None):
     """Stitch whatever child tilesets exist under output_prefix into one parent."""
     storage = get_storage()
     prefix = output_prefix.rstrip('/') + '/'

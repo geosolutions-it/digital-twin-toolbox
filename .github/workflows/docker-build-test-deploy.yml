@@ -16,7 +16,36 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  lint:
+    runs-on: self-hosted
+    permissions:
+      contents: read
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Lint backend
+        run: bash backend/scripts/lint.sh
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Lint and type-check frontend
+        working-directory: frontend
+        run: |
+          npm ci --ignore-scripts
+          npm run check
+
   build-test-deploy:
+    needs: lint
     runs-on: self-hosted
     permissions:
       contents: read

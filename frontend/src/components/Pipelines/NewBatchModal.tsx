@@ -419,7 +419,7 @@ const NewBatchModal = ({
             await processPipelineBatchTask(editBatchId, "run")
           } else {
             const ids =
-              targetIds && targetIds.length
+              targetIds?.length
                 ? targetIds
                 : editPipelineId
                   ? [editPipelineId]

@@ -134,7 +134,8 @@ def test_write_result_finalizes_only_when_owned(monkeypatch, rowcount, finalized
     assert len(seen) == finalized
 
 
-def test_job_log_gets_start_and_end_lines(fake_db, caplog, monkeypatch):
+@pytest.mark.usefixtures("fake_db")
+def test_job_log_gets_start_and_end_lines(caplog, monkeypatch):
     caplog.set_level("INFO", logger="app.worker.main")
     run()
 

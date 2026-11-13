@@ -182,7 +182,7 @@ def parse_obj(path):
     def general(chunks, mats):
         """'v', 'v/vt', 'v//vn' and mixed arities; vt is -1 where the face has no UVs."""
         out_v, out_vt, out_mat = [], [], []
-        for line, mat in zip(chunks, mats):
+        for line, mat in zip(chunks, mats, strict=True):
             vs, vts = [], []
             for token in line.split():
                 parts = token.split(b"/")

@@ -66,8 +66,8 @@ def _subdivide(records, depth, max_bytes, max_depth, max_ge, models, schema, out
     else:
         picked = np.zeros(len(records), dtype=bool)
         picked[np.linspace(0, len(records) - 1, max_features).astype(np.int64)] = True
-        content = [r for r, p in zip(records, picked) if p]
-        remainder = [r for r, p in zip(records, picked) if not p]
+        content = [r for r, p in zip(records, picked, strict=True) if p]
+        remainder = [r for r, p in zip(records, picked, strict=True) if not p]
 
     box = _write_node(content, models, schema, out_dir, tile_id)
     node = {

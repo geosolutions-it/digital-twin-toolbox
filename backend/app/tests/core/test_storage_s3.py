@@ -4,9 +4,9 @@ import pytest
 
 boto3 = pytest.importorskip("boto3")
 pytest.importorskip("moto")
-from moto import mock_aws
+from moto import mock_aws  # noqa: E402
 
-from app.core.storage import S3Storage, output_key
+from app.core.storage import S3Storage, output_key  # noqa: E402
 
 BUCKET = "test-bucket"
 
@@ -51,6 +51,6 @@ def test_upload_dir_and_delete_prefix(s3, tmp_path):
     assert not s3.exists("output/pid/tiles/tileset.json")
 
 
-def test_iter_object(s3, tmp_path):
+def test_iter_object(s3):
     s3.upload_fileobj(io.BytesIO(b"x y z\n1 2 3\n"), "upload/a/sample.xyz")
     assert b"".join(s3.iter_object("upload/a/sample.xyz")) == b"x y z\n1 2 3\n"

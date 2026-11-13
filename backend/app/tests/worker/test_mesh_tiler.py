@@ -28,8 +28,8 @@ def _write_textured_obj(folder, n=80):
     gx, gy = np.meshgrid(xs, ys)
     gz = 2.0 * np.sin(gx / 7.0) * np.cos(gy / 5.0)
     lines = ["mtllib grid.mtl"]
-    lines += [f"v {x:.4f} {y:.4f} {z:.4f}" for x, y, z in zip(gx.ravel(), gy.ravel(), gz.ravel())]
-    lines += [f"vt {x / SIZE_X:.6f} {y / SIZE_Y:.6f}" for x, y in zip(gx.ravel(), gy.ravel())]
+    lines += [f"v {x:.4f} {y:.4f} {z:.4f}" for x, y, z in zip(gx.ravel(), gy.ravel(), gz.ravel(), strict=True)]
+    lines += [f"vt {x / SIZE_X:.6f} {y / SIZE_Y:.6f}" for x, y in zip(gx.ravel(), gy.ravel(), strict=True)]
     lines.append("usemtl grid")
     for j in range(n - 1):
         for i in range(n - 1):
@@ -145,12 +145,11 @@ def test_texture_orientation(tiled):
         expected = np.stack([centroid[:, 0] / SIZE_X, centroid[:, 1] / SIZE_Y], axis=1) * 255
         size = image.shape[0]
         col = np.clip((cuv[:, 0] * size).astype(int), 0, size - 1)
-
-        def error(rows):
-            return np.abs(image[np.clip(rows, 0, size - 1), col][:, :2] - expected).mean()
-
-        correct = error((cuv[:, 1] * size).astype(int))
-        flipped = error(((1 - cuv[:, 1]) * size).astype(int))
+        errors = [
+            np.abs(image[np.clip(rows, 0, size - 1), col][:, :2] - expected).mean()
+            for rows in ((cuv[:, 1] * size).astype(int), ((1 - cuv[:, 1]) * size).astype(int))
+        ]
+        correct, flipped = errors
         assert correct < 6, (uri, correct)
         assert flipped > 3 * correct, (uri, correct, flipped)
 
@@ -207,7 +206,7 @@ def _rasterize_reference(atlas_uv, faces, size, tolerance=0.003):
         w0 = ((y1 - y2) * (gx - x2) + (x2 - x1) * (gy - y2)) / denom
         w1 = ((y2 - y0) * (gx - x2) + (x0 - x2) * (gy - y2)) / denom
         inside = (w0 >= -tolerance) & (w1 >= -tolerance) & (1 - w0 - w1 >= -tolerance)
-        texels.update(zip(gy[inside].tolist(), gx[inside].tolist(), [f] * int(inside.sum())))
+        texels.update(zip(gy[inside].tolist(), gx[inside].tolist(), [f] * int(inside.sum()), strict=True))
     return texels
 
 
@@ -216,5 +215,5 @@ def test_rasterize_matches_reference():
     uv = rng.random((300, 2))
     faces = rng.integers(0, 300, (200, 3))
     rows, cols, face_ids, bary = rasterize_atlas(uv, faces, 64, chunk=500)
-    assert set(zip(rows.tolist(), cols.tolist(), face_ids.tolist())) == _rasterize_reference(uv, faces, 64)
+    assert set(zip(rows.tolist(), cols.tolist(), face_ids.tolist(), strict=True)) == _rasterize_reference(uv, faces, 64)
     assert np.allclose(bary.sum(axis=1), 1.0)

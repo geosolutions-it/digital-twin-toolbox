@@ -834,15 +834,21 @@ function PipelinesTable() {
   const toggleAll = () =>
     setSelected((prev) => {
       const next = new Set(prev)
-      if (soloIds.every((id) => next.has(id))) soloIds.forEach((id) => next.delete(id))
-      else soloIds.forEach((id) => next.add(id))
+      const select = !soloIds.every((id) => next.has(id))
+      for (const id of soloIds) {
+        if (select) next.add(id)
+        else next.delete(id)
+      }
       return next
     })
 
   const toggleMany = (ids: string[], select: boolean) =>
     setSelected((prev) => {
       const next = new Set(prev)
-      ids.forEach((id) => (select ? next.add(id) : next.delete(id)))
+      for (const id of ids) {
+        if (select) next.add(id)
+        else next.delete(id)
+      }
       return next
     })
 

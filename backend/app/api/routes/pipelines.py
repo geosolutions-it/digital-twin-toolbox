@@ -306,7 +306,7 @@ def create_pipeline_batch(
     stems = [os.path.splitext(r)[0] for r in rels]
     batch_id = uuid.uuid4()
     created = []
-    for (key, ptype), rel, stem in zip(classified, rels, stems):
+    for (key, ptype), rel, stem in zip(classified, rels, stems, strict=True):
         name = os.path.basename(key)
         ext = os.path.splitext(rel)[1]
         # same stem, different extension (x.las + x.laz) keeps the extension apart

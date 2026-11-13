@@ -1,5 +1,6 @@
 #!/bin/sh -e
 set -x
 
-ruff check app scripts --fix
-ruff format app scripts
+cd "$(dirname "$0")/.."
+uv run --frozen --only-group dev ruff check app --fix
+uv run --frozen --only-group dev ruff format app
