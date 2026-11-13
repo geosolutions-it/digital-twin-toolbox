@@ -131,7 +131,6 @@ def test_batch_creates_one_row_per_matching_file(client, db, storage, fake_celer
     ).all()
     assert sorted(r.title for r in rows) == ["City / a.laz", "City / b.las"]
     out_root = output_key("City")
-    assert {r.source["batch_output_prefix"] for r in rows} == {out_root}
     assert sorted(r.source["output_base"] for r in rows) == [
         f"{out_root}/a",
         f"{out_root}/sub/b",

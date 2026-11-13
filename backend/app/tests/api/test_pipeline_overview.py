@@ -19,7 +19,6 @@ def batch_source(prefix, name):
         "key": f"city/{name}",
         "pipeline": "PointCloud",
         "output_base": f"{prefix}/{name}",
-        "batch_output_prefix": prefix,
     }
 
 

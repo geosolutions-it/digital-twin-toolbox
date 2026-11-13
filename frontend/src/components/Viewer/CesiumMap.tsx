@@ -20,7 +20,12 @@ import { useQuery } from "@tanstack/react-query"
 import * as Cesium from "cesium"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { FiCrosshair, FiX } from "react-icons/fi"
-import { API_BASE, readPipelines } from "../../api"
+import { API_BASE, readPipelinesOverview } from "../../api"
+import type {
+  PipelineBatchSummary,
+  PipelineOverviewEntry,
+  PipelinePublic,
+} from "../../api/types"
 import { createViewer, neutralLighting } from "../../utils/cesium"
 
 type Layer = {
@@ -32,52 +37,46 @@ type Layer = {
   extent?: number[]
 }
 
-function soloLayer(p: any): Layer {
-  const tileset = String(p.task_result.tileset)
-  const type = p?.source?.pipeline || "PointCloud"
+// JSON columns the API does not type yet
+type TaskResult = { tileset?: string; extent?: number[] }
+type PipelineSource = { pipeline?: string }
+
+function soloLayer(p: PipelinePublic): Layer | null {
+  const result = p.task_result as TaskResult | null
+  if (p.task_status !== "SUCCESS" || !result?.tileset) return null
+  const tileset = String(result.tileset)
+  const type = (p.source as PipelineSource | null)?.pipeline || "PointCloud"
   return {
     id: p.id,
     title: p.title || p.id,
     type,
     url: `${API_BASE}${tileset}`,
     isTerrain: tileset.endsWith("layer.json") || type === "Terrain",
-    extent: Array.isArray(p.task_result.extent)
-      ? p.task_result.extent
-      : undefined,
+    extent: Array.isArray(result.extent) ? result.extent : undefined,
   }
 }
 
-function buildLayers(items: any[]): Layer[] {
-  const solo: any[] = []
-  const batches = new Map<string, any[]>()
-  for (const p of items) {
-    if (p?.batch_id) {
-      const arr = batches.get(p.batch_id)
-      if (arr) arr.push(p)
-      else batches.set(p.batch_id, [p])
-    } else {
-      solo.push(p)
-    }
+function batchLayer(b: PipelineBatchSummary): Layer | null {
+  if (b.counts.success !== b.total || !b.output_url) return null
+  return {
+    id: `batch:${b.batch_id}`,
+    title: b.label,
+    type: b.pipeline || "PointCloud",
+    url: `${API_BASE}${b.output_url}/tileset.json`,
+    isTerrain: false,
   }
+}
 
+function buildLayers(entries: PipelineOverviewEntry[]): Layer[] {
   const layers: Layer[] = []
-  for (const p of solo) {
-    if (p?.task_status === "SUCCESS" && p?.task_result?.tileset)
-      layers.push(soloLayer(p))
-  }
-  for (const [bid, group] of batches) {
-    const allDone =
-      group.length > 0 && group.every((p) => p?.task_status === "SUCCESS")
-    const batchUrl: string = group[0]?.source?.batch_output_url || ""
-    if (!allDone || !batchUrl) continue
-    const t: string = group[0]?.title || ""
-    layers.push({
-      id: `batch:${bid}`,
-      title: t.includes(" / ") ? t.split(" / ")[0] : `Batch ${bid.slice(0, 8)}`,
-      type: group[0]?.source?.pipeline || "PointCloud",
-      url: `${API_BASE}${batchUrl}/tileset.json`,
-      isTerrain: false,
-    })
+  for (const e of entries) {
+    const layer =
+      e.kind === "batch" && e.batch
+        ? batchLayer(e.batch)
+        : e.pipeline
+          ? soloLayer(e.pipeline)
+          : null
+    if (layer) layers.push(layer)
   }
   return layers
 }
@@ -166,9 +165,9 @@ export default function CesiumMap() {
 
   const { data } = useQuery({
     queryKey: ["pipelines", "map"],
-    queryFn: () => readPipelines({ skip: 0, limit: 1000 }),
+    queryFn: () => readPipelinesOverview({ skip: 0, limit: 1000 }),
   })
-  const layers = useMemo(() => buildLayers((data as any)?.data || []), [data])
+  const layers = useMemo(() => buildLayers(data?.data ?? []), [data])
   const tileLayers = useMemo(() => layers.filter((l) => !l.isTerrain), [layers])
   const terrainLayers = useMemo(
     () => layers.filter((l) => l.isTerrain),

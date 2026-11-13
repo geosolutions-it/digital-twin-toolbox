@@ -333,8 +333,6 @@ def create_pipeline_batch(
                 "key": key,
                 "extension": os.path.splitext(key)[1],
                 "output_base": output_base,
-                "batch_output_prefix": out_root,
-                "batch_output_url": output_url(out_root),
                 "pipeline": ptype,
             },
             owner_id=current_user.id,
