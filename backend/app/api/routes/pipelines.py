@@ -12,6 +12,7 @@ from sqlmodel import delete, func, select
 from app.api.deps import CurrentUser, SessionDep
 from app.core.celery_app import celery
 from app.core.storage import get_storage, output_key, output_root, output_url
+from app.models.config import HeightReference
 from app.models.inspect import MeshBbox, VectorFields, VectorSample
 from app.models.pipeline import (
     MAX_LOG_LINES,
@@ -486,7 +487,8 @@ def vector_sample(
     key: str | None = None,
     prefix: str | None = None,
     limit: int = Query(200, ge=1, le=1000),
-    ellipsoidal: bool = False,
+    height_reference: HeightReference = "source",
+    vertical_epsg: int | None = None,
 ) -> Any:
     """Neighbouring features of a bucket vector as WGS84 GeoJSON."""
     target = _bucket_target(key, prefix, "Polygon")
@@ -494,7 +496,12 @@ def vector_sample(
         return celery.send_task(
             "read_vector_sample",
             kwargs={
-                "options": {"key": target, "limit": limit, "ellipsoidal": ellipsoidal}
+                "options": {
+                    "key": target,
+                    "limit": limit,
+                    "height_reference": height_reference,
+                    "vertical_epsg": vertical_epsg,
+                }
             },
         ).get(timeout=60)
     except Exception as e:

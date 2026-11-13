@@ -20,15 +20,22 @@ Expression = float | str | list[Any]
 OptionalExpression = Annotated[Expression | None, _Blank]
 
 
-class PointCloudConfig(BaseModel):
+HeightReference = Literal["source", "ellipsoidal", "orthometric"]
+
+
+class HeightConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
+    height_reference: HeightReference = "source"
+    # geoid on the orthometric side (EGM2008 when empty); a vertical CRS declared by the file wins
+    vertical_epsg: OptionalInt = None
+
+
+class PointCloudConfig(HeightConfig):
     colorization_image: str | None = None
     sample_radius: OptionalFloat = None
     # fallback CRS, used when the point cloud or its source carry none of their own
     horizontal_epsg: OptionalInt = None
-    vertical_epsg: OptionalInt = None
-    to_ellipsoidal_height: bool = False
     ground_classification: bool = False
 
 
@@ -53,15 +60,11 @@ class MeshConfig(BaseModel):
     up_axis: Axis = "Z"
 
 
-class CityGMLConfig(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class CityGMLConfig(HeightConfig):
     # None: the highest each object has
     lod: OptionalInt = Field(None, ge=0, le=4)
-    to_ellipsoidal_height: bool = False
     # used when the file declares none
     horizontal_epsg: OptionalInt = None
-    vertical_epsg: OptionalInt = None
     max_tile_size_kb: float = 400
     orthophoto: OptionalStr = None
     # m per texel; None: the orthophoto's
@@ -71,10 +74,8 @@ class CityGMLConfig(BaseModel):
 BuildingLod = Literal["1.2", "1.3", "2.2"]
 
 
-class BuildingConfig(BaseModel):
+class BuildingConfig(HeightConfig):
     """The footprint file is the pipeline source."""
-
-    model_config = ConfigDict(extra="ignore")
 
     # LAS/LAZ key, or a folder ending with /
     point_cloud: str = ""
@@ -83,7 +84,6 @@ class BuildingConfig(BaseModel):
     lod: BuildingLod = "2.2"
     building_class: int = 6
     ground_class: int = 2
-    to_ellipsoidal_height: bool = False
     # m per texel; None: the orthophoto's
     texture_resolution: OptionalFloat = Field(None, gt=0)
     max_tile_size_kb: float = 400
@@ -101,22 +101,14 @@ class BuildingConfig(BaseModel):
         return str(v or "2.2")
 
 
-class PolygonConfig(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class PolygonConfig(HeightConfig):
     lower_limit_height: OptionalExpression = None
     upper_limit_height: OptionalExpression = None
-    to_ellipsoidal_height: bool = False
     remove_bottom_surface: bool = True
     max_tile_size_kb: float = Field(400, gt=0)
 
 
-class TerrainConfig(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    to_ellipsoidal_height: bool = False
-    # vertical CRS of the DEM heights
-    source_vertical_epsg: int = 3855
+class TerrainConfig(HeightConfig):
     min_zoom: int = Field(0, ge=0)
     # None: from the DEM resolution
     max_zoom: OptionalInt = Field(None, ge=0)
@@ -125,9 +117,7 @@ class TerrainConfig(BaseModel):
     water_key: OptionalStr = None
 
 
-class InstanceConfig(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class InstanceConfig(HeightConfig):
     # glb name, appended to models_prefix
     model: str | list[Any] = "model.glb"
     models_prefix: str = ""
@@ -136,6 +126,5 @@ class InstanceConfig(BaseModel):
     scale: Expression = 1.0
     # None: the point's own height
     elevation: OptionalExpression = None
-    to_ellipsoidal_height: bool = False
     max_tile_size_kb: float = Field(1024, gt=0)
     max_geometric_error: float = Field(500, gt=0)

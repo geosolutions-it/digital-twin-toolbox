@@ -18,7 +18,7 @@ def create_terrain_tiles(pipeline_extended):
         src = ctx.download(ctx.source.key, "dem")
         log_stage("Reprojecting DEM")
         warped = dem.warp_to_wgs84(
-            src, ctx.scratch, config.to_ellipsoidal_height, config.source_vertical_epsg
+            src, ctx.scratch, config.height_reference, config.vertical_epsg
         )
 
         if config.water_key:

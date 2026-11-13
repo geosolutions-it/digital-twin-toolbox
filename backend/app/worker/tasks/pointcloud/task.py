@@ -1,6 +1,8 @@
 import logging
 import os
 
+from pyproj import CRS
+
 from app.core.celery_app import celery
 from app.models.config import PointCloudConfig
 from app.worker.runtime.logs import log_stage
@@ -25,15 +27,17 @@ def create_point_cloud_3dtiles(pipeline_extended):
             ctx.source.key, "index" + (ctx.source.extension or "")
         )
 
-        horizontal_epsg, vertical_epsg = resolve_crs_from_file(input_file)
+        horizontal_epsg, declared_vertical = resolve_crs_from_file(input_file)
         # some clouds ship without a CRS in the header: fall back to the one set in the config
-        if not horizontal_epsg and config.horizontal_epsg:
-            horizontal_epsg = config.horizontal_epsg
-            vertical_epsg = vertical_epsg or config.vertical_epsg
+        horizontal_epsg = horizontal_epsg or config.horizontal_epsg
         if not horizontal_epsg:
             raise Exception(
                 "Point cloud has no CRS. Set its EPSG code in the config and re-run."
             )
+        source_crs = CRS.from_user_input(
+            f"EPSG:{horizontal_epsg}"
+            + (f"+{declared_vertical}" if declared_vertical else "")
+        )
 
         colorization_image_path = None
         if config.colorization_image:
@@ -55,10 +59,10 @@ def create_point_cloud_3dtiles(pipeline_extended):
         processed_file = process_las(
             scratch,
             input_file,
+            source_crs,
             sample_radius=sample_radius,
-            to_ellipsoidal_height=config.to_ellipsoidal_height,
-            horizontal_epsg=horizontal_epsg,
-            vertical_epsg=vertical_epsg,
+            height_reference=config.height_reference,
+            vertical_epsg=config.vertical_epsg,
             colorization_image=colorization_image_path,
             ground_classification=config.ground_classification,
         )

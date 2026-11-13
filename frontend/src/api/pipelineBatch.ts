@@ -2,6 +2,7 @@ import axios from "axios"
 import { API_BASE } from "./config"
 import type {
   FinalizeQueued,
+  HeightReference,
   MeshBbox,
   Message,
   PipelineBatchActionResult,
@@ -72,14 +73,16 @@ export async function getVectorSample(params: {
   key?: string
   prefix?: string
   limit?: number
-  ellipsoidal?: boolean
+  height_reference?: HeightReference
+  vertical_epsg?: number
 }): Promise<VectorSample> {
   const res = await axios.get(`${API_BASE}/api/v1/pipelines/vector-sample`, {
     params: {
       key: params.key,
       prefix: params.prefix,
       limit: params.limit,
-      ellipsoidal: params.ellipsoidal,
+      height_reference: params.height_reference,
+      vertical_epsg: params.vertical_epsg,
     },
   })
   return res.data

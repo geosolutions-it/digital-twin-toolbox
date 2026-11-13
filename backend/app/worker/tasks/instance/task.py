@@ -40,7 +40,7 @@ def create_point_instance_3dtiles(pipeline_extended):
         input_path = resolve_input(ctx.source.key, ctx.storage, ctx.scratch)
         log_stage("Reading points")
         features, (lo, hi) = reader.read_points(
-            input_path, config.to_ellipsoidal_height
+            input_path, config.height_reference, config.vertical_epsg
         )
         if not features:
             raise Exception("No point features to tile")

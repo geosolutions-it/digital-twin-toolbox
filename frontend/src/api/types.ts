@@ -57,6 +57,7 @@ export type BuildingLod = BuildingConfig["lod"]
 export type PolygonConfig = S["PolygonConfig"]
 export type TerrainConfig = S["TerrainConfig"]
 export type InstanceConfig = S["InstanceConfig"]
+export type HeightReference = PolygonConfig["height_reference"]
 
 type PipelineConfig =
   | PointCloudConfig

@@ -1,6 +1,6 @@
 """Bucket point vector + model glb readers for the instance worker.
 
-Points are read with OGR and reprojected to WGS84 (optionally ellipsoidal). Model
+Points are read with OGR and reprojected to WGS84 with the requested heights. Model
 glbs are parsed by hand (single-buffer, non-Draco, non-interleaved) into primitives
 so the mesh writer can embed and gpu-instance them. No gltf library.
 """
@@ -27,11 +27,11 @@ _NCOMP = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}
 # ---- point vector ---------------------------------------------------------
 
 
-def read_points(path, to_ellipsoidal=False):
+def read_points(path, height_reference="source", vertical_epsg=None):
     """(features, (lo, hi)) where each feature is {lonlath, properties}; bounds are
     lon/lat/h min/max for the local frame origin. Non-point geometries are skipped."""
     ds, layer = open_layer(path)
-    transform = wgs84_transform(layer, to_ellipsoidal)
+    transform = wgs84_transform(layer, height_reference, vertical_epsg)
 
     lo = np.array([np.inf, np.inf, np.inf])
     hi = np.array([-np.inf, -np.inf, -np.inf])

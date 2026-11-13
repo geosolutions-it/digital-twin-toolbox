@@ -4,20 +4,24 @@ import type { InstanceConfig } from "../../../api/types"
 import { useStorageListing } from "../StorageKeyInput"
 import {
   type FieldsProps,
+  HeightFields,
+  type HeightValues,
   type PipelineForm,
   exprText,
   exprValue,
   fieldsFor,
+  heightDefaults,
+  heightFromConfig,
+  heightToConfig,
   numText,
 } from "./common"
 
-export interface InstanceValues {
+export interface InstanceValues extends HeightValues {
   models_prefix: string
   model: unknown
   scale: unknown
   rotation: unknown
   elevation: unknown
-  to_ellipsoidal_height: boolean
   max_tile_size_kb: string
   max_geometric_error: string
 }
@@ -77,10 +81,7 @@ function InstanceFields(props: FieldsProps) {
         type="number"
         placeholder="point Z, e.g. $minZ + 2"
       />
-      <F.Checkbox
-        name="to_ellipsoidal_height"
-        label="Convert heights to ellipsoidal (EGM2008)"
-      />
+      <HeightFields />
       <F.Number
         name="max_tile_size_kb"
         label="Max tile size in KB (optional)"
@@ -102,7 +103,7 @@ export const instanceForm: PipelineForm<InstanceValues, InstanceConfig> = {
     scale: "",
     rotation: "",
     elevation: "",
-    to_ellipsoidal_height: false,
+    ...heightDefaults,
     max_tile_size_kb: "",
     max_geometric_error: "",
   },
@@ -116,11 +117,10 @@ export const instanceForm: PipelineForm<InstanceValues, InstanceConfig> = {
     if (scale !== undefined) data.scale = scale
     if (rotation !== undefined) data.rotation = rotation
     if (elevation !== undefined) data.elevation = elevation
-    if (v.to_ellipsoidal_height) data.to_ellipsoidal_height = true
     if (v.max_tile_size_kb) data.max_tile_size_kb = Number(v.max_tile_size_kb)
     if (v.max_geometric_error)
       data.max_geometric_error = Number(v.max_geometric_error)
-    return data
+    return { ...data, ...heightToConfig(v) }
   },
   fromConfig: (c) => ({
     models_prefix: c.models_prefix || "",
@@ -128,7 +128,7 @@ export const instanceForm: PipelineForm<InstanceValues, InstanceConfig> = {
     scale: exprText(c.scale),
     rotation: exprText(c.rotation),
     elevation: exprText(c.elevation),
-    to_ellipsoidal_height: !!c.to_ellipsoidal_height,
+    ...heightFromConfig(c),
     max_tile_size_kb: numText(c.max_tile_size_kb),
     max_geometric_error: numText(c.max_geometric_error),
   }),

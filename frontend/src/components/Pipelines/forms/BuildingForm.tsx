@@ -2,9 +2,14 @@ import { Flex, Text } from "@chakra-ui/react"
 import { useWatch } from "react-hook-form"
 import type { BuildingConfig, BuildingLod } from "../../../api/types"
 import {
+  HeightFields,
+  type HeightValues,
   type PipelineForm,
   RASTER_EXTENSIONS,
   fieldsFor,
+  heightDefaults,
+  heightFromConfig,
+  heightToConfig,
   numText,
 } from "./common"
 
@@ -14,7 +19,7 @@ function isBuildingLod(v: string | undefined): v is BuildingLod {
   return BUILDING_LODS.includes(v as BuildingLod)
 }
 
-export interface BuildingValues {
+export interface BuildingValues extends HeightValues {
   point_cloud: string
   lod: string
   orthophoto: string
@@ -22,7 +27,6 @@ export interface BuildingValues {
   dtm: string
   building_class: string
   ground_class: string
-  to_ellipsoidal_height: boolean
   max_tile_size_kb: string
 }
 
@@ -80,10 +84,7 @@ function BuildingFields() {
         />
         <F.Number name="ground_class" label="Ground class" placeholder="2" />
       </Flex>
-      <F.Checkbox
-        name="to_ellipsoidal_height"
-        label="Convert heights to ellipsoidal (EGM2008)"
-      />
+      <HeightFields />
       <F.Number
         name="max_tile_size_kb"
         label="Max tile size in KB (optional)"
@@ -102,7 +103,7 @@ export const buildingForm: PipelineForm<BuildingValues, BuildingConfig> = {
     dtm: "",
     building_class: "",
     ground_class: "",
-    to_ellipsoidal_height: false,
+    ...heightDefaults,
     max_tile_size_kb: "",
   },
   toConfig: (v) => {
@@ -116,9 +117,8 @@ export const buildingForm: PipelineForm<BuildingValues, BuildingConfig> = {
     if (v.ground_class) data.ground_class = Number(v.ground_class)
     if (v.texture_resolution)
       data.texture_resolution = Number(v.texture_resolution)
-    if (v.to_ellipsoidal_height) data.to_ellipsoidal_height = true
     if (v.max_tile_size_kb) data.max_tile_size_kb = Number(v.max_tile_size_kb)
-    return data
+    return { ...data, ...heightToConfig(v) }
   },
   fromConfig: (c) => ({
     point_cloud: c.point_cloud || "",
@@ -128,7 +128,7 @@ export const buildingForm: PipelineForm<BuildingValues, BuildingConfig> = {
     dtm: c.dtm || "",
     building_class: numText(c.building_class),
     ground_class: numText(c.ground_class),
-    to_ellipsoidal_height: !!c.to_ellipsoidal_height,
+    ...heightFromConfig(c),
     max_tile_size_kb: numText(c.max_tile_size_kb),
   }),
   Fields: BuildingFields,

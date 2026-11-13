@@ -39,6 +39,7 @@ import {
   type PipelineFormValues,
   configFromValues,
 } from "./forms"
+import { heightToConfig } from "./forms/common"
 
 const PreviewMap = lazy(() => import("./PreviewMap"))
 
@@ -121,7 +122,12 @@ const PipelineModal = ({
         : null
   const vectorLike =
     baseType === "Polygon" || baseType === "Instance" || baseType === "Building"
-  const ellipsoidal = !!watch("to_ellipsoidal_height")
+  const heights = heightToConfig({
+    height_reference: watch("height_reference"),
+    vertical_epsg: watch("vertical_epsg"),
+  })
+  // a partly typed code would fail the preview request
+  if ((heights.vertical_epsg ?? 1000) < 1000) heights.vertical_epsg = undefined
   const { data: vectorFields } = useQuery({
     queryKey: ["vector-fields", fieldsParam],
     queryFn: () => getVectorFields(fieldsParam!),
@@ -130,8 +136,8 @@ const PipelineModal = ({
     staleTime: 60000,
   })
   const sample = useQuery({
-    queryKey: ["vector-sample", fieldsParam, ellipsoidal],
-    queryFn: () => getVectorSample({ ...fieldsParam!, ellipsoidal }),
+    queryKey: ["vector-sample", fieldsParam, heights],
+    queryFn: () => getVectorSample({ ...fieldsParam!, ...heights }),
     enabled:
       isOpen && vectorLike && !!(fieldsParam?.key || fieldsParam?.prefix),
     staleTime: 60000,

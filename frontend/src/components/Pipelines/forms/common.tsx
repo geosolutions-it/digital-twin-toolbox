@@ -13,8 +13,13 @@ import {
   type FieldValues,
   type Path,
   useFormContext,
+  useWatch,
 } from "react-hook-form"
-import type { AnyPipelineConfig, SampleFeature } from "../../../api/types"
+import type {
+  AnyPipelineConfig,
+  HeightReference,
+  SampleFeature,
+} from "../../../api/types"
 import ExpressionInput, { isInvalidExpression } from "../ExpressionInput"
 import StorageKeyInput from "../StorageKeyInput"
 
@@ -67,6 +72,7 @@ interface NumberFieldProps {
   placeholder?: string
   step?: string
   required?: string
+  help?: ReactNode
 }
 
 function NumberField({
@@ -75,6 +81,7 @@ function NumberField({
   placeholder,
   step,
   required,
+  help,
 }: NumberFieldProps) {
   const { register } = useFormContext()
   const error = useError(name)
@@ -89,6 +96,7 @@ function NumberField({
         {...register(name, required ? { required } : undefined)}
       />
       {error && <FormErrorMessage>{error}</FormErrorMessage>}
+      <Help>{help}</Help>
     </FormControl>
   )
 }
@@ -235,4 +243,58 @@ export function fieldsFor<V extends FieldValues>() {
       p: Named<V, ExpressionFieldProps>,
     ) => ReactElement,
   }
+}
+
+export interface HeightValues {
+  height_reference: HeightReference
+  vertical_epsg: string
+}
+
+export const heightDefaults: HeightValues = {
+  height_reference: "source",
+  vertical_epsg: "",
+}
+
+export function heightToConfig(v: HeightValues) {
+  const data: { height_reference?: HeightReference; vertical_epsg?: number } =
+    {}
+  if (v.height_reference && v.height_reference !== "source") {
+    data.height_reference = v.height_reference
+    if (v.vertical_epsg) data.vertical_epsg = Number(v.vertical_epsg)
+  }
+  return data
+}
+
+export const heightFromConfig = (c: AnyPipelineConfig): HeightValues => ({
+  height_reference: c.height_reference || "source",
+  vertical_epsg: numText(c.vertical_epsg),
+})
+
+const GEOID_HELP: Record<HeightReference, string> = {
+  source: "",
+  ellipsoidal: "Geoid of the source heights, EGM2008 when empty.",
+  orthometric: "Geoid of the output heights, EGM2008 when empty.",
+}
+
+export function HeightFields() {
+  const reference = useWatch<HeightValues, "height_reference">({
+    name: "height_reference",
+  })
+  return (
+    <>
+      <SelectField name="height_reference" label="Height conversion">
+        <option value="source">None</option>
+        <option value="ellipsoidal">Geoid → Ellipsoidal</option>
+        <option value="orthometric">Ellipsoidal → Geoid</option>
+      </SelectField>
+      {reference && reference !== "source" && (
+        <NumberField
+          name="vertical_epsg"
+          label="Geoid EPSG (optional)"
+          placeholder="3855"
+          help={GEOID_HELP[reference]}
+        />
+      )}
+    </>
+  )
 }

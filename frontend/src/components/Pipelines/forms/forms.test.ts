@@ -27,13 +27,14 @@ const SAVED: Record<PipelineType, object> = {
   PointCloud: {
     sample_radius: 0.5,
     colorization_image: "rasters/ortho.tif",
-    to_ellipsoidal_height: true,
+    height_reference: "ellipsoidal",
+    vertical_epsg: 5783,
     ground_classification: true,
   },
   Polygon: {
     upper_limit_height: ["*", ["property", "floors"], 3],
     lower_limit_height: 2,
-    to_ellipsoidal_height: true,
+    height_reference: "orthometric",
     remove_bottom_surface: false,
     max_tile_size_kb: 300,
   },
@@ -43,13 +44,14 @@ const SAVED: Record<PipelineType, object> = {
     scale: 2,
     rotation: ["property", "angle"],
     elevation: 10,
-    to_ellipsoidal_height: true,
+    height_reference: "ellipsoidal",
     max_tile_size_kb: 512,
     max_geometric_error: 100,
   },
   Terrain: {
     max_zoom: 14,
-    to_ellipsoidal_height: true,
+    height_reference: "ellipsoidal",
+    vertical_epsg: 3855,
     vertex_normals: false,
     water_key: "water/sea.gpkg",
   },
@@ -67,7 +69,7 @@ const SAVED: Record<PipelineType, object> = {
   },
   CityGML: {
     lod: 2,
-    to_ellipsoidal_height: true,
+    height_reference: "ellipsoidal",
     horizontal_epsg: 6708,
     vertical_epsg: 3855,
     orthophoto: "rasters/ortho.tif",
@@ -82,7 +84,8 @@ const SAVED: Record<PipelineType, object> = {
     building_class: 7,
     ground_class: 3,
     texture_resolution: 0.25,
-    to_ellipsoidal_height: true,
+    height_reference: "orthometric",
+    vertical_epsg: 3855,
     max_tile_size_kb: 300,
   },
 }
@@ -108,4 +111,14 @@ it("Instance keeps a plain model name", () => {
   const form = PIPELINE_FORMS.Instance
   const values = { ...form.defaults, ...form.fromConfig({ model: "tree.glb" }) }
   expect(form.toConfig(values)).toEqual({ model: "tree.glb" })
+})
+
+it("drops the geoid when heights stay as in the source", () => {
+  const form = PIPELINE_FORMS.Polygon
+  const values = {
+    ...form.defaults,
+    height_reference: "source",
+    vertical_epsg: "5783",
+  }
+  expect(form.toConfig(values)).toEqual({ remove_bottom_surface: true })
 })

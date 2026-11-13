@@ -23,16 +23,16 @@ def _ensure_z(coords):
 
 
 def _read_raw_features(path, config):
-    """Open the vector with OGR, reproject to WGS84 (optionally ellipsoidal), and
+    """Open the vector with OGR, reproject to WGS84 with the requested heights, and
     collect per-feature footprints + resolved heights. Returns (features, (lo, hi))."""
     ds, layer = open_layer(path)
-    to_ellipsoidal = config.to_ellipsoidal_height
-    transform = wgs84_transform(layer, to_ellipsoidal)
+    transform = wgs84_transform(layer, config.height_reference, config.vertical_epsg)
+    force_3d = config.height_reference != "source"
 
     lo = np.array([np.inf, np.inf, np.inf])
     hi = np.array([-np.inf, -np.inf, -np.inf])
     features = []
-    for geometry, properties in iter_features(layer, transform, to_ellipsoidal):
+    for geometry, properties in iter_features(layer, transform, force_3d):
         gtype = geometry.get("type")
         if gtype == "Polygon":
             parts = [geometry["coordinates"]]

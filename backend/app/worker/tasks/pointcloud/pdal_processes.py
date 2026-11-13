@@ -3,8 +3,8 @@ import math
 import os
 
 import laspy
-from pyproj import CRS
 
+from app.worker.lib.geo.ogr import height_transform
 from app.worker.runtime.subprocess import run_subprocess
 from app.worker.tasks.pointcloud.crs import resolve_epsg_codes_from_pdal_metadata
 
@@ -76,33 +76,41 @@ def _las_point_format(file_path):
         return f.header.point_format.id
 
 
+def _las_center(file_path):
+    with laspy.open(file_path) as f:
+        (x0, y0), (x1, y1) = f.header.mins[:2], f.header.maxs[:2]
+    return (x0 + x1) / 2, (y0 + y1) / 2
+
+
 def process_las(
     work_dir,
     input_path,
+    source_crs,
     sample_radius=None,
-    to_ellipsoidal_height=False,
-    horizontal_epsg=None,
+    height_reference="source",
     vertical_epsg=None,
     colorization_image=None,
     ground_classification=False,
 ):
+    """source_crs: pyproj CRS of the cloud; heights are converted in place, x/y stay in it."""
     pipeline = []
 
     if sample_radius:
         pipeline += [{"type": "filters.sample", "radius": sample_radius}]
 
-    if to_ellipsoidal_height:
-        if not horizontal_epsg:
-            raise Exception(
-                "Not recognized Point Cloud horizontal CRS (required for ellipsoidal height conversion)"
-            )
-        vepsg = vertical_epsg or 3855
-        geodetic_crs = CRS(horizontal_epsg).geodetic_crs.to_epsg()
+    if height_reference != "source":
+        _, src, dst = height_transform(
+            source_crs,
+            *_las_center(input_path),
+            height_reference,
+            vertical_epsg,
+            target=source_crs.sub_crs_list[0] if source_crs.is_compound else source_crs,
+        )
         pipeline += [
             {
                 "type": "filters.reprojection",
-                "in_srs": f"EPSG:{horizontal_epsg}+{vepsg}",
-                "out_srs": f"EPSG:{horizontal_epsg}+{geodetic_crs}",
+                "in_srs": src.to_wkt(),
+                "out_srs": dst.to_wkt(),
                 "error_on_failure": True,
             }
         ]

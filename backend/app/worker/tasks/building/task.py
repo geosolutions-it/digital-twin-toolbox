@@ -78,7 +78,9 @@ def create_building_3dtiles(pipeline_extended):
             raise Exception("The footprints have no CRS: include the .prj file")
         srs = layer.GetSpatialRef().Clone()  # outlives the datasource
         srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-        transform = wgs84_transform(layer, config.to_ellipsoidal_height)
+        transform = wgs84_transform(
+            layer, config.height_reference, config.vertical_epsg
+        )
         minx, maxx, miny, maxy = layer.GetExtent()
         del ds, layer
 

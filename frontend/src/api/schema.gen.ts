@@ -782,6 +782,17 @@ export interface components {
          */
         BuildingConfig: {
             /**
+             * Height Reference
+             * @default source
+             * @enum {string}
+             */
+            height_reference: "source" | "ellipsoidal" | "orthometric";
+            /**
+             * Vertical Epsg
+             * @default null
+             */
+            vertical_epsg: number | null;
+            /**
              * Point Cloud
              * @default
              */
@@ -813,11 +824,6 @@ export interface components {
              */
             ground_class: number;
             /**
-             * To Ellipsoidal Height
-             * @default false
-             */
-            to_ellipsoidal_height: boolean;
-            /**
              * Texture Resolution
              * @default null
              */
@@ -831,25 +837,26 @@ export interface components {
         /** CityGMLConfig */
         CityGMLConfig: {
             /**
-             * Lod
-             * @default null
+             * Height Reference
+             * @default source
+             * @enum {string}
              */
-            lod: number | null;
-            /**
-             * To Ellipsoidal Height
-             * @default false
-             */
-            to_ellipsoidal_height: boolean;
-            /**
-             * Horizontal Epsg
-             * @default null
-             */
-            horizontal_epsg: number | null;
+            height_reference: "source" | "ellipsoidal" | "orthometric";
             /**
              * Vertical Epsg
              * @default null
              */
             vertical_epsg: number | null;
+            /**
+             * Lod
+             * @default null
+             */
+            lod: number | null;
+            /**
+             * Horizontal Epsg
+             * @default null
+             */
+            horizontal_epsg: number | null;
             /**
              * Max Tile Size Kb
              * @default 400
@@ -868,6 +875,17 @@ export interface components {
         };
         /** InstanceConfig */
         InstanceConfig: {
+            /**
+             * Height Reference
+             * @default source
+             * @enum {string}
+             */
+            height_reference: "source" | "ellipsoidal" | "orthometric";
+            /**
+             * Vertical Epsg
+             * @default null
+             */
+            vertical_epsg: number | null;
             /**
              * Model
              * @default model.glb
@@ -893,11 +911,6 @@ export interface components {
              * @default null
              */
             elevation: number | string | unknown[] | null;
-            /**
-             * To Ellipsoidal Height
-             * @default false
-             */
-            to_ellipsoidal_height: boolean;
             /**
              * Max Tile Size Kb
              * @default 1024
@@ -967,6 +980,17 @@ export interface components {
         /** PointCloudConfig */
         PointCloudConfig: {
             /**
+             * Height Reference
+             * @default source
+             * @enum {string}
+             */
+            height_reference: "source" | "ellipsoidal" | "orthometric";
+            /**
+             * Vertical Epsg
+             * @default null
+             */
+            vertical_epsg: number | null;
+            /**
              * Colorization Image
              * @default null
              */
@@ -982,16 +1006,6 @@ export interface components {
              */
             horizontal_epsg: number | null;
             /**
-             * Vertical Epsg
-             * @default null
-             */
-            vertical_epsg: number | null;
-            /**
-             * To Ellipsoidal Height
-             * @default false
-             */
-            to_ellipsoidal_height: boolean;
-            /**
              * Ground Classification
              * @default false
              */
@@ -999,6 +1013,17 @@ export interface components {
         };
         /** PolygonConfig */
         PolygonConfig: {
+            /**
+             * Height Reference
+             * @default source
+             * @enum {string}
+             */
+            height_reference: "source" | "ellipsoidal" | "orthometric";
+            /**
+             * Vertical Epsg
+             * @default null
+             */
+            vertical_epsg: number | null;
             /**
              * Lower Limit Height
              * @default null
@@ -1009,11 +1034,6 @@ export interface components {
              * @default null
              */
             upper_limit_height: number | string | unknown[] | null;
-            /**
-             * To Ellipsoidal Height
-             * @default false
-             */
-            to_ellipsoidal_height: boolean;
             /**
              * Remove Bottom Surface
              * @default true
@@ -1028,15 +1048,16 @@ export interface components {
         /** TerrainConfig */
         TerrainConfig: {
             /**
-             * To Ellipsoidal Height
-             * @default false
+             * Height Reference
+             * @default source
+             * @enum {string}
              */
-            to_ellipsoidal_height: boolean;
+            height_reference: "source" | "ellipsoidal" | "orthometric";
             /**
-             * Source Vertical Epsg
-             * @default 3855
+             * Vertical Epsg
+             * @default null
              */
-            source_vertical_epsg: number;
+            vertical_epsg: number | null;
             /**
              * Min Zoom
              * @default 0
@@ -1333,7 +1354,8 @@ export interface operations {
                 key?: string | null;
                 prefix?: string | null;
                 limit?: number;
-                ellipsoidal?: boolean;
+                height_reference?: "source" | "ellipsoidal" | "orthometric";
+                vertical_epsg?: number | null;
             };
             header?: never;
             path?: never;

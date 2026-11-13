@@ -142,10 +142,10 @@ def test_resolve_crs_fallback():
 
 def test_horizontal_only_gets_vertical_datum():
     crs, _ = resolve_crs("EPSG:25832")
-    crs, _ = wgs84_transformer(crs, True, 7837)
-    assert crs.is_compound and "DHHN2016" in crs.name
-    crs2, _ = wgs84_transformer(resolve_crs("EPSG:25832")[0], False)
-    assert not crs2.is_compound
+    src, _, shifts = wgs84_transformer(crs, "ellipsoidal", 7837)
+    assert src.is_compound and "DHHN2016" in src.name and shifts
+    src2, _, shifts2 = wgs84_transformer(resolve_crs("EPSG:25832")[0])
+    assert not src2.is_compound and not shifts2
 
 
 def _area(soup):

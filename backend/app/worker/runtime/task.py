@@ -72,8 +72,6 @@ def task_output_base(pipeline_extended: dict, source: PipelineSource) -> str:
 
 
 class TaskContext:
-    """One pipeline run: validated source and config, storage, output prefix and a scratch folder."""
-
     def __init__(self, pipeline_extended, label, config_class, storage=None):
         self.source = task_source(pipeline_extended, label)
         self.config = config_class(**(pipeline_extended.get("data") or {}))

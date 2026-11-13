@@ -84,18 +84,21 @@ def _sample_window(layer, limit):
 def read_vector_sample(options):
     """Up to `limit` neighbouring features as WGS84 GeoJSON, heights as the workers produce them."""
     key = options["key"]
-    ellipsoidal = bool(options.get("ellipsoidal"))
+    height_reference = options.get("height_reference") or "source"
+    vertical_epsg = options.get("vertical_epsg")
     limit = int(options.get("limit") or 200)
     storage = get_storage()
     with tempfile.TemporaryDirectory() as scratch:
         path = resolve_input(key, storage, scratch)
         ds, layer = open_layer(path)
-        transform = wgs84_transform(layer, ellipsoidal)
+        transform = wgs84_transform(layer, height_reference, vertical_epsg)
         window = _sample_window(layer, limit)
         if window:
             layer.SetSpatialFilterRect(*window)
         features = []
-        for geometry, properties in iter_features(layer, transform, ellipsoidal):
+        for geometry, properties in iter_features(
+            layer, transform, height_reference != "source"
+        ):
             features.append(
                 {"type": "Feature", "geometry": geometry, "properties": properties}
             )

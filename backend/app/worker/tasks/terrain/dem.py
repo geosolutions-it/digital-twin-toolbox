@@ -1,32 +1,32 @@
-"""Prepare a DEM for tiling: warp to WGS84, optionally shift geoid heights to ellipsoidal."""
-
 import os
 
-from osgeo import gdal, osr
+from osgeo import gdal
+from pyproj import CRS
+
+from app.worker.lib.geo.ogr import height_transform
 
 gdal.UseExceptions()
 
 
-def _horizontal_epsg(path):
-    srs = osr.SpatialReference()
-    srs.ImportFromWkt(gdal.Open(path).GetProjection())
-    return srs.GetAuthorityCode(None)
-
-
-def warp_to_wgs84(src_path, scratch, to_ellipsoidal=False, source_vertical_epsg=3855):
-    """gdalwarp to EPSG:4326; optional geoid->ellipsoid via a compound vertical CRS.
-    Needs the PROJ geoid grid present (PROJ_NETWORK=ON)."""
+def warp_to_wgs84(src_path, scratch, height_reference="source", vertical_epsg=None):
     dst = os.path.join(scratch, "dem_4326.tif")
-    if to_ellipsoidal:
-        epsg = _horizontal_epsg(src_path)
-        src_srs = f"EPSG:{epsg}+{source_vertical_epsg}" if epsg else None
-        gdal.Warp(
-            dst,
-            src_path,
-            srcSRS=src_srs,
-            dstSRS="EPSG:4326+4979",
-            resampleAlg="bilinear",
-        )
-    else:
-        gdal.Warp(dst, src_path, dstSRS="EPSG:4326", resampleAlg="bilinear")
+    ds = gdal.Open(src_path)
+    srs = ds.GetSpatialRef()
+    if srs is None:
+        raise Exception("The DEM has no CRS")
+    gt = ds.GetGeoTransform()
+    _, src, target = height_transform(
+        CRS(srs.ExportToWkt(["FORMAT=WKT2_2019"])),
+        gt[0] + gt[1] * ds.RasterXSize / 2,
+        gt[3] + gt[5] * ds.RasterYSize / 2,
+        height_reference,
+        vertical_epsg,
+    )
+    gdal.Warp(
+        dst,
+        ds,
+        srcSRS=src.to_wkt(),
+        dstSRS=target.to_wkt(),
+        resampleAlg="bilinear",
+    )
     return dst

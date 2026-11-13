@@ -34,7 +34,7 @@ def test_source_creates_pending_row_and_sends_its_task(
     assert row.source["key"] == "lidar/a.laz"
     assert row.source["pipeline"] == "PointCloud"
     assert row.source["output_base"] == output_key("a")
-    assert row.data["to_ellipsoidal_height"] is False
+    assert row.data["height_reference"] == "source"
     assert [(t.name, t.task_id) for t in fake_celery.sent] == [
         ("create_point_cloud_3dtiles", row.task_id)
     ]
