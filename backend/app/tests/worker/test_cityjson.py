@@ -7,9 +7,9 @@ import pytest
 np = pytest.importorskip("numpy")
 
 from app.services.file_classify import classify_bucket_file  # noqa: E402
-from app.worker.tasks.vector.citygml.cityjson import iter_cityjson  # noqa: E402
-from app.worker.tasks.vector.citygml.crs import resolve_crs  # noqa: E402
-from app.worker.tasks.vector.citygml.reader import iter_city_objects  # noqa: E402
+from app.worker.lib.cityjson import iter_cityjson  # noqa: E402
+from app.worker.lib.geo.crs import resolve_crs  # noqa: E402
+from app.worker.tasks.citygml.reader import iter_city_objects  # noqa: E402
 
 SQUARE = [[0, 1, 2, 3]]
 

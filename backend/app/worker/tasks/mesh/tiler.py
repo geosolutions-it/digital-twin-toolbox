@@ -10,8 +10,8 @@ from io import BytesIO
 import numpy as np
 from PIL import Image
 
-from app.worker.common.geo import LocalFrame
-from app.worker.common.tileset import box, write_tileset
+from app.worker.lib.geo.frame import LocalFrame
+from app.worker.lib.tiles3d.tileset import box, write_tileset
 from app.worker.tasks.mesh.bake import (
     TextureCache,
     dilate,

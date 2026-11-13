@@ -4,8 +4,8 @@ import uuid
 
 import pytest
 
-from app.worker.common import logs
-from app.worker.common.logs import PipelineLogHandler, redact
+from app.worker.runtime import logs
+from app.worker.runtime.logs import PipelineLogHandler, redact
 
 PID = uuid.uuid4()
 

@@ -124,19 +124,19 @@ services:
   worker-vector:
     <<: *worker
     command:
-      - "celery -A app.worker.main.celery worker --queues=vector,common --include=app.worker.tasks.vector.task,app.worker.tasks.common.task --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}"
+      - "celery -A app.worker.main.celery worker --queues=vector,common --include=app.worker.queues.vector,app.worker.queues.batch --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY}"
 
   worker-point-cloud:
     <<: *worker
     mem_limit: ${WORKER_POINT_CLOUD_MEM_LIMIT:-0}
     command:
-      - "celery -A app.worker.main.celery worker --queues=point-cloud,common --include=app.worker.tasks.pointcloud.task,app.worker.tasks.common.task --loglevel=info --concurrency=${WORKER_POINT_CLOUD_CONCURRENCY:-2}"
+      - "celery -A app.worker.main.celery worker --queues=point-cloud,common --include=app.worker.queues.pointcloud,app.worker.queues.batch --loglevel=info --concurrency=${WORKER_POINT_CLOUD_CONCURRENCY:-2}"
 
   worker-mesh:
     <<: *worker
     mem_limit: ${WORKER_MESH_MEM_LIMIT:-0}
     command:
-      - "celery -A app.worker.main.celery worker --queues=mesh,common --include=app.worker.tasks.mesh.task,app.worker.tasks.common.task --loglevel=info --concurrency=${WORKER_MESH_CONCURRENCY:-1}"
+      - "celery -A app.worker.main.celery worker --queues=mesh,common --include=app.worker.queues.mesh,app.worker.queues.batch --loglevel=info --concurrency=${WORKER_MESH_CONCURRENCY:-1}"
 
 volumes:
   app-db-data:

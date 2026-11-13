@@ -6,15 +6,15 @@ import pytest
 np = pytest.importorskip("numpy")
 pytest.importorskip("mapbox_earcut")
 
-from app.worker.tasks.vector.citygml.crs import (  # noqa: E402
+from app.worker.lib.features.triangulate import triangulate  # noqa: E402
+from app.worker.lib.geo.crs import (  # noqa: E402
     resolve_crs,
     wgs84_transformer,
 )
-from app.worker.tasks.vector.citygml.reader import (  # noqa: E402
+from app.worker.tasks.citygml.reader import (  # noqa: E402
     iter_objects,
     iter_streams,
 )
-from app.worker.tasks.vector.citygml.triangulate import triangulate  # noqa: E402
 
 
 def _poly(gid, coords):

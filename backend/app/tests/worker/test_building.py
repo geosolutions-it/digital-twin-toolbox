@@ -12,14 +12,14 @@ pytest.importorskip("PIL")
 from osgeo import osr  # noqa: E402
 
 from app.models.config import BuildingConfig  # noqa: E402
-from app.worker.common.geo import LocalFrame  # noqa: E402
-from app.worker.tasks.vector.building import task as building_task  # noqa: E402
-from app.worker.tasks.vector.building.task import (  # noqa: E402
+from app.worker.lib.features.ortho import OrthoTexturer, roof_mask  # noqa: E402
+from app.worker.lib.features.writer import glb_bytes  # noqa: E402
+from app.worker.lib.geo.frame import LocalFrame  # noqa: E402
+from app.worker.tasks.building import roofer  # noqa: E402
+from app.worker.tasks.building.dtm import sink_to_dtm  # noqa: E402
+from app.worker.tasks.building.roofer import (  # noqa: E402
     read_roofer,
-    sink_to_dtm,
 )
-from app.worker.tasks.vector.ortho import OrthoTexturer, roof_mask  # noqa: E402
-from app.worker.tasks.vector.polygon.writer import glb_bytes  # noqa: E402
 
 # a 10 m box building at (1000, 2000) in EPSG:25833, base at 50 m, flat roof at 60 m
 X0, Y0 = 1000.0, 2000.0
@@ -272,7 +272,7 @@ class _TileStorage:
 
 
 def test_point_cloud_folder_keeps_only_tiles_near_the_footprints(tmp_path):
-    from app.worker.tasks.vector.building.task import _download_point_cloud
+    from app.worker.tasks.building.task import _download_point_cloud
 
     storage = _TileStorage(
         {
@@ -301,7 +301,7 @@ def test_point_cloud_folder_keeps_only_tiles_near_the_footprints(tmp_path):
 
 
 def test_tiler_splits_leaves_wider_than_the_texture_reach(tmp_path):
-    from app.worker.tasks.vector.polygon.tiler import build_tileset
+    from app.worker.lib.features.tiler import build_tileset
 
     # two buildings 1 km apart
     def box(x):
@@ -322,7 +322,7 @@ def test_tiler_splits_leaves_wider_than_the_texture_reach(tmp_path):
 
 
 def test_tiler_parent_error_covers_its_texture(tmp_path):
-    from app.worker.tasks.vector.polygon.tiler import build_tileset
+    from app.worker.lib.features.tiler import build_tileset
 
     class Texturer:
         def classify(self, t):
@@ -381,7 +381,7 @@ def test_texturer_stretches_16_bit_orthophotos(tmp_path):
 
 
 def test_grow_is_a_square_dilation():
-    from app.worker.tasks.vector.ortho import _grow
+    from app.worker.lib.features.ortho import _grow
 
     m = np.zeros((9, 9), dtype=bool)
     m[5, 4] = True
@@ -418,4 +418,4 @@ def test_grow_is_a_square_dilation():
     ],
 )
 def test_roofer_stage(line, stage):
-    assert building_task._roofer_stage(line) == stage
+    assert roofer._roofer_stage(line) == stage

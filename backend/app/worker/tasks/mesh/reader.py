@@ -1,4 +1,3 @@
-import io
 import os
 import zipfile
 from dataclasses import dataclass
@@ -16,7 +15,7 @@ AXIS_VECTORS = {
 }
 
 
-def _is_obj_candidate(relative_path):
+def is_obj_candidate(relative_path):
     if not relative_path.lower().endswith(".obj"):
         return False
     if "__MACOSX" in Path(relative_path).parts:
@@ -30,7 +29,7 @@ def find_obj_path(directory):
     for root, _, files in os.walk(directory):
         for name in files:
             relative = os.path.relpath(os.path.join(root, name), directory)
-            if _is_obj_candidate(relative):
+            if is_obj_candidate(relative):
                 candidates.append(relative)
     if not candidates:
         raise FileNotFoundError("No .obj file found in the mesh archive")
@@ -87,22 +86,6 @@ def bbox_from_lines(lines, batch=500_000):
     if not np.isfinite(lo).all():
         return None
     return {"size": (hi - lo).tolist(), "offset": ((lo + hi) / 2).tolist()}
-
-
-def mesh_bbox_from_key(storage, key):
-    """Bbox of a bucket .obj or zipped .obj; a zip is read in place, textures untouched."""
-    from app.core.storage import open_range
-
-    with open_range(storage, key) as raw:
-        if not key.lower().endswith(".zip"):
-            return bbox_from_lines(raw)
-        with zipfile.ZipFile(raw) as archive:
-            names = [n for n in archive.namelist() if _is_obj_candidate(n)]
-            if not names:
-                raise FileNotFoundError("No .obj file found in the mesh archive")
-            names.sort(key=lambda n: (n.count("/"), n))
-            with archive.open(names[0]) as member:
-                return bbox_from_lines(io.BufferedReader(member, buffer_size=4 << 20))
 
 
 @dataclass

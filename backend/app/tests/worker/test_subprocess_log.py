@@ -3,9 +3,9 @@ import subprocess
 
 import pytest
 
-from app.worker.common.utils import run_subprocess
+from app.worker.runtime.subprocess import run_subprocess
 
-LOGGER = "app.worker.common.utils"
+LOGGER = "app.worker.runtime.subprocess"
 
 
 def lines(caplog):

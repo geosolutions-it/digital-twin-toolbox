@@ -2,7 +2,7 @@ import React from "react"
 import { readPipelineLogs } from "../api"
 import type { PipelineLogLine } from "../api/types"
 
-// MAX_LINES in backend/app/worker/common/logs.py
+// MAX_LOG_LINES in backend/app/models/pipeline.py
 const MAX_LINES = 5000
 const POLL_MS = 1000
 

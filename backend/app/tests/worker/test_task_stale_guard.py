@@ -5,9 +5,10 @@ import pytest
 from celery.states import FAILURE, IGNORED, STARTED, SUCCESS
 from sqlalchemy.dialects import postgresql
 
+from app.core.celery_app import celery
 from app.services import pipeline_lifecycle as lifecycle
-from app.worker import main
-from app.worker.main import PipelineDatabaseTask, celery
+from app.worker.runtime import task as runtime_task
+from app.worker.runtime.task import PipelineDatabaseTask
 
 PID = str(uuid.uuid4())
 calls = {}
@@ -31,9 +32,11 @@ def fake_db(monkeypatch):
     def write(pipeline_id, task_id, values):
         state["writes"].append((pipeline_id, task_id, values))
 
-    monkeypatch.setattr(main, "claim_row", claim)
-    monkeypatch.setattr(main, "write_result", write)
-    monkeypatch.setattr(main, "capture_pipeline_log", lambda _pid: nullcontext())
+    monkeypatch.setattr(runtime_task, "claim_row", claim)
+    monkeypatch.setattr(runtime_task, "write_result", write)
+    monkeypatch.setattr(
+        runtime_task, "capture_pipeline_log", lambda _pid: nullcontext()
+    )
     return state
 
 
@@ -139,7 +142,7 @@ def test_write_result_finalizes_only_when_owned(monkeypatch, rowcount, finalized
 
 @pytest.mark.usefixtures("fake_db")
 def test_job_log_gets_start_and_end_lines(caplog, monkeypatch):
-    caplog.set_level("INFO", logger="app.worker.main")
+    caplog.set_level("INFO", logger="app.worker.runtime.task")
     run()
 
     def boom(**_kwargs):
@@ -147,7 +150,9 @@ def test_job_log_gets_start_and_end_lines(caplog, monkeypatch):
 
     monkeypatch.setattr(guarded, "run", boom)
     run(task_id="t-3")
-    messages = [r.getMessage() for r in caplog.records if r.name == "app.worker.main"]
+    messages = [
+        r.getMessage() for r in caplog.records if r.name == "app.worker.runtime.task"
+    ]
     assert messages[0] == "Started test_stale_guard_task"
     assert messages[1].startswith("Finished in ")
     assert messages[2] == "Started test_stale_guard_task"
@@ -158,4 +163,4 @@ def test_job_log_gets_start_and_end_lines(caplog, monkeypatch):
     "seconds, text", [(4.4, "4 s"), (60, "1 min 00 s"), (1985, "33 min 05 s")]
 )
 def test_duration(seconds, text):
-    assert main._duration(seconds) == text
+    assert runtime_task._duration(seconds) == text

@@ -1,6 +1,6 @@
 import os
 
-from app.worker.common.output import publish_tiles
+from app.worker.runtime.output import publish_tiles
 
 
 class _Storage:

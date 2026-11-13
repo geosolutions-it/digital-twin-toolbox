@@ -1,4 +1,4 @@
-// formula text <-> arrays evaluated by backend/app/worker/common/expression.py
+// formula text <-> arrays evaluated by backend/app/worker/lib/expression.py
 
 export type ExprType = "number" | "string"
 export type Expr = number | string | any[]

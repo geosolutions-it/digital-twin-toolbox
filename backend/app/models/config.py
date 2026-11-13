@@ -15,7 +15,7 @@ OptionalInt = Annotated[int | None, _Blank]
 OptionalFloat = Annotated[float | None, _Blank]
 OptionalStr = Annotated[str | None, _Blank]
 
-# a constant, or an expression array evaluated per feature by worker/common/expression.py
+# a constant, or an expression array evaluated per feature by worker/lib/expression.py
 Expression = float | str | list[Any]
 OptionalExpression = Annotated[Expression | None, _Blank]
 

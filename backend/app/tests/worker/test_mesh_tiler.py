@@ -11,7 +11,7 @@ pytest.importorskip("fast_simplification")
 
 from PIL import Image  # noqa: E402
 
-from app.worker.common.geo import LocalFrame  # noqa: E402
+from app.worker.lib.geo.frame import LocalFrame  # noqa: E402
 from app.worker.tasks.mesh import tiler  # noqa: E402
 from app.worker.tasks.mesh.bake import rasterize_atlas  # noqa: E402
 from app.worker.tasks.mesh.reader import axis_matrix, parse_obj  # noqa: E402

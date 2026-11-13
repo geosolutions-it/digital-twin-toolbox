@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from app.worker.common.gltf import (
+from app.worker.lib.gltf import (
     ARRAY_BUFFER,
     ELEMENT_ARRAY_BUFFER,
     UNSIGNED_INT,
