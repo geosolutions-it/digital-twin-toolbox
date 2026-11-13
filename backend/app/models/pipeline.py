@@ -162,6 +162,8 @@ class PipelineBatchCounts(SQLModel):
 class PipelineBatchSummary(SQLModel):
     batch_id: uuid.UUID
     label: str
+    # input folder as stored, and its display form
+    prefix: str
     source: str | None = None
     output_prefix: str | None = None
     output_url: str | None = None
@@ -184,7 +186,15 @@ class PipelinesOverview(SQLModel):
 
 
 class PipelineUpdate(SQLModel):
-    data: dict | None = Field(nullable=True, sa_type=JSONB)
+    data: dict | None = None
+    # re-points the pipeline to another file; the output folder stays the same
+    source_key: str | None = None
+
+
+class PipelineBatchUpdate(SQLModel):
+    data: dict | None = None
+    # re-points every member to the same relative path under another folder
+    prefix: str | None = None
 
 
 class PipelinesActionTypes(str, Enum):

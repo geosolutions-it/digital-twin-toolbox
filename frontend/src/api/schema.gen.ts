@@ -117,7 +117,7 @@ export interface paths {
         get?: never;
         /**
          * Update Pipeline Batch
-         * @description Apply one config to the batch and every pipeline in it.
+         * @description Apply one config, and optionally a new input folder, to the batch and every pipeline in it.
          */
         put: operations["pipelines-update_pipeline_batch"];
         post?: never;
@@ -500,6 +500,8 @@ export interface components {
             batch_id: string;
             /** Label */
             label: string;
+            /** Prefix */
+            prefix: string;
             /** Source */
             source?: string | null;
             /** Output Prefix */
@@ -517,6 +519,15 @@ export interface components {
             /** Total */
             total: number;
             counts: components["schemas"]["PipelineBatchCounts"];
+        };
+        /** PipelineBatchUpdate */
+        PipelineBatchUpdate: {
+            /** Data */
+            data?: {
+                [key: string]: unknown;
+            } | null;
+            /** Prefix */
+            prefix?: string | null;
         };
         /** PipelineBatchUpdated */
         PipelineBatchUpdated: {
@@ -630,9 +641,11 @@ export interface components {
         /** PipelineUpdate */
         PipelineUpdate: {
             /** Data */
-            data: {
+            data?: {
                 [key: string]: unknown;
             } | null;
+            /** Source Key */
+            source_key?: string | null;
         };
         /**
          * PipelinesActionTypes
@@ -1227,7 +1240,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["PipelineUpdate"];
+                "application/json": components["schemas"]["PipelineBatchUpdate"];
             };
         };
         responses: {

@@ -34,17 +34,23 @@ export async function createPipelineSource(
 export async function updatePipelineConfig(
   id: string,
   data: PipelineConfigInput,
+  sourceKey?: string,
 ): Promise<PipelinePublic> {
-  const res = await axios.put(`${API_BASE}/api/v1/pipelines/${id}`, { data })
+  const res = await axios.put(`${API_BASE}/api/v1/pipelines/${id}`, {
+    data,
+    ...(sourceKey ? { source_key: sourceKey } : {}),
+  })
   return res.data
 }
 
 export async function updateBatchConfig(
   batchId: string,
   data: PipelineConfigInput,
+  prefix?: string,
 ): Promise<PipelineBatchUpdated> {
   const res = await axios.put(`${API_BASE}/api/v1/pipelines/batch/${batchId}`, {
     data,
+    ...(prefix ? { prefix } : {}),
   })
   return res.data
 }

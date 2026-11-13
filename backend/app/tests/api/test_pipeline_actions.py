@@ -46,7 +46,10 @@ def test_batch_update_applies_to_the_batch_and_every_member(
     assert fresh(db, batch.id, PipelineBatch).data["depth"] == 2
 
 
-def test_run_idle_pipeline_starts_a_new_task(client, db, make_pipeline, fake_celery):
+def test_run_idle_pipeline_starts_a_new_task(
+    client, db, make_pipeline, storage, fake_celery
+):
+    storage.put("m/model.zip")
     row = make_pipeline(source=mesh_source(), task_id="old", task_status=SUCCESS)
     res = client.post(f"{BASE}/{row.id}/task/run")
     assert res.status_code == 200

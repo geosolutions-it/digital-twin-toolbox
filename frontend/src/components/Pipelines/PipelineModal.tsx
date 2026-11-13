@@ -3,7 +3,6 @@ import {
   Button,
   Flex,
   FormControl,
-  FormErrorMessage,
   FormLabel,
   Input,
   Modal,
@@ -17,7 +16,7 @@ import {
   Spinner,
 } from "@chakra-ui/react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Suspense, lazy, useEffect } from "react"
+import { Suspense, lazy, useEffect, useState } from "react"
 import { FormProvider, type SubmitHandler, useForm } from "react-hook-form"
 import {
   createPipelineBatch,
@@ -32,6 +31,7 @@ import {
 import { processPipelineTask } from "../../api/pipelines"
 import type { PipelineType } from "../../api/types"
 import useCustomToast from "../../hooks/useCustomToast"
+import InputField from "./InputField"
 import type { PreviewKind } from "./PreviewMap"
 import {
   FORM_DEFAULTS,
@@ -44,7 +44,6 @@ const PreviewMap = lazy(() => import("./PreviewMap"))
 
 const EMPTY: PipelineFormValues = {
   ...FORM_DEFAULTS,
-  prefix: "",
   title: "",
   pipelineType: "PointCloud",
 }
@@ -59,6 +58,8 @@ interface PipelineModalProps {
   editPipelineId?: string
   editBatchId?: string
   editSampleKey?: string
+  /** the edited pipeline's input file, or the batch's input folder */
+  editInput?: string
   targetIds?: string[]
   initialValues?: Partial<PipelineFormValues>
   label?: string
@@ -75,6 +76,7 @@ const PipelineModal = ({
   editPipelineId,
   editBatchId,
   editSampleKey,
+  editInput,
   targetIds,
   initialValues,
   label,
@@ -85,29 +87,24 @@ const PipelineModal = ({
   const showToast = useCustomToast()
   const form = useForm<PipelineFormValues>({
     mode: "onBlur",
-    defaultValues: { ...EMPTY, prefix: initialPrefix },
+    defaultValues: EMPTY,
   })
-  const {
-    register,
-    handleSubmit,
-    reset,
-    watch,
-    setValue,
-    formState: { errors },
-  } = form
+  const [newInput, setNewInput] = useState<string>()
+  const [inputError, setInputError] = useState<string>()
+  const changedInput =
+    edit && newInput && newInput !== editInput ? newInput : undefined
+  const { register, handleSubmit, reset, watch, setValue } = form
 
   useEffect(() => {
     if (!isOpen) return
+    setNewInput(undefined)
+    setInputError(undefined)
     reset(
       edit
         ? { ...EMPTY, pipelineType, ...initialValues }
-        : {
-            ...EMPTY,
-            prefix: initialPrefix,
-            pipelineType: pipelineType ?? "PointCloud",
-          },
+        : { ...EMPTY, pipelineType: pipelineType ?? "PointCloud" },
     )
-  }, [isOpen, initialPrefix, initialValues, pipelineType, edit, reset])
+  }, [isOpen, initialValues, pipelineType, edit, reset])
 
   const watchedType = watch("pipelineType")
   const baseType: PipelineType =
@@ -184,8 +181,9 @@ const PipelineModal = ({
     }: { values: PipelineFormValues; run: boolean }) => {
       const data = configFromValues(type, values)
       if (edit) {
-        if (editBatchId) await updateBatchConfig(editBatchId, data)
-        else await updatePipelineConfig(editPipelineId!, data)
+        if (editBatchId)
+          await updateBatchConfig(editBatchId, data, changedInput)
+        else await updatePipelineConfig(editPipelineId!, data, changedInput)
         if (run) {
           if (editBatchId) {
             // server-side, so unloaded members run too
@@ -196,13 +194,17 @@ const PipelineModal = ({
               : editPipelineId
                 ? [editPipelineId]
                 : []
+            // a running pipeline answers run with a no-op, so these are real failures
+            const failures: string[] = []
             for (const id of ids) {
               try {
                 await processPipelineTask(id, "run")
-              } catch {
-                // already running
+              } catch (e) {
+                failures.push(errorText(e))
               }
             }
+            if (failures.length)
+              throw new Error(`Saved, but could not run: ${failures[0]}`)
           }
         }
         return { edited: true, run }
@@ -216,7 +218,7 @@ const PipelineModal = ({
         })
       }
       return createPipelineBatch({
-        prefix: values.prefix,
+        prefix: initialPrefix,
         pipeline: type,
         title: values.title || null,
         data,
@@ -231,8 +233,16 @@ const PipelineModal = ({
       reset()
       onClose()
     },
-    onError: () => {
-      showToast("An error occurred.", "Could not start the job.", "error")
+    onError: (e: any) => {
+      const detail = errorText(e)
+      // input problems belong under the input; config problems are prefixed "Invalid config"
+      if (
+        changedInput &&
+        e?.response?.status === 422 &&
+        !detail.startsWith("Invalid config")
+      )
+        setInputError(detail)
+      else showToast("An error occurred.", detail, "error")
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["pipelines"] })
@@ -288,30 +298,23 @@ const PipelineModal = ({
             pr={hasPreview ? 1 : 0}
             pt={1}
           >
-            {!edit &&
-              (single ? (
-                <FormControl>
-                  <FormLabel>File</FormLabel>
-                  <Input
-                    value={fileKey}
-                    isReadOnly
-                    fontFamily="mono"
-                    fontSize="sm"
-                  />
-                </FormControl>
-              ) : (
-                <FormControl isRequired isInvalid={!!errors.prefix}>
-                  <FormLabel htmlFor="prefix">Bucket prefix</FormLabel>
-                  <Input
-                    id="prefix"
-                    placeholder="e.g. city-timisoara/"
-                    {...register("prefix", { required: "Prefix is required." })}
-                  />
-                  {errors.prefix && (
-                    <FormErrorMessage>{errors.prefix.message}</FormErrorMessage>
-                  )}
-                </FormControl>
-              ))}
+            <InputField
+              label={
+                single || (edit && !editBatchId) ? "Input file" : "Input folder"
+              }
+              value={edit ? editInput ?? "" : single ? fileKey! : initialPrefix}
+              current={newInput}
+              folder={!single && !editPipelineId}
+              error={inputError}
+              onChange={
+                edit
+                  ? (v) => {
+                      setNewInput(v)
+                      setInputError(undefined)
+                    }
+                  : undefined
+              }
+            />
             {!edit && selectableType && (
               <FormControl>
                 <FormLabel htmlFor="pipelineType">Workflow</FormLabel>

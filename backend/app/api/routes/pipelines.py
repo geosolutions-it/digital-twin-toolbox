@@ -25,6 +25,7 @@ from app.models.pipeline import (
     PipelineBatchCreate,
     PipelineBatchCreated,
     PipelineBatchSummary,
+    PipelineBatchUpdate,
     PipelineBatchUpdated,
     PipelineCreated,
     PipelineLog,
@@ -153,6 +154,7 @@ def _batch_summary(batch, counts, sample_key) -> PipelineBatchSummary:
     return PipelineBatchSummary(
         batch_id=batch.id,
         label=_batch_label(batch),
+        prefix=batch.prefix,
         source=f"s3://…/{folder}/" if folder else None,
         output_prefix=batch.output_prefix,
         output_url=output_url(batch.output_prefix) if batch.output_prefix else None,
@@ -374,18 +376,65 @@ def _validated_update(pipeline: Pipeline, pipeline_in: PipelineUpdate) -> dict:
     return update_dict
 
 
+def _repointed_source(pipeline: Pipeline, key: str) -> dict:
+    """The pipeline's source pointing at key, if the file exists and the pipeline can run on it."""
+    storage = get_storage()
+    if not storage.exists(key):
+        raise HTTPException(status_code=422, detail=f"Input file not found: {key!r}")
+    ptype = pipeline_type_of(pipeline.source)
+    try:
+        if resolve_pipeline(ptype, classify_bucket_file(storage, key)) != ptype:
+            raise ValueError(f"{ptype} cannot run on this file")
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=f"{e}: {key!r}")
+    source = PipelineSource.model_validate(pipeline.source or {})
+    source.key = key
+    source.extension = os.path.splitext(key)[1]
+    return source.model_dump(exclude_none=True)
+
+
+def _repoint_members(batch: PipelineBatch, members: list[Pipeline], prefix: str):
+    """Point every member at its same relative path under prefix, or fail listing what is missing."""
+    storage = get_storage()
+    old_root, new_root = batch.prefix.strip("/"), prefix.strip("/")
+    new_keys, missing = {}, []
+    for member in members:
+        key = (member.source or {}).get("key") or ""
+        if old_root and not key.startswith(old_root + "/"):
+            missing.append(key)
+            continue
+        rel = key[len(old_root) :].lstrip("/") if old_root else key
+        new_key = f"{new_root}/{rel}" if new_root else rel
+        if not storage.exists(new_key):
+            missing.append(new_key)
+        new_keys[member.id] = new_key
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail=f"{len(missing)} of {len(members)} input files not found under "
+            f"{prefix!r}: {', '.join(missing[:3])}",
+        )
+    for member in members:
+        member.source = {**(member.source or {}), "key": new_keys[member.id]}
+    batch.prefix = f"{new_root}/" if new_root else ""
+
+
 @router.put("/batch/{batch_id}", response_model=PipelineBatchUpdated)
 def update_pipeline_batch(
-    *, session: SessionDep, batch_id: uuid.UUID, pipeline_in: PipelineUpdate
+    *, session: SessionDep, batch_id: uuid.UUID, batch_in: PipelineBatchUpdate
 ) -> Any:
-    """Apply one config to the batch and every pipeline in it."""
+    """Apply one config, and optionally a new input folder, to the batch and every pipeline in it."""
     batch = session.get(PipelineBatch, batch_id)
     if batch is None:
         raise HTTPException(status_code=404, detail="Batch not found")
     pipelines = session.exec(
         select(Pipeline).where(Pipeline.batch_id == batch_id)
     ).all()
-    update_dict = pipeline_in.model_dump(exclude_unset=True)
+    update_dict = batch_in.model_dump(exclude_unset=True)
+    prefix = update_dict.pop("prefix", None)
+    if prefix is not None and prefix.strip("/") != batch.prefix.strip("/"):
+        _repoint_members(batch, pipelines, prefix)
+        session.add(batch)
     if "data" in update_dict:
         try:
             update_dict["data"] = validate_pipeline_config(
@@ -479,6 +528,14 @@ def process_pipeline_task(
     pipeline = session.get(Pipeline, id)
     if not pipeline:
         raise HTTPException(status_code=404, detail="Pipeline not found")
+    key = (pipeline.source or {}).get("key")
+    if (
+        action_type == PipelinesActionTypes.run
+        and pipeline.task_status not in IN_PROGRESS
+        and key
+        and not get_storage().exists(key)
+    ):
+        raise HTTPException(status_code=422, detail=f"Input file not found: {key!r}")
     try:
         pipeline_out = apply_action(session, pipeline, action_type)
     except ValueError as e:
@@ -562,6 +619,9 @@ def update_pipeline(
     if not pipeline:
         raise HTTPException(status_code=404, detail="Pipeline not found")
     update_dict = _validated_update(pipeline, pipeline_in)
+    source_key = update_dict.pop("source_key", None)
+    if source_key and source_key != (pipeline.source or {}).get("key"):
+        pipeline.source = _repointed_source(pipeline, source_key)
     pipeline.sqlmodel_update(update_dict)
     session.add(pipeline)
     session.commit()

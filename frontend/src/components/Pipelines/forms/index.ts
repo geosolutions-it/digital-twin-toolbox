@@ -25,7 +25,6 @@ export const PIPELINE_FORMS: Record<PipelineType, PipelineForm<any, any>> = {
 }
 
 interface SharedValues {
-  prefix: string
   title: string
   pipelineType: PipelineType
 }

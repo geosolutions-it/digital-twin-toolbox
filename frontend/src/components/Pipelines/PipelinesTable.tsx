@@ -65,6 +65,7 @@ type EditTarget =
       label: string
       type: PipelineType
       sampleKey?: string
+      input?: string
       values: Partial<PipelineFormValues>
     }
   | {
@@ -73,6 +74,7 @@ type EditTarget =
       label: string
       type: PipelineType
       sampleKey?: string
+      input?: string
       values: Partial<PipelineFormValues>
     }
 
@@ -253,6 +255,7 @@ export default function PipelinesTable({
       label: p.title,
       type: pipelineType(p),
       sampleKey: p.source?.key ?? undefined,
+      input: p.source?.key ?? undefined,
       values: formValuesFromConfig(pipelineType(p), p.data),
     })
   const editBatch = (summary: PipelineBatchSummary) =>
@@ -262,6 +265,7 @@ export default function PipelinesTable({
       label: summary.label,
       type: summary.pipeline || "PointCloud",
       sampleKey: summary.sample_key || undefined,
+      input: summary.prefix,
       values: formValuesFromConfig(
         summary.pipeline || "PointCloud",
         summary.data,
@@ -458,6 +462,7 @@ export default function PipelinesTable({
         label={editTarget?.label}
         pipelineType={editTarget?.type}
         editSampleKey={editTarget?.sampleKey}
+        editInput={editTarget?.input}
         initialValues={editTarget?.values}
         editPipelineId={
           editTarget?.kind === "single" ? editTarget.id : undefined
