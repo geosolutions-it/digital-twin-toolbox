@@ -1,18 +1,10 @@
-"""Prepare a DEM for tiling: resolve the bucket input, warp to WGS84, optionally
-shift geoid heights to ellipsoidal."""
+"""Prepare a DEM for tiling: warp to WGS84, optionally shift geoid heights to ellipsoidal."""
 
 import os
 
 from osgeo import gdal, osr
 
 gdal.UseExceptions()
-
-
-def resolve_input(key, storage, scratch):
-    """Local DEM path, a single GeoTIFF."""
-    dest = os.path.join(scratch, os.path.basename(key))
-    storage.download_file(key, dest)
-    return dest
 
 
 def _horizontal_epsg(path):

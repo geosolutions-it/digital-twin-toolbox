@@ -1,5 +1,6 @@
 """Shared bucket vector reading: download, open the layer, reproject to WGS84 (optionally ellipsoidal)."""
 
+import json
 import os
 from decimal import Decimal
 
@@ -64,3 +65,18 @@ def wgs84_transform(layer, to_ellipsoidal=False):
     src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
     dst_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
     return osr.CoordinateTransformation(src_srs, dst_srs)
+
+
+def iter_features(layer, transform, force_3d=False):
+    """-> (WGS84 GeoJSON geometry, properties) per feature with a geometry, within any spatial filter."""
+    names = field_names(layer)
+    for feat in layer:
+        geom = feat.GetGeometryRef()
+        if geom is None:
+            continue
+        geom = geom.Clone()
+        if force_3d:
+            geom.Set3D(True)
+        geom.Transform(transform)
+        properties = {name: coerce(feat.GetField(name)) for name in names}
+        yield json.loads(geom.ExportToJson()), properties

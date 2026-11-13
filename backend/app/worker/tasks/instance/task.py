@@ -2,18 +2,15 @@
 1.1 with EXT_mesh_gpu_instancing. No PostGIS, no i3dm.export binary."""
 
 import os
-import tempfile
 
 from app.core.celery_app import celery
-from app.core.storage import get_storage
 from app.models.config import InstanceConfig
 from app.worker.lib.expression import parse_expression
 from app.worker.lib.geo.frame import LocalFrame
 from app.worker.lib.geo.ogr import resolve_input
 from app.worker.lib.gltf import infer_schema
 from app.worker.runtime.logs import log_stage
-from app.worker.runtime.output import publish_tiles
-from app.worker.runtime.task import PipelineDatabaseTask, task_output_base, task_source
+from app.worker.runtime.task import PipelineDatabaseTask, TaskContext
 from app.worker.tasks.instance import reader
 from app.worker.tasks.instance.tiler import build_instance_tileset
 
@@ -21,32 +18,26 @@ from app.worker.tasks.instance.tiler import build_instance_tileset
 _DEFAULTS = {name: field.default for name, field in InstanceConfig.model_fields.items()}
 
 
-def _load_model(storage, name, config, scratch, cache):
+def _load_model(ctx, name, cache):
     """Download a model glb from the bucket once and parse it; cached by name, None if missing."""
-    if name in cache:
-        return cache[name]
-    key = config.models_prefix + str(name)
-    if not storage.exists(key):
-        return None
-    dest = os.path.join(scratch, "model_" + os.path.basename(str(name)))
-    storage.download_file(key, dest)
-    mesh = reader.read_model_glb(dest)
-    cache[name] = mesh
-    return mesh
+    if name not in cache:
+        key = ctx.config.models_prefix + str(name)
+        cache[name] = (
+            reader.read_model_glb(
+                ctx.download(key, "model_" + os.path.basename(str(name)))
+            )
+            if ctx.storage.exists(key)
+            else None
+        )
+    return cache[name]
 
 
 @celery.task(name="create_point_instance_3dtiles", base=PipelineDatabaseTask)
 def create_point_instance_3dtiles(pipeline_extended):
-    source = task_source(pipeline_extended, "Instance")
-
-    config = InstanceConfig(**(pipeline_extended.get("data") or {}))
-
-    storage = get_storage()
-    out_base = task_output_base(pipeline_extended, source)
-
-    with tempfile.TemporaryDirectory() as scratch:
+    with TaskContext(pipeline_extended, "Instance", InstanceConfig) as ctx:
+        config = ctx.config
         log_stage("Downloading input")
-        input_path = resolve_input(source.key, storage, scratch)
+        input_path = resolve_input(ctx.source.key, ctx.storage, ctx.scratch)
         log_stage("Reading points")
         features, (lo, hi) = reader.read_points(
             input_path, config.to_ellipsoidal_height
@@ -74,10 +65,7 @@ def create_point_instance_3dtiles(pipeline_extended):
                 "number", config.elevation, fe, _DEFAULTS["elevation"]
             )
 
-            if (
-                not model
-                or _load_model(storage, model, config, scratch, model_cache) is None
-            ):
+            if not model or _load_model(ctx, model, model_cache) is None:
                 continue
             if scale is None:
                 scale = _DEFAULTS["scale"]
@@ -99,7 +87,7 @@ def create_point_instance_3dtiles(pipeline_extended):
             raise Exception("No features with a valid model to tile")
         schema = infer_schema([r["properties"] for r in records])
 
-        tiles_dir = os.path.join(scratch, "tiles")
+        tiles_dir = ctx.path("tiles")
         log_stage(f"Tiling {len(records)} instances")
         build_instance_tileset(
             records,
@@ -111,4 +99,4 @@ def create_point_instance_3dtiles(pipeline_extended):
             max_geometric_error=config.max_geometric_error,
         )
 
-        return publish_tiles(storage, tiles_dir, out_base, "tileset.json")
+        return ctx.publish(tiles_dir, "tileset.json")

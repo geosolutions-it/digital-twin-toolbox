@@ -1,18 +1,15 @@
 import os
 import struct
-import tempfile
 
 import numpy as np
 from osgeo import osr
 
 from app.core.celery_app import celery
-from app.core.storage import get_storage
 from app.models.config import BuildingConfig
 from app.worker.lib.features.city import tile_city_objects
 from app.worker.lib.geo.ogr import open_layer, resolve_input, wgs84_transform
 from app.worker.runtime.logs import log_stage
-from app.worker.runtime.output import publish_tiles
-from app.worker.runtime.task import PipelineDatabaseTask, task_output_base, task_source
+from app.worker.runtime.task import PipelineDatabaseTask, TaskContext
 from app.worker.tasks.building.dtm import sink_to_dtm
 from app.worker.tasks.building.roofer import read_roofer, run_roofer
 
@@ -70,22 +67,12 @@ def _download_point_cloud(storage, key, scratch, extent):
     return paths
 
 
-def _download(storage, key, scratch, name):
-    dest = os.path.join(scratch, name + os.path.splitext(key)[1].lower())
-    storage.download_file(key, dest)
-    return dest
-
-
 @celery.task(name="create_building_3dtiles", base=PipelineDatabaseTask)
 def create_building_3dtiles(pipeline_extended):
-    source = task_source(pipeline_extended, "Building")
-    config = BuildingConfig(**(pipeline_extended.get("data") or {}))
-    storage = get_storage()
-    out_base = task_output_base(pipeline_extended, source)
-
-    with tempfile.TemporaryDirectory() as scratch:
+    with TaskContext(pipeline_extended, "Building", BuildingConfig) as ctx:
+        config, storage, scratch = ctx.config, ctx.storage, ctx.scratch
         log_stage("Reading footprints")
-        footprints = resolve_input(source.key, storage, scratch)
+        footprints = resolve_input(ctx.source.key, storage, scratch)
         ds, layer = open_layer(footprints)
         if layer.GetSpatialRef() is None:
             raise Exception("The footprints have no CRS: include the .prj file")
@@ -109,7 +96,7 @@ def create_building_3dtiles(pipeline_extended):
             log_stage("Fitting walls to the DTM")
             sink_to_dtm(
                 objects,
-                _download(storage, config.dtm, scratch, "dtm"),
+                ctx.download(config.dtm, "dtm"),
                 srs.ExportToWkt(),
             )
 
@@ -117,14 +104,11 @@ def create_building_3dtiles(pipeline_extended):
         def project(_srs_name, pts):
             return np.array(transform.TransformPoints(pts))
 
+        orthophoto = None
         if config.orthophoto:
             log_stage("Downloading orthophoto")
-        orthophoto = (
-            _download(storage, config.orthophoto, scratch, "orthophoto")
-            if config.orthophoto
-            else None
-        )
-        tiles_dir = os.path.join(scratch, "tiles")
+            orthophoto = ctx.download(config.orthophoto, "orthophoto")
+        tiles_dir = ctx.path("tiles")
         log_stage(f"Tiling {len(objects)} buildings")
         tile_city_objects(
             objects,
@@ -138,4 +122,4 @@ def create_building_3dtiles(pipeline_extended):
             f"buildings{'' if len(jsonl) == 1 else f'-{i}'}.city.jsonl": path
             for i, path in enumerate(jsonl)
         }
-        return publish_tiles(storage, tiles_dir, out_base, "tileset.json", artifacts)
+        return ctx.publish(tiles_dir, "tileset.json", artifacts)

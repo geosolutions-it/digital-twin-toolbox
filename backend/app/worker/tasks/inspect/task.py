@@ -1,6 +1,5 @@
 """Attribute schema and preview sample of bucket vectors."""
 
-import json
 import tempfile
 
 from osgeo import ogr
@@ -9,7 +8,7 @@ from app.core.celery_app import celery
 from app.core.storage import get_storage
 from app.worker.lib.geo.ogr import (
     coerce,
-    field_names,
+    iter_features,
     open_layer,
     resolve_input,
     wgs84_transform,
@@ -92,26 +91,13 @@ def read_vector_sample(options):
         path = resolve_input(key, storage, scratch)
         ds, layer = open_layer(path)
         transform = wgs84_transform(layer, ellipsoidal)
-        names = field_names(layer)
         window = _sample_window(layer, limit)
         if window:
             layer.SetSpatialFilterRect(*window)
-        layer.ResetReading()
         features = []
-        for feat in layer:
-            geom = feat.GetGeometryRef()
-            if geom is None:
-                continue
-            geom = geom.Clone()
-            if ellipsoidal:
-                geom.Set3D(True)
-            geom.Transform(transform)
+        for geometry, properties in iter_features(layer, transform, ellipsoidal):
             features.append(
-                {
-                    "type": "Feature",
-                    "geometry": json.loads(geom.ExportToJson()),
-                    "properties": {name: coerce(feat.GetField(name)) for name in names},
-                }
+                {"type": "Feature", "geometry": geometry, "properties": properties}
             )
             if len(features) >= limit:
                 break

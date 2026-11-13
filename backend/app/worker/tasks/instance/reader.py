@@ -10,12 +10,7 @@ import struct
 
 import numpy as np
 
-from app.worker.lib.geo.ogr import (
-    coerce,
-    field_names,
-    open_layer,
-    wgs84_transform,
-)
+from app.worker.lib.geo.ogr import iter_features, open_layer, wgs84_transform
 from app.worker.lib.gltf import BIN_CHUNK, GLB_MAGIC, JSON_CHUNK
 
 _DTYPE = {
@@ -37,24 +32,15 @@ def read_points(path, to_ellipsoidal=False):
     lon/lat/h min/max for the local frame origin. Non-point geometries are skipped."""
     ds, layer = open_layer(path)
     transform = wgs84_transform(layer, to_ellipsoidal)
-    names = field_names(layer)
 
     lo = np.array([np.inf, np.inf, np.inf])
     hi = np.array([-np.inf, -np.inf, -np.inf])
     features = []
-    for feat in layer:
-        geom = feat.GetGeometryRef()
-        if geom is None:
-            continue
-        geom = geom.Clone()
-        geom.Set3D(True)
-        geom.Transform(transform)
-        g = json.loads(geom.ExportToJson())
+    for g, props in iter_features(layer, transform, force_3d=True):
         if g.get("type") != "Point":
             continue  # TODO: MultiPoint -> one instance per point
         c = g["coordinates"]
         lonlath = [c[0], c[1], c[2] if len(c) > 2 and c[2] is not None else 0.0]
-        props = {name: coerce(feat.GetField(name)) for name in names}
         arr = np.asarray(lonlath, dtype=np.float64)
         lo = np.minimum(lo, arr)
         hi = np.maximum(hi, arr)

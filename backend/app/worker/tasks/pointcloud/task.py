@@ -1,12 +1,10 @@
 import logging
 import os
-import tempfile
 
 from app.core.celery_app import celery
-from app.core.storage import get_storage, output_url
 from app.models.config import PointCloudConfig
 from app.worker.runtime.logs import log_stage
-from app.worker.runtime.task import PipelineDatabaseTask, task_output_base, task_source
+from app.worker.runtime.task import PipelineDatabaseTask, TaskContext
 from app.worker.tasks.pointcloud.pdal_processes import (
     compute_auto_sample_radius,
     detect_point_attributes,
@@ -18,32 +16,14 @@ from app.worker.tasks.pointcloud.py3dtiles_processes import py3dtiles_convert
 logger = logging.getLogger(__name__)
 
 
-def _materialize(storage, key, scratch, name):
-    """Download a stored object to local scratch and return its path."""
-    dest = os.path.join(scratch, name)
-    storage.download_file(key, dest)
-    return dest
-
-
-def _resolve_colorization_path(storage, filename, scratch):
-    if not filename or not storage.exists(filename):
-        return None
-    ext = os.path.splitext(filename)[1] or ".tif"
-    return _materialize(storage, filename, scratch, f"colorization{ext}")
-
-
 @celery.task(name="create_point_cloud_3dtiles", base=PipelineDatabaseTask)
 def create_point_cloud_3dtiles(pipeline_extended):
-    config = PointCloudConfig(**(pipeline_extended.get("data") or {}))
-    storage = get_storage()
-    source = task_source(pipeline_extended, "Point cloud")
-    input_key = source.key
-    extension = source.extension or os.path.splitext(input_key)[1]
-    out_base = task_output_base(pipeline_extended, source)
-
-    with tempfile.TemporaryDirectory() as scratch:
+    with TaskContext(pipeline_extended, "Point cloud", PointCloudConfig) as ctx:
+        config, scratch = ctx.config, ctx.scratch
         log_stage("Downloading point cloud")
-        input_file = _materialize(storage, input_key, scratch, f"index{extension}")
+        input_file = ctx.download(
+            ctx.source.key, "index" + (ctx.source.extension or "")
+        )
 
         horizontal_epsg, vertical_epsg = resolve_crs_from_file(input_file)
         # some clouds ship without a CRS in the header: fall back to the one set in the config
@@ -58,13 +38,11 @@ def create_point_cloud_3dtiles(pipeline_extended):
         colorization_image_path = None
         if config.colorization_image:
             log_stage("Downloading colorization raster")
-            colorization_image_path = _resolve_colorization_path(
-                storage, config.colorization_image, scratch
-            )
-            if not colorization_image_path:
-                raise Exception(
-                    f"Colorization raster not found: {config.colorization_image!r}"
-                )
+            key = config.colorization_image
+            if not ctx.storage.exists(key):
+                raise Exception(f"Colorization raster not found: {key!r}")
+            ext = os.path.splitext(key)[1].lower() or ".tif"
+            colorization_image_path = ctx.download(key, "colorization" + ext)
 
         # no radius given: auto-pick one from the cloud's spacing to drop redundant points
         sample_radius = config.sample_radius
@@ -89,20 +67,14 @@ def create_point_cloud_3dtiles(pipeline_extended):
             processed_file, force_classification=config.ground_classification
         )
 
-        tiles_dir = os.path.join(scratch, "tiles")
+        tiles_dir = ctx.path("tiles")
         log_stage("Tiling with py3dtiles")
         py3dtiles_convert(
             processed_file, tiles_dir, f"{horizontal_epsg}", attributes=attributes
         )
 
-        log_stage("Uploading tiles")
-        storage.delete_prefix(f"{out_base}/tiles/")
-        storage.upload_dir(tiles_dir, f"{out_base}/tiles")
-
-    return {
-        "output": out_base,
-        "tileset": output_url(f"{out_base}/tiles/tileset.json"),
-        "download": output_url(f"{out_base}/tiles/download.zip"),
-        "sample_radius": sample_radius,
-        "sample_radius_auto": config.sample_radius is None,
-    }
+        return {
+            **ctx.publish(tiles_dir, "tileset.json"),
+            "sample_radius": sample_radius,
+            "sample_radius_auto": config.sample_radius is None,
+        }

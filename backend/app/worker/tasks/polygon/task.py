@@ -1,25 +1,18 @@
-import json
-import os
-import tempfile
-
 import numpy as np
 
 from app.core.celery_app import celery
-from app.core.storage import get_storage
 from app.models.config import PolygonConfig
 from app.worker.lib.expression import parse_expression
 from app.worker.lib.features.tiler import build_tileset
 from app.worker.lib.geo.frame import LocalFrame
 from app.worker.lib.geo.ogr import (
-    coerce,
-    field_names,
+    iter_features,
     open_layer,
     resolve_input,
     wgs84_transform,
 )
 from app.worker.runtime.logs import log_stage
-from app.worker.runtime.output import publish_tiles
-from app.worker.runtime.task import PipelineDatabaseTask, task_output_base, task_source
+from app.worker.runtime.task import PipelineDatabaseTask, TaskContext
 from app.worker.tasks.polygon.extrude import extrude
 
 
@@ -35,20 +28,11 @@ def _read_raw_features(path, config):
     ds, layer = open_layer(path)
     to_ellipsoidal = config.to_ellipsoidal_height
     transform = wgs84_transform(layer, to_ellipsoidal)
-    names = field_names(layer)
 
     lo = np.array([np.inf, np.inf, np.inf])
     hi = np.array([-np.inf, -np.inf, -np.inf])
     features = []
-    for feat in layer:
-        geom = feat.GetGeometryRef()
-        if geom is None:
-            continue
-        geom = geom.Clone()
-        if to_ellipsoidal:
-            geom.Set3D(True)
-        geom.Transform(transform)
-        geometry = json.loads(geom.ExportToJson())
+    for geometry, properties in iter_features(layer, transform, to_ellipsoidal):
         gtype = geometry.get("type")
         if gtype == "Polygon":
             parts = [geometry["coordinates"]]
@@ -57,7 +41,6 @@ def _read_raw_features(path, config):
         else:
             continue
 
-        properties = {name: coerce(feat.GetField(name)) for name in names}
         feature_for_expr = {
             "type": "Feature",
             "properties": properties,
@@ -145,18 +128,11 @@ def _build_meshes(raw, frame):
 
 @celery.task(name="create_polygon_3dtiles", base=PipelineDatabaseTask)
 def create_polygon_3dtiles(pipeline_extended):
-    source = task_source(pipeline_extended, "Polygon")
-
-    config = PolygonConfig(**(pipeline_extended.get("data") or {}))
-
-    storage = get_storage()
-    out_base = task_output_base(pipeline_extended, source)
-
-    with tempfile.TemporaryDirectory() as scratch:
+    with TaskContext(pipeline_extended, "Polygon", PolygonConfig) as ctx:
         log_stage("Downloading input")
-        input_path = resolve_input(source.key, storage, scratch)
+        input_path = resolve_input(ctx.source.key, ctx.storage, ctx.scratch)
         log_stage("Reading features")
-        raw, (lo, hi) = _read_raw_features(input_path, config)
+        raw, (lo, hi) = _read_raw_features(input_path, ctx.config)
         if not raw:
             raise Exception("No polygon features to tile")
 
@@ -165,13 +141,13 @@ def create_polygon_3dtiles(pipeline_extended):
         log_stage(f"Building meshes for {len(raw)} features")
         features = _build_meshes(raw, frame)
 
-        tiles_dir = os.path.join(scratch, "tiles")
+        tiles_dir = ctx.path("tiles")
         log_stage(f"Tiling {len(features)} features")
         build_tileset(
             features,
             tiles_dir,
             frame.transform(),
-            max_tile_bytes=config.max_tile_size_kb * 1024,
+            max_tile_bytes=ctx.config.max_tile_size_kb * 1024,
         )
 
-        return publish_tiles(storage, tiles_dir, out_base, "tileset.json")
+        return ctx.publish(tiles_dir, "tileset.json")
