@@ -47,6 +47,7 @@ jobs:
           npm ci --ignore-scripts
           npx biome ci .
           npx tsc --noEmit
+          npm test
 
   build-test-deploy:
     needs: lint

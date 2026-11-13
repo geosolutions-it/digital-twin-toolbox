@@ -67,7 +67,6 @@ import {
   processPipelineBatchTask,
 } from "../../api/pipelineBatch"
 import {
-  type AnyPipelineConfig,
   type PipelineBatchCounts,
   type PipelineBatchSummary,
   type PipelineOverviewEntry,
@@ -77,9 +76,11 @@ import {
 } from "../../api/types"
 import PageHeader from "../../components/Common/PageHeader"
 import LogsDrawer from "../../components/Pipelines/LogsDrawer"
-import NewBatchModal, {
-  type BatchFormValues,
-} from "../../components/Pipelines/NewBatchModal"
+import PipelineModal from "../../components/Pipelines/PipelineModal"
+import {
+  type PipelineFormValues,
+  formValuesFromConfig,
+} from "../../components/Pipelines/forms"
 import useCustomToast from "../../hooks/useCustomToast"
 import {
   celeryTaskStatusColor,
@@ -300,7 +301,7 @@ type EditTarget =
       label: string
       type: PipelineType
       sampleKey?: string
-      values: Partial<BatchFormValues>
+      values: Partial<PipelineFormValues>
     }
   | {
       kind: "batch"
@@ -308,59 +309,12 @@ type EditTarget =
       label: string
       type: PipelineType
       sampleKey?: string
-      values: Partial<BatchFormValues>
+      values: Partial<PipelineFormValues>
     }
 
 function pipelineType(p: PipelinePublic): PipelineType {
   const t = sourceOf(p)?.pipeline
   return isPipelineType(t) ? t : "PointCloud"
-}
-
-function dataToValues(
-  data: PipelinePublic["data"] | undefined,
-): Partial<BatchFormValues> {
-  // stored rows predate validation, so values are still checked at runtime
-  const d = (data ?? {}) as AnyPipelineConfig
-  const num = (v: unknown) => (typeof v === "number" ? String(v) : "")
-  const expr = (v: unknown) =>
-    Array.isArray(v) ? v : typeof v === "number" ? String(v) : ""
-  return {
-    sample_radius: d?.sample_radius != null ? String(d.sample_radius) : "",
-    colorization_image: d?.colorization_image || "",
-    to_ellipsoidal_height: !!d?.to_ellipsoidal_height,
-    ground_classification: !!d?.ground_classification,
-    lower_limit_height: expr(d?.lower_limit_height),
-    upper_limit_height: expr(d?.upper_limit_height),
-    remove_bottom_surface: d?.remove_bottom_surface !== false,
-    max_geometric_error: num(d?.max_geometric_error),
-    max_tile_size_kb: num(d?.max_tile_size_kb),
-    max_zoom: num(d?.max_zoom),
-    vertex_normals: d?.vertex_normals !== false,
-    water_key: d?.water_key || "",
-    model: expr(d?.model) || (typeof d?.model === "string" ? d.model : ""),
-    models_prefix: d?.models_prefix || "",
-    scale: expr(d?.scale),
-    rotation: expr(d?.rotation),
-    elevation: expr(d?.elevation),
-    latitude: num(d?.latitude),
-    longitude: num(d?.longitude),
-    altitude: num(d?.altitude),
-    forward_axis: d?.forward_axis || "Y",
-    up_axis: d?.up_axis || "Z",
-    depth: num(d?.depth),
-    tile_faces_target: num(d?.tile_faces_target),
-    texture_image_size: num(d?.texture_image_size),
-    decimate_last_depth_level: d?.decimate_last_depth_level !== false,
-    lod: typeof d?.lod === "string" ? d.lod : num(d?.lod),
-    point_cloud: d?.point_cloud || "",
-    orthophoto: d?.orthophoto || "",
-    dtm: d?.dtm || "",
-    building_class: num(d?.building_class),
-    ground_class: num(d?.ground_class),
-    texture_resolution: num(d?.texture_resolution),
-    horizontal_epsg: num(d?.horizontal_epsg),
-    vertical_epsg: num(d?.vertical_epsg),
-  }
 }
 
 const SEG_COLORS: Record<string, string> = {
@@ -994,16 +948,19 @@ function PipelinesTable() {
       label: p.title,
       type: pipelineType(p),
       sampleKey: sourceOf(p)?.key,
-      values: dataToValues(p.data),
+      values: formValuesFromConfig(pipelineType(p), p.data),
     })
   const editBatch = (summary: PipelineBatchSummary) =>
     setEditTarget({
       kind: "batch",
       batchId: summary.batch_id,
       label: summary.label,
-      type: (summary.pipeline as PipelineType) || "PointCloud",
+      type: summary.pipeline || "PointCloud",
       sampleKey: summary.sample_key || undefined,
-      values: dataToValues(summary.data),
+      values: formValuesFromConfig(
+        summary.pipeline || "PointCloud",
+        summary.data,
+      ),
     })
 
   const bulkAction = useMutation({
@@ -1190,7 +1147,7 @@ function PipelinesTable() {
         </Flex>
       )}
 
-      <NewBatchModal
+      <PipelineModal
         isOpen={!!editTarget}
         onClose={() => setEditTarget(null)}
         label={editTarget?.label}

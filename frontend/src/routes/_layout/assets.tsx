@@ -34,7 +34,7 @@ import { FiFile, FiFolder, FiPlay, FiPlus, FiUpload } from "react-icons/fi"
 import { listStorage, uploadToStorage } from "../../api/storageBrowser"
 import type { PipelineType } from "../../api/types"
 import PageHeader from "../../components/Common/PageHeader"
-import NewBatchModal from "../../components/Pipelines/NewBatchModal"
+import PipelineModal from "../../components/Pipelines/PipelineModal"
 import useCustomToast from "../../hooks/useCustomToast"
 
 export const Route = createFileRoute("/_layout/assets")({
@@ -382,13 +382,13 @@ function BucketBrowser({
         registration needed.
       </Text>
 
-      <NewBatchModal
+      <PipelineModal
         isOpen={batchModal.isOpen}
         onClose={batchModal.onClose}
         initialPrefix={batchPrefix}
         selectableType
       />
-      <NewBatchModal
+      <PipelineModal
         isOpen={processModal.isOpen}
         onClose={processModal.onClose}
         fileKey={processKey}
