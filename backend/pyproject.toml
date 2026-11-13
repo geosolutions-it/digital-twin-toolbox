@@ -81,6 +81,10 @@ ignore = [
     "B904",  # Allow raising exceptions without from e, for HTTPException
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# pytest fixtures are often requested only for their side effects
+"app/tests/*" = ["ARG001"]
+
 [tool.ruff.lint.pyupgrade]
 keep-runtime-typing = true
 
