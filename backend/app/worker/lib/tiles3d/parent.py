@@ -1,7 +1,7 @@
 """Combine several tilesets into one parent that references them by uri
 (content-agnostic, no tiles are re-read)."""
 
-from app.worker.lib.tiles3d.tileset import box
+from app.worker.lib.tiles3d.tileset import box, region_corners
 
 
 def _box_corners(b):
@@ -47,8 +47,6 @@ def build_parent_tileset(children):
     child_nodes = []
     ge_values = []
     world_corners = []
-    region = None
-    use_region = False
     version = "1.1"
     properties = {}
     ext_used = set()
@@ -82,20 +80,9 @@ def build_parent_tileset(children):
         # node gets a world-space bbox and no transform: the external tileset's root
         # transform already places it, so repeating it here would double-apply
         if "region" in bv:
-            use_region = True
-            r = bv["region"]
-            node_bv = {"region": list(r)}
-            if region is None:
-                region = list(r)
-            else:
-                region = [
-                    min(region[0], r[0]),
-                    min(region[1], r[1]),
-                    max(region[2], r[2]),
-                    max(region[3], r[3]),
-                    min(region[4], r[4]),
-                    max(region[5], r[5]),
-                ]
+            corners = region_corners(bv["region"])
+            world_corners.extend(corners)
+            node_bv = {"box": _aabb_box(corners)}
         elif "box" in bv:
             corners = [_apply_transform(tf, c) for c in _box_corners(bv["box"])]
             world_corners.extend(corners)
@@ -119,10 +106,7 @@ def build_parent_tileset(children):
         )
 
     root_ge = max(ge_values) if ge_values else 0
-    if use_region:
-        parent_bv = {"region": region}
-    else:
-        parent_bv = {"box": _aabb_box(world_corners)}
+    parent_bv = {"box": _aabb_box(world_corners)}
 
     tileset = {
         "asset": {"version": version},

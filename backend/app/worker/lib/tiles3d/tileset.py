@@ -1,6 +1,7 @@
 """Dependency-free 3D Tiles helpers: bounding box and tileset.json writing."""
 
 import json
+import math
 import os
 
 
@@ -36,3 +37,24 @@ def write_tileset(output_dir, root, transform, geometric_error, metadata=None):
     with open(os.path.join(output_dir, "tileset.json"), "w") as f:
         json.dump(tileset, f, separators=(",", ":"))
     return tileset
+
+
+def region_corners(region, samples=3):
+    """ECEF points bounding a 3D Tiles region (radians, metres), edges sampled for curvature."""
+    west, south, east, north, low, high = region
+    a, e2 = 6378137.0, 6.69437999014e-3
+    points = []
+    for i in range(samples):
+        lon = west + (east - west) * i / (samples - 1)
+        for j in range(samples):
+            lat = south + (north - south) * j / (samples - 1)
+            n = a / math.sqrt(1 - e2 * math.sin(lat) ** 2)
+            for h in (low, high):
+                points.append(
+                    (
+                        (n + h) * math.cos(lat) * math.cos(lon),
+                        (n + h) * math.cos(lat) * math.sin(lon),
+                        (n * (1 - e2) + h) * math.sin(lat),
+                    )
+                )
+    return points

@@ -148,24 +148,27 @@ def build_tileset(tiles, depth, max_geometric_error):
     ge = geometric_errors(max_geometric_error, depth)
 
     def node(level, y, x):
+        """-> (tile, min, max); the box also encloses the children, whose faces can reach past the parent's."""
         lo, hi = tiles[(level, y, x)]
-        out = {
-            "boundingVolume": {"box": box(lo, hi)},
-            "geometricError": ge[level + 1],
-            "refine": "REPLACE",
-            "content": {"uri": f"{level}_{y}_{x}.glb"},
-        }
         children = [
             node(level + 1, cy, cx)
             for cy in (2 * y, 2 * y + 1)
             for cx in (2 * x, 2 * x + 1)
             if (level + 1, cy, cx) in tiles
         ]
+        lo = np.min([lo, *(c[1] for c in children)], axis=0)
+        hi = np.max([hi, *(c[2] for c in children)], axis=0)
+        out = {
+            "boundingVolume": {"box": box(lo, hi)},
+            "geometricError": ge[level + 1],
+            "refine": "REPLACE",
+            "content": {"uri": f"{level}_{y}_{x}.glb"},
+        }
         if children:
-            out["children"] = children
-        return out
+            out["children"] = [c[0] for c in children]
+        return out, lo, hi
 
-    top = node(0, 0, 0)
+    top, _, _ = node(0, 0, 0)
     # contentless root, so 0_0_0 loads on refinement
     return {
         "boundingVolume": top["boundingVolume"],

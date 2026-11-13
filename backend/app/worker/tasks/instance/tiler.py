@@ -39,16 +39,20 @@ def _capacity(records, models, max_bytes):
     return max(_MIN_CAPACITY, int((max_bytes - fixed) // per))
 
 
+def _model_radius(mesh):
+    return max(
+        float(np.linalg.norm(p["positions"], axis=1).max()) for p in mesh["primitives"]
+    )
+
+
 def _write_node(records, models, schema, out_dir, tile_id):
-    """Group a node's records by model, emit one instanced glb, return its box."""
-    enu = np.array([r["enu"] for r in records], dtype=np.float64)
-    order = sorted(range(len(records)), key=lambda i: records[i]["model"])
-    records = [records[i] for i in order]
+    """One instanced glb per node -> ENU (min, max) of the placed models."""
+    by_model = {}
+    for r in records:
+        by_model.setdefault(r["model"], []).append(r)
     groups, features = [], []
-    i = 0
-    while i < len(records):
-        name = records[i]["model"]
-        chunk = [r for r in records if r["model"] == name]
+    for name in sorted(by_model):
+        chunk = by_model[name]
         groups.append(
             {
                 "mesh": models[name],
@@ -58,16 +62,20 @@ def _write_node(records, models, schema, out_dir, tile_id):
             }
         )
         features.extend(r["properties"] for r in chunk)
-        i += len(chunk)
     write_instanced_glb(
         os.path.join(out_dir, f"{tile_id}.glb"), groups, features, schema
     )
-    return box(enu.min(axis=0), enu.max(axis=0), min_half=1.0)
+    enu = np.array([r["enu"] for r in records], dtype=np.float64)
+    reach = np.array(
+        [_model_radius(models[r["model"]]) * abs(r["scale"]) for r in records]
+    )[:, None]
+    return (enu - reach).min(axis=0), (enu + reach).max(axis=0)
 
 
 def _subdivide(
     records, depth, max_bytes, max_depth, max_ge, models, schema, out_dir, counter
 ):
+    """-> (node, ENU min, ENU max); the box encloses the node's models and its children."""
     tile_id = counter["n"]
     counter["n"] += 1
     max_features = _capacity(records, models, max_bytes)
@@ -81,9 +89,8 @@ def _subdivide(
         content = [r for r, p in zip(records, picked, strict=True) if p]
         remainder = [r for r, p in zip(records, picked, strict=True) if not p]
 
-    box = _write_node(content, models, schema, out_dir, tile_id)
+    lo, hi = _write_node(content, models, schema, out_dir, tile_id)
     node = {
-        "boundingVolume": {"box": box},
         "geometricError": float(max_ge) / (2**depth) if not is_leaf else 0.0,
         "content": {"uri": f"{tile_id}.glb"},
         "refine": "ADD",
@@ -96,7 +103,7 @@ def _subdivide(
             qx = 0 if r["enu"][0] < cx else 1
             qy = 0 if r["enu"][1] < cy else 1
             quads[qy * 2 + qx].append(r)
-        node["children"] = [
+        children = [
             _subdivide(
                 q,
                 depth + 1,
@@ -111,7 +118,11 @@ def _subdivide(
             for q in quads
             if q
         ]
-    return node
+        node["children"] = [c[0] for c in children]
+        lo = np.min([lo, *(c[1] for c in children)], axis=0)
+        hi = np.max([hi, *(c[2] for c in children)], axis=0)
+    node["boundingVolume"] = {"box": box(lo, hi, min_half=1.0)}
+    return node, lo, hi
 
 
 def build_instance_tileset(
@@ -130,7 +141,7 @@ def build_instance_tileset(
         raise ValueError("No instances to tile")
 
     counter = {"n": 0}
-    root = _subdivide(
+    root, _, _ = _subdivide(
         records,
         0,
         int(max_tile_bytes),

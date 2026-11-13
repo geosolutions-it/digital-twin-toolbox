@@ -12,6 +12,7 @@ pytest.importorskip("fast_simplification")
 from PIL import Image  # noqa: E402
 
 from app.worker.lib.geo.frame import LocalFrame  # noqa: E402
+from app.worker.lib.tiles3d.check import check_tileset  # noqa: E402
 from app.worker.tasks.mesh import tiler  # noqa: E402
 from app.worker.tasks.mesh.bake import rasterize_atlas  # noqa: E402
 from app.worker.tasks.mesh.reader import axis_matrix, parse_obj  # noqa: E402
@@ -157,6 +158,10 @@ def test_tileset_structure(tiled):
         gltf = _read_glb(out / uri)[0]
         assert "EXT_texture_webp" in gltf["extensionsRequired"]
         assert gltf["textures"][0]["extensions"]["EXT_texture_webp"]["source"] == 0
+
+
+def test_tileset_passes_the_checker(tiled):
+    assert check_tileset(tiled[0]) == []
 
 
 def test_vertices_inside_their_bounding_volume(tiled):
