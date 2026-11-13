@@ -13,7 +13,12 @@ from sqlmodel import Session, delete, select, update
 from app.core.celery_app import celery
 from app.core.config import settings
 from app.core.db import engine
-from app.models.pipeline import Pipeline, PipelineLog, PipelinesActionTypes
+from app.models.pipeline import (
+    Pipeline,
+    PipelineBatch,
+    PipelineLog,
+    PipelinesActionTypes,
+)
 from app.models.pipeline_types import (
     PIPELINES,
     pipeline_type_of,
@@ -121,14 +126,14 @@ def maybe_finalize_batch(session: Session, pipeline: Pipeline) -> None:
     """When the last member of a batch finishes, stitch the combined tileset."""
     if not pipeline.batch_id:
         return
-    prefix = (pipeline.source or {}).get("batch_output_prefix")
-    if not prefix:
+    batch = session.get(PipelineBatch, pipeline.batch_id)
+    if batch is None or not batch.output_prefix:
         return
-    members = session.exec(
-        select(Pipeline).where(Pipeline.batch_id == pipeline.batch_id)
+    statuses = session.exec(
+        select(Pipeline.task_status).where(Pipeline.batch_id == batch.id)
     ).all()
-    if all(m.task_status in FINISHED for m in members):
-        queue_batch_finalize(prefix)
+    if all(status in FINISHED for status in statuses):
+        queue_batch_finalize(batch.output_prefix)
 
 
 def sync_lost_tasks(session: Session) -> None:

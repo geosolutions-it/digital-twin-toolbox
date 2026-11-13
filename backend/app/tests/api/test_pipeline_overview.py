@@ -1,4 +1,3 @@
-import uuid
 from datetime import datetime, timezone
 
 from celery.states import FAILURE, PENDING, STARTED, SUCCESS
@@ -24,10 +23,12 @@ def batch_source(prefix, name):
     }
 
 
-def test_overview_shows_a_batch_as_one_entry(client, make_pipeline, fake_celery):
+def test_overview_shows_a_batch_as_one_entry(
+    client, make_batch, make_pipeline, fake_celery
+):
     before = overview(client)["count"]
-    batch_id = uuid.uuid4()
     prefix = output_key("City")
+    batch_id = make_batch(title="City", output_prefix=prefix, data={"x": 1}).id
     make_pipeline(
         title="City / a.laz",
         source=batch_source(prefix, "a"),
@@ -58,6 +59,10 @@ def test_overview_shows_a_batch_as_one_entry(client, make_pipeline, fake_celery)
     assert batch["total"] == 3
     assert batch["counts"] == {"success": 1, "running": 0, "ready": 1, "failed": 1}
     assert batch["output_prefix"] == prefix
+    assert batch["source"] == "s3://…/city/"
+    assert batch["pipeline"] == "PointCloud"
+    assert batch["sample_key"] == "city/a"
+    assert batch["data"] == {"x": 1}
     assert any(
         e["kind"] == "pipeline" and e["pipeline"]["id"] == str(solo.id)
         for e in body["data"]
@@ -71,9 +76,24 @@ def test_lost_task_is_marked_failed(client, db, make_pipeline, fake_celery):
     assert fresh(db, row.id).task_status == FAILURE
 
 
-def test_lost_task_completing_a_batch_rebuilds_it(client, make_pipeline, fake_celery):
-    batch_id = uuid.uuid4()
+def test_untitled_batch_is_labelled_by_its_id(
+    client, make_batch, make_pipeline, fake_celery
+):
+    batch = make_batch()
+    make_pipeline(title="a.laz", batch_id=batch.id)
+    [entry] = [
+        e
+        for e in overview(client)["data"]
+        if e["kind"] == "batch" and e["batch"]["batch_id"] == str(batch.id)
+    ]
+    assert entry["batch"]["label"] == f"Batch {str(batch.id)[:8]}"
+
+
+def test_lost_task_completing_a_batch_rebuilds_it(
+    client, make_batch, make_pipeline, fake_celery
+):
     prefix = output_key("City")
+    batch_id = make_batch(output_prefix=prefix).id
     make_pipeline(
         source=batch_source(prefix, "a"),
         batch_id=batch_id,
@@ -94,9 +114,9 @@ def test_lost_task_completing_a_batch_rebuilds_it(client, make_pipeline, fake_ce
 
 
 def test_running_pipeline_shows_its_latest_stage(
-    client, db, make_pipeline, fake_celery
+    client, db, make_batch, make_pipeline, fake_celery
 ):
-    batch_id = uuid.uuid4()
+    batch_id = make_batch().id
     row = make_pipeline(batch_id=batch_id, task_id="t1", task_status=STARTED)
     now = datetime.now(timezone.utc)
     for stage in ("Downloading input", None, "Tiling"):
@@ -115,9 +135,11 @@ def test_running_pipeline_shows_its_latest_stage(
     assert [d["stage"] for d in data] == ["Tiling"]
 
 
-def test_finalize_queues_the_batch_rebuild(client, make_pipeline, fake_celery):
-    batch_id = uuid.uuid4()
+def test_finalize_queues_the_batch_rebuild(
+    client, make_batch, make_pipeline, fake_celery
+):
     prefix = output_key("City")
+    batch_id = make_batch(output_prefix=prefix).id
     make_pipeline(source=batch_source(prefix, "a"), batch_id=batch_id)
     assert client.post(f"{BASE}/batch/{batch_id}/finalize").json() == {"ok": True}
     assert [t.kwargs["output_prefix"] for t in fake_celery.sent] == [prefix]

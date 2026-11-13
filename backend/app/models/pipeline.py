@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Literal
 
@@ -10,6 +10,27 @@ from sqlmodel import Field, SQLModel
 from app.models.pipeline_types import PipelineType
 
 
+class PipelineBatch(SQLModel, table=True):
+    """One run over every matching file under a bucket folder; its members are Pipeline rows."""
+
+    __tablename__ = "pipeline_batch"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    # None: shown as "Batch <id prefix>"
+    title: str | None = Field(default=None, max_length=255)
+    prefix: str
+    pipeline: str
+    data: dict | None = Field(default=None, nullable=True, sa_type=JSONB)
+    output_prefix: str | None = None
+    owner_id: uuid.UUID = Field(
+        foreign_key="user.id", nullable=False, ondelete="CASCADE"
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_type=DateTime(timezone=True),
+    )
+
+
 class PipelineBase(SQLModel):
     title: str = Field(min_length=1, max_length=255)
     data: dict | None = Field(nullable=True, sa_type=JSONB)
@@ -17,7 +38,13 @@ class PipelineBase(SQLModel):
     task_status: str | None
     task_result: dict | None = Field(nullable=True, sa_type=JSONB)
     source: dict | None = Field(default=None, nullable=True, sa_type=JSONB)
-    batch_id: uuid.UUID | None = Field(default=None, nullable=True, index=True)
+    batch_id: uuid.UUID | None = Field(
+        default=None,
+        nullable=True,
+        index=True,
+        foreign_key="pipeline_batch.id",
+        ondelete="CASCADE",
+    )
 
 
 class Pipeline(PipelineBase, table=True):

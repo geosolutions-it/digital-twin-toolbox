@@ -6,7 +6,7 @@ from sqlmodel import func, select
 
 from app.core.config import settings
 from app.core.storage import output_key
-from app.models.pipeline import Pipeline
+from app.models.pipeline import Pipeline, PipelineBatch
 from app.tests.api.conftest import fresh
 
 pytestmark = pytest.mark.usefixtures("cleanup")
@@ -137,6 +137,15 @@ def test_batch_creates_one_row_per_matching_file(client, db, storage, fake_celer
         f"{out_root}/sub/b",
     ]
     assert fake_celery.names() == ["create_point_cloud_3dtiles"] * 2
+
+    batch = db.get(PipelineBatch, uuid.UUID(body["batch_id"]))
+    assert (batch.title, batch.prefix, batch.pipeline) == (
+        "City",
+        "city/",
+        "PointCloud",
+    )
+    assert batch.output_prefix == out_root
+    assert batch.data == rows[0].data
 
 
 def test_batch_keeps_same_stem_files_apart(client, db, storage, fake_celery):

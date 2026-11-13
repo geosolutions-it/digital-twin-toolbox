@@ -4,6 +4,7 @@ from celery.states import PENDING, REVOKED, STARTED, SUCCESS
 
 from app.core.config import settings
 from app.core.storage import output_key
+from app.models.pipeline import PipelineBatch
 from app.tests.api.conftest import fresh
 
 BASE = f"{settings.API_V1_STR}/pipelines"
@@ -34,12 +35,15 @@ def test_update_stores_the_config_with_defaults(client, db, make_pipeline):
     assert data["forward_axis"] == "Y"
 
 
-def test_batch_update_applies_to_every_member(client, db, make_pipeline):
-    batch_id = uuid.uuid4()
-    rows = [make_pipeline(source=mesh_source(), batch_id=batch_id) for _ in range(2)]
-    res = client.put(f"{BASE}/batch/{batch_id}", json={"data": {"depth": 2}})
+def test_batch_update_applies_to_the_batch_and_every_member(
+    client, db, make_batch, make_pipeline
+):
+    batch = make_batch(pipeline="Mesh")
+    rows = [make_pipeline(source=mesh_source(), batch_id=batch.id) for _ in range(2)]
+    res = client.put(f"{BASE}/batch/{batch.id}", json={"data": {"depth": 2}})
     assert res.json()["count"] == 2
     assert all(fresh(db, r.id).data["depth"] == 2 for r in rows)
+    assert fresh(db, batch.id, PipelineBatch).data["depth"] == 2
 
 
 def test_run_idle_pipeline_starts_a_new_task(client, db, make_pipeline, fake_celery):
@@ -92,8 +96,10 @@ def test_cancel_marks_revoked_even_if_revoke_fails(
     assert fresh(db, row.id).task_status == REVOKED
 
 
-def test_batch_run_counts_only_idle_members(client, make_pipeline, fake_celery):
-    batch_id = uuid.uuid4()
+def test_batch_run_counts_only_idle_members(
+    client, make_batch, make_pipeline, fake_celery
+):
+    batch_id = make_batch(pipeline="Mesh").id
     make_pipeline(
         source=mesh_source(), batch_id=batch_id, task_id="a", task_status=SUCCESS
     )
@@ -107,21 +113,24 @@ def test_batch_run_counts_only_idle_members(client, make_pipeline, fake_celery):
 
 
 def test_delete_batch_member_cleans_output_and_rebuilds_batch(
-    client, db, make_pipeline, storage, fake_celery
+    client, db, make_batch, make_pipeline, storage, fake_celery
 ):
     batch_prefix = output_key("city")
+    batch = make_batch(pipeline="Mesh", output_prefix=batch_prefix)
     row = make_pipeline(
-        source=mesh_source(
-            output_base=f"{batch_prefix}/a", batch_output_prefix=batch_prefix
-        ),
-        batch_id=uuid.uuid4(),
+        source=mesh_source(output_base=f"{batch_prefix}/a"),
+        batch_id=batch.id,
         task_id="t1",
         task_status=STARTED,
+    )
+    make_pipeline(
+        source=mesh_source(output_base=f"{batch_prefix}/b"), batch_id=batch.id
     )
     storage.put(f"{batch_prefix}/a/tileset.json", f"{batch_prefix}/b/tileset.json")
 
     assert client.delete(f"{BASE}/{row.id}").status_code == 200
     assert fresh(db, row.id) is None
+    assert fresh(db, batch.id, PipelineBatch) is not None
     assert storage.deleted == [f"{batch_prefix}/a/"]
     assert storage.exists(f"{batch_prefix}/b/tileset.json")
     assert fake_celery.revoked == ["t1"]
@@ -129,20 +138,25 @@ def test_delete_batch_member_cleans_output_and_rebuilds_batch(
     assert [t.kwargs["output_prefix"] for t in finalize] == [batch_prefix]
 
 
-def test_delete_batch_removes_rows_and_output(
-    client, db, make_pipeline, storage, fake_celery
+def test_deleting_the_last_member_removes_the_batch(
+    client, db, make_batch, make_pipeline, storage, fake_celery
 ):
-    batch_id = uuid.uuid4()
+    batch_id = make_batch(pipeline="Mesh", output_prefix=output_key("city")).id
+    row = make_pipeline(source=mesh_source(), batch_id=batch_id)
+    assert client.delete(f"{BASE}/{row.id}").status_code == 200
+    assert fresh(db, batch_id, PipelineBatch) is None
+
+
+def test_delete_batch_removes_rows_and_output(
+    client, db, make_batch, make_pipeline, storage, fake_celery
+):
     batch_prefix = output_key("city")
-    ids = [
-        make_pipeline(
-            source=mesh_source(batch_output_prefix=batch_prefix), batch_id=batch_id
-        ).id
-        for _ in range(2)
-    ]
+    batch_id = make_batch(pipeline="Mesh", output_prefix=batch_prefix).id
+    ids = [make_pipeline(source=mesh_source(), batch_id=batch_id).id for _ in range(2)]
     storage.put(f"{batch_prefix}/tileset.json")
 
     assert client.delete(f"{BASE}/batch/{batch_id}").status_code == 200
+    assert fresh(db, batch_id, PipelineBatch) is None
     assert all(fresh(db, i) is None for i in ids)
     assert storage.deleted == [f"{batch_prefix}/"]
     assert not storage.exists(f"{batch_prefix}/tileset.json")

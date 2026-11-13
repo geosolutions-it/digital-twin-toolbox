@@ -5,7 +5,8 @@ from typing import Any
 
 from celery.states import SUCCESS
 from fastapi import APIRouter, HTTPException, Query
-from sqlmodel import func, select
+from sqlalchemy.dialects.postgresql import distinct_on
+from sqlmodel import delete, func, select
 
 from app.api.deps import CurrentUser, SessionDep
 from app.core.celery_app import celery
@@ -17,6 +18,7 @@ from app.models.pipeline import (
     Message,
     Pipeline,
     PipelineActionResult,
+    PipelineBatch,
     PipelineBatchActionResult,
     PipelineBatchCounts,
     PipelineBatchCreate,
@@ -109,10 +111,53 @@ def _classify_status(status: str | None) -> str:
     return "failed"
 
 
-def _batch_label(title: str | None, batch_id) -> str:
-    if title and " / " in title:
-        return title.split(" / ")[0]
-    return f"Batch {str(batch_id)[:8]}"
+def _batch_label(batch: PipelineBatch) -> str:
+    return batch.title or f"Batch {str(batch.id)[:8]}"
+
+
+def _batch_counts(session, batch_ids) -> dict[uuid.UUID, PipelineBatchCounts]:
+    counts: dict[uuid.UUID, PipelineBatchCounts] = {}
+    if not batch_ids:
+        return counts
+    rows = session.exec(
+        select(Pipeline.batch_id, Pipeline.task_status, func.count())
+        .where(Pipeline.batch_id.in_(batch_ids))
+        .group_by(Pipeline.batch_id, Pipeline.task_status)
+    ).all()
+    for batch_id, status, n in rows:
+        c = counts.setdefault(batch_id, PipelineBatchCounts())
+        key = _classify_status(status)
+        setattr(c, key, getattr(c, key) + n)
+    return counts
+
+
+def _first_keys(session, batch_ids) -> dict[uuid.UUID, str | None]:
+    """Each batch's member with the smallest title: its file feeds the edit dialog's preview."""
+    if not batch_ids:
+        return {}
+    rows = session.exec(
+        select(Pipeline.batch_id, Pipeline.source)
+        .where(Pipeline.batch_id.in_(batch_ids))
+        .ext(distinct_on(Pipeline.batch_id))
+        .order_by(Pipeline.batch_id, Pipeline.title)
+    ).all()
+    return {batch_id: (source or {}).get("key") for batch_id, source in rows}
+
+
+def _batch_summary(batch, counts, sample_key) -> PipelineBatchSummary:
+    folder = batch.prefix.strip("/")
+    return PipelineBatchSummary(
+        batch_id=batch.id,
+        label=_batch_label(batch),
+        source=f"s3://…/{folder}/" if folder else None,
+        output_prefix=batch.output_prefix,
+        output_url=output_url(batch.output_prefix) if batch.output_prefix else None,
+        pipeline=batch.pipeline,
+        sample_key=sample_key,
+        data=batch.data,
+        total=counts.success + counts.running + counts.ready + counts.failed,
+        counts=counts,
+    )
 
 
 @router.get("/overview", response_model=PipelinesOverview)
@@ -123,81 +168,24 @@ def read_pipelines_overview(session: SessionDep, skip: int = 0, limit: int = 10)
     Paginates over entries (folders + solo), not raw pipeline rows.
     """
     sync_lost_tasks(session)
-    rows = session.exec(
-        select(
-            Pipeline.id,
-            Pipeline.title,
-            Pipeline.task_status,
-            Pipeline.batch_id,
-            Pipeline.source,
-            Pipeline.data,
-        )
+    batches = session.exec(select(PipelineBatch)).all()
+    solo = session.exec(
+        select(Pipeline.id, Pipeline.title).where(Pipeline.batch_id.is_(None))
     ).all()
+    entries = [(_batch_label(b).lower(), b) for b in batches] + [
+        ((title or "").lower(), pipeline_id) for pipeline_id, title in solo
+    ]
+    entries.sort(key=lambda e: e[0])
+    page = [item for _, item in entries[skip : skip + limit]]
 
-    batches: dict[str, dict] = {}
-    solo: list[dict] = []
-    for r in rows:
-        if r.batch_id:
-            key = str(r.batch_id)
-            b = batches.get(key)
-            if b is None:
-                b = {
-                    "batch_id": r.batch_id,
-                    "rep_title": r.title,
-                    "rep_source": r.source,
-                    "rep_data": r.data,
-                    "counts": {"success": 0, "running": 0, "ready": 0, "failed": 0},
-                    "total": 0,
-                }
-                batches[key] = b
-            # representative = smallest title, matching the members' title ordering
-            if r.title is not None and (
-                b["rep_title"] is None or r.title < b["rep_title"]
-            ):
-                b["rep_title"] = r.title
-                b["rep_source"] = r.source
-                b["rep_data"] = r.data
-            b["counts"][_classify_status(r.task_status)] += 1
-            b["total"] += 1
-        else:
-            solo.append({"id": r.id, "title": r.title or ""})
-
-    entries: list[dict] = []
-    for b in batches.values():
-        label = _batch_label(b["rep_title"], b["batch_id"])
-        src = b["rep_source"] or {}
-        key = src.get("key") or ""
-        src_dir = key[: key.rfind("/")] if "/" in key else ""
-        entries.append(
-            {
-                "sort": label.lower(),
-                "summary": PipelineBatchSummary(
-                    batch_id=b["batch_id"],
-                    label=label,
-                    source=f"s3://…/{src_dir}/" if src_dir else None,
-                    output_prefix=src.get("batch_output_prefix"),
-                    output_url=output_url(src["batch_output_prefix"])
-                    if src.get("batch_output_prefix")
-                    else None,
-                    pipeline=pipeline_type_of(src),
-                    sample_key=key or None,
-                    data=b["rep_data"],
-                    total=b["total"],
-                    counts=PipelineBatchCounts(**b["counts"]),
-                ),
-            }
-        )
-    for s in solo:
-        entries.append({"sort": s["title"].lower(), "solo_id": s["id"]})
-
-    entries.sort(key=lambda e: e["sort"])
-    count = len(entries)
-    page = entries[skip : skip + limit]
-
-    solo_ids = [e["solo_id"] for e in page if "solo_id" in e]
-    full = {}
+    page_batches = [item for item in page if isinstance(item, PipelineBatch)]
+    page_batch_ids = [b.id for b in page_batches]
+    counts = _batch_counts(session, page_batch_ids)
+    first_keys = _first_keys(session, page_batch_ids)
+    solo_ids = [item for item in page if not isinstance(item, PipelineBatch)]
+    solo_rows = {}
     if solo_ids:
-        full = {
+        solo_rows = {
             p.id: p
             for p in _with_stage(
                 session,
@@ -206,15 +194,20 @@ def read_pipelines_overview(session: SessionDep, skip: int = 0, limit: int = 10)
         }
 
     data = []
-    for e in page:
-        if "summary" in e:
-            data.append(PipelineOverviewEntry(kind="batch", batch=e["summary"]))
-        else:
-            pipeline = full.get(e["solo_id"])
-            if pipeline is not None:
-                data.append(PipelineOverviewEntry(kind="pipeline", pipeline=pipeline))
+    for item in page:
+        if isinstance(item, PipelineBatch):
+            summary = _batch_summary(
+                item,
+                counts.get(item.id, PipelineBatchCounts()),
+                first_keys.get(item.id),
+            )
+            data.append(PipelineOverviewEntry(kind="batch", batch=summary))
+        elif item in solo_rows:
+            data.append(
+                PipelineOverviewEntry(kind="pipeline", pipeline=solo_rows[item])
+            )
 
-    return PipelinesOverview(data=data, count=count)
+    return PipelinesOverview(data=data, count=len(entries))
 
 
 def _slug(value: str) -> str:
@@ -312,7 +305,16 @@ def create_pipeline_batch(
 
     rels = [key[len(root) :].lstrip("/") if root else key for key, _ in classified]
     stems = [os.path.splitext(r)[0] for r in rels]
-    batch_id = uuid.uuid4()
+    batch = PipelineBatch(
+        title=batch_in.title or None,
+        prefix=batch_in.prefix,
+        pipeline=batch_in.pipeline,
+        data=data,
+        output_prefix=out_root,
+        owner_id=current_user.id,
+    )
+    session.add(batch)
+    session.commit()
     created = []
     for (key, ptype), rel, stem in zip(classified, rels, stems, strict=True):
         name = os.path.basename(key)
@@ -336,12 +338,12 @@ def create_pipeline_batch(
                 "pipeline": ptype,
             },
             owner_id=current_user.id,
-            batch_id=batch_id,
+            batch_id=batch.id,
         )
         created.append(str(pipeline.id))
 
     return {
-        "batch_id": str(batch_id),
+        "batch_id": str(batch.id),
         "count": len(created),
         "pipeline_ids": created,
     }
@@ -350,15 +352,12 @@ def create_pipeline_batch(
 @router.post("/batch/{batch_id}/finalize", response_model=FinalizeQueued)
 def finalize_pipeline_batch(*, session: SessionDep, batch_id: uuid.UUID) -> Any:
     """Rebuild the combined tileset for a batch from whatever child tilesets exist."""
-    pipeline = session.exec(
-        select(Pipeline).where(Pipeline.batch_id == batch_id).limit(1)
-    ).first()
-    if not pipeline:
+    batch = session.get(PipelineBatch, batch_id)
+    if batch is None:
         raise HTTPException(status_code=404, detail="Batch not found")
-    prefix = (pipeline.source or {}).get("batch_output_prefix")
-    if not prefix:
+    if not batch.output_prefix:
         raise HTTPException(status_code=422, detail="Batch has no output prefix")
-    queue_batch_finalize(prefix)
+    queue_batch_finalize(batch.output_prefix)
     return {"ok": True}
 
 
@@ -377,14 +376,23 @@ def _validated_update(pipeline: Pipeline, pipeline_in: PipelineUpdate) -> dict:
 def update_pipeline_batch(
     *, session: SessionDep, batch_id: uuid.UUID, pipeline_in: PipelineUpdate
 ) -> Any:
-    """Apply one config to every pipeline in a batch."""
+    """Apply one config to the batch and every pipeline in it."""
+    batch = session.get(PipelineBatch, batch_id)
+    if batch is None:
+        raise HTTPException(status_code=404, detail="Batch not found")
     pipelines = session.exec(
         select(Pipeline).where(Pipeline.batch_id == batch_id)
     ).all()
-    if not pipelines:
-        raise HTTPException(status_code=404, detail="Batch not found")
-    # members of a batch share one workflow
-    update_dict = _validated_update(pipelines[0], pipeline_in)
+    update_dict = pipeline_in.model_dump(exclude_unset=True)
+    if "data" in update_dict:
+        try:
+            update_dict["data"] = validate_pipeline_config(
+                batch.pipeline, update_dict["data"]
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=f"Invalid config: {e}")
+        batch.data = update_dict["data"]
+        session.add(batch)
     for pipeline in pipelines:
         pipeline.sqlmodel_update(update_dict)
         session.add(pipeline)
@@ -513,18 +521,17 @@ def process_pipeline_batch_task(
 
 @router.delete("/batch/{batch_id}")
 def delete_pipeline_batch(session: SessionDep, batch_id: uuid.UUID) -> Message:
-    """Delete every member of a batch and its combined output tree."""
+    """Delete a batch, every member (database cascade) and its combined output tree."""
+    batch = session.get(PipelineBatch, batch_id)
+    if batch is None:
+        raise HTTPException(status_code=404, detail="Batch not found")
+    batch_prefix = batch.output_prefix
     pipelines = session.exec(
         select(Pipeline).where(Pipeline.batch_id == batch_id)
     ).all()
-    if not pipelines:
-        raise HTTPException(status_code=404, detail="Batch not found")
-    batch_prefix = None
     for pipeline in pipelines:
-        source = pipeline.source or {}
-        batch_prefix = batch_prefix or source.get("batch_output_prefix")
         revoke_running(pipeline)
-        session.delete(pipeline)
+    session.exec(delete(PipelineBatch).where(PipelineBatch.id == batch_id))
     session.commit()
 
     # drop the whole batch output tree in one shot (no per-member finalize needed)
@@ -602,11 +609,19 @@ def delete_pipeline(session: SessionDep, id: uuid.UUID) -> Message:
 
     source = pipeline.source or {}
     output_prefix = source.get("output_base") or output_key(str(pipeline.id))
-    batch_prefix = source.get("batch_output_prefix")
+    batch = session.get(PipelineBatch, pipeline.batch_id) if pipeline.batch_id else None
+    batch_prefix = batch.output_prefix if batch else None
 
     revoke_running(pipeline)
     session.delete(pipeline)
     session.commit()
+    if batch is not None:
+        remaining = session.exec(
+            select(func.count()).where(Pipeline.batch_id == batch.id)
+        ).one()
+        if remaining == 0:
+            session.delete(batch)
+            session.commit()
 
     try:
         get_storage().delete_prefix(output_prefix + "/")

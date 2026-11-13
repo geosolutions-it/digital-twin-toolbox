@@ -4,13 +4,13 @@ from types import SimpleNamespace
 import pytest
 from celery.states import PENDING
 from fastapi.testclient import TestClient
-from sqlmodel import Session, select
+from sqlmodel import Session, delete, select
 
 from app.api.routes import pipelines as pipelines_routes
 from app.core.celery_app import celery
 from app.core.db import engine, init_db
 from app.main import app
-from app.models.pipeline import Pipeline
+from app.models.pipeline import Pipeline, PipelineBatch
 from app.models.user import User
 from app.services import pipeline_lifecycle
 
@@ -42,15 +42,15 @@ def owner(db: Session) -> User:
 
 @pytest.fixture
 def cleanup(db: Session):
-    """Delete the pipeline rows a test created."""
-    before = set(db.exec(select(Pipeline.id)).all())
+    """Delete the pipeline and batch rows a test created."""
+    pipelines_before = list(db.exec(select(Pipeline.id)).all())
+    batches_before = list(db.exec(select(PipelineBatch.id)).all())
     yield
     db.rollback()
-    db.expire_all()
-    for row in db.exec(select(Pipeline)).all():
-        if row.id not in before:
-            db.delete(row)
+    db.exec(delete(Pipeline).where(Pipeline.id.not_in(pipelines_before)))
+    db.exec(delete(PipelineBatch).where(PipelineBatch.id.not_in(batches_before)))
     db.commit()
+    db.expire_all()
 
 
 @pytest.fixture
@@ -66,9 +66,22 @@ def make_pipeline(db: Session, owner: User, cleanup):
     return make
 
 
-def fresh(db: Session, row_id):
+@pytest.fixture
+def make_batch(db: Session, owner: User, cleanup):
+    def make(**fields) -> PipelineBatch:
+        values = {"prefix": "city/", "pipeline": "PointCloud"}
+        row = PipelineBatch(**{**values, **fields}, owner_id=owner.id)
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+        return row
+
+    return make
+
+
+def fresh(db: Session, row_id, model=Pipeline):
     db.expire_all()
-    return db.get(Pipeline, row_id)
+    return db.get(model, row_id)
 
 
 class FakeStorage:
