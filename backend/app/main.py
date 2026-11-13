@@ -6,7 +6,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from app.api.main import api_router
 from app.core.config import settings
-from app.models.config import CONFIG_MODELS
+from app.models.pipeline_types import PIPELINES
 
 
 def custom_generate_unique_id(route: APIRoute) -> str:
@@ -42,7 +42,7 @@ def _openapi() -> dict:
     if app.openapi_schema is None:
         schema = FastAPI.openapi(app)
         _, extra = models_json_schema(
-            [(m, "validation") for m in CONFIG_MODELS.values()],
+            [(spec.config, "validation") for spec in PIPELINES.values()],
             ref_template="#/components/schemas/{model}",
         )
         schema["components"]["schemas"].update(extra["$defs"])

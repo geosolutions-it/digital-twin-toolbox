@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 from app.core.config import settings
-from app.models.task import Pipeline, PipelineLog
+from app.models.pipeline import Pipeline, PipelineLog
 from app.models.user import User
 
 

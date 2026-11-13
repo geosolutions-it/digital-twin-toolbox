@@ -107,22 +107,3 @@ def classify_bucket_file(storage, key):
         if lower.endswith(ext):
             return workflow
     return None
-
-
-# batch workflow -> classified file type it runs on (Instance runs on vectors)
-BATCH_ACCEPTS = {
-    "PointCloud": "PointCloud",
-    "Polygon": "Polygon",
-    "Instance": "Polygon",
-    "Terrain": "Terrain",
-    "Mesh": "Mesh",
-    "CityGML": "CityGML",
-}
-
-
-def batch_targets(classified, workflow):
-    """(key, type) pairs the batch workflow accepts, retagged as (key, workflow)."""
-    accepts = BATCH_ACCEPTS.get(workflow)
-    if accepts is None:
-        raise ValueError(f"Unsupported batch workflow {workflow!r}")
-    return [(k, workflow) for k, t in classified if t == accepts]

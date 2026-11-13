@@ -11,7 +11,7 @@ from sqlmodel import func, select
 from app.api.deps import CurrentUser, SessionDep
 from app.core.storage import get_storage, output_key, output_root, output_url
 from app.models.inspect import MeshBbox, VectorFields, VectorSample
-from app.models.task import (
+from app.models.pipeline import (
     FinalizeQueued,
     Message,
     Pipeline,
@@ -33,13 +33,14 @@ from app.models.task import (
     PipelinesPublic,
     PipelineUpdate,
 )
-from app.services.file_classify import (
-    BATCH_ACCEPTS,
-    SUPPORTED_EXTENSIONS,
+from app.models.pipeline_types import (
+    PIPELINES,
     batch_targets,
-    classify_bucket_file,
+    pipeline_type_of,
+    resolve_pipeline,
+    validate_pipeline_config,
 )
-from app.services.pipeline_config import validate_pipeline_config
+from app.services.file_classify import SUPPORTED_EXTENSIONS, classify_bucket_file
 from app.worker.common.logs import MAX_LINES
 from app.worker.main import _maybe_finalize_batch, celery, queue_batch_finalize
 
@@ -202,7 +203,7 @@ def read_pipelines_overview(session: SessionDep, skip: int = 0, limit: int = 10)
                     output_url=output_url(src["batch_output_prefix"])
                     if src.get("batch_output_prefix")
                     else None,
-                    pipeline=src.get("pipeline") or "PointCloud",
+                    pipeline=pipeline_type_of(src),
                     sample_key=key or None,
                     data=b["rep_data"],
                     total=b["total"],
@@ -240,17 +241,6 @@ def read_pipelines_overview(session: SessionDep, skip: int = 0, limit: int = 10)
     return PipelinesOverview(data=data, count=count)
 
 
-_SOURCE_TASK = {
-    "PointCloud": "create_point_cloud_3dtiles",
-    "Polygon": "create_polygon_3dtiles",
-    "Terrain": "create_terrain_tiles",
-    "Instance": "create_point_instance_3dtiles",
-    "Mesh": "create_mesh_3dtiles",
-    "CityGML": "create_citygml_3dtiles",
-    "Building": "create_building_3dtiles",
-}
-
-
 def _slug(value: str) -> str:
     value = re.sub(r"[^A-Za-z0-9_-]+", "-", value or "").strip("-")
     return value or "batch"
@@ -265,19 +255,12 @@ def create_pipeline_source(
     if not storage.exists(source_in.key):
         raise HTTPException(status_code=404, detail=f"No such file: {source_in.key!r}")
 
-    pipeline_type = classify_bucket_file(storage, source_in.key)
-    if source_in.pipeline == "Building" and pipeline_type != "Polygon":
-        raise HTTPException(
-            status_code=422,
-            detail=f"Buildings need a polygon footprint file: {source_in.key!r}",
+    try:
+        pipeline_type = resolve_pipeline(
+            source_in.pipeline, classify_bucket_file(storage, source_in.key)
         )
-    if source_in.pipeline in ("Instance", "Building") and pipeline_type == "Polygon":
-        pipeline_type = source_in.pipeline
-    dispatch_task = _SOURCE_TASK.get(pipeline_type)
-    if dispatch_task is None:
-        raise HTTPException(
-            status_code=422, detail=f"Unsupported file: {source_in.key!r}"
-        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=f"{e}: {source_in.key!r}")
 
     try:
         data = validate_pipeline_config(pipeline_type, source_in.data)
@@ -311,7 +294,7 @@ def create_pipeline_source(
     session.refresh(pipeline)
     # row is PENDING before the task exists, so a fast failure is never overwritten
     celery.send_task(
-        dispatch_task,
+        PIPELINES[pipeline_type].task,
         kwargs={"pipeline_extended": pipeline.model_dump()},
         task_id=pipeline.task_id,
     )
@@ -335,7 +318,7 @@ def create_pipeline_batch(
     Run the picked workflow on every matching file under a bucket prefix, one pipeline
     per file. File types are detected from contents (zips are peeked).
     """
-    if batch_in.pipeline not in BATCH_ACCEPTS:
+    if not PIPELINES[batch_in.pipeline].batch:
         raise HTTPException(
             status_code=422, detail=f"{batch_in.pipeline} does not run in a batch"
         )
@@ -399,7 +382,7 @@ def create_pipeline_batch(
         session.commit()
         session.refresh(pipeline)
         celery.send_task(
-            _SOURCE_TASK[ptype],
+            PIPELINES[ptype].task,
             kwargs={"pipeline_extended": pipeline.model_dump()},
             task_id=pipeline.task_id,
         )
@@ -430,7 +413,7 @@ def finalize_pipeline_batch(*, session: SessionDep, batch_id: uuid.UUID) -> Any:
 def _validated_update(pipeline: Pipeline, pipeline_in: PipelineUpdate) -> dict:
     update_dict = pipeline_in.model_dump(exclude_unset=True)
     if "data" in update_dict:
-        ptype = (pipeline.source or {}).get("pipeline") or "PointCloud"
+        ptype = pipeline_type_of(pipeline.source)
         try:
             update_dict["data"] = validate_pipeline_config(ptype, update_dict["data"])
         except ValueError as e:
@@ -539,10 +522,8 @@ def _apply_pipeline_action(
     Raises ValueError for unsupported configs; callers decide how to surface it."""
     pipeline_out = {}
     if action_type == "run" and pipeline.task_status not in (PENDING, STARTED):
-        ptype = (pipeline.source or {}).get("pipeline") or "PointCloud"
-        task_name = _SOURCE_TASK.get(ptype)
-        if not task_name:
-            raise ValueError(f"Unsupported source pipeline: {ptype}")
+        ptype = pipeline_type_of(pipeline.source)
+        task_name = PIPELINES[ptype].task
         data = validate_pipeline_config(ptype, pipeline.data)
         pipeline_out = {
             "task_id": str(uuid.uuid4()),

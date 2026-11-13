@@ -7,9 +7,7 @@ from sqlalchemy import BigInteger, DateTime, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
-PipelineType = Literal[
-    "PointCloud", "Polygon", "Terrain", "Instance", "Mesh", "CityGML", "Building"
-]
+from app.models.pipeline_types import PipelineType
 
 
 class PipelineBase(SQLModel):
@@ -17,7 +15,7 @@ class PipelineBase(SQLModel):
     data: dict | None = Field(nullable=True, sa_type=JSONB)
     task_id: str | None
     task_status: str | None
-    task_result: dict | None | None = Field(nullable=True, sa_type=JSONB)
+    task_result: dict | None = Field(nullable=True, sa_type=JSONB)
     source: dict | None = Field(default=None, nullable=True, sa_type=JSONB)
     batch_id: uuid.UUID | None = Field(default=None, nullable=True, index=True)
 

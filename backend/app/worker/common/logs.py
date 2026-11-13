@@ -11,7 +11,7 @@ from sqlmodel import Session
 
 from app.core.config import settings
 from app.core.db import engine
-from app.models.task import PipelineLog
+from app.models.pipeline import PipelineLog
 
 MAX_LINES = 5000
 FLUSH_SECONDS = 1.0

@@ -18,7 +18,7 @@ fileConfig(config.config_file_name)
 # target_metadata = mymodel.Base.metadata
 # target_metadata = None
 
-import app.models.task  # noqa - register task models
+import app.models.pipeline  # noqa - register pipeline models
 import app.models.user  # noqa - register user table
 from sqlmodel import SQLModel
 from app.core.config import settings # noqa

@@ -139,14 +139,3 @@ class InstanceConfig(BaseModel):
     to_ellipsoidal_height: bool = False
     max_tile_size_kb: float = Field(1024, gt=0)
     max_geometric_error: float = Field(500, gt=0)
-
-
-CONFIG_MODELS: dict[str, type[BaseModel]] = {
-    "PointCloud": PointCloudConfig,
-    "Polygon": PolygonConfig,
-    "Terrain": TerrainConfig,
-    "Instance": InstanceConfig,
-    "Mesh": MeshConfig,
-    "CityGML": CityGMLConfig,
-    "Building": BuildingConfig,
-}

@@ -15,7 +15,7 @@ from sqlmodel import Session, delete, select, update
 
 from app.core.config import settings
 from app.core.db import engine
-from app.models.task import Pipeline, PipelineLog
+from app.models.pipeline import Pipeline, PipelineLog
 from app.models.user import User  # noqa - registers user table for FK resolution
 from app.worker.common.logs import capture_pipeline_log
 from app.worker.tasks import TASK_QUEUES
