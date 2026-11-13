@@ -8,10 +8,9 @@
     "dev": "vite",
     "prebuild": "node scripts/copy-cesium-assets.mjs",
     "build": "tsc && vite build",
-    "lint": "biome check --apply-unsafe --no-errors-on-unmatched --files-ignore-unknown=true ./",
+    "lint": "biome check --apply .",
     "preview": "vite preview",
-    "generate-types": "openapi-typescript ${OPENAPI_URL:-http://localhost/api/v1/openapi.json} -o src/api/schema.gen.ts",
-    "check": "biome ci . && tsc --noEmit"
+    "generate-types": "openapi-typescript ${OPENAPI_URL:-http://localhost/api/v1/openapi.json} -o src/api/schema.gen.ts"
   },
   "dependencies": {
     "@chakra-ui/react": "2.8.2",

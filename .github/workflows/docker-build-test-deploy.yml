@@ -29,7 +29,10 @@ jobs:
         uses: astral-sh/setup-uv@v6
 
       - name: Lint backend
-        run: bash backend/scripts/lint.sh
+        working-directory: backend
+        run: |
+          uv run --locked ruff check app
+          uv run --locked ruff format --check app
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -42,7 +45,8 @@ jobs:
         working-directory: frontend
         run: |
           npm ci --ignore-scripts
-          npm run check
+          npx biome ci .
+          npx tsc --noEmit
 
   build-test-deploy:
     needs: lint
