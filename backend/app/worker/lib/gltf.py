@@ -58,25 +58,6 @@ def quantize_positions(pos, max_step=0.01):
     return np.round((pos - mn) / step).astype(np.uint16), step, mn
 
 
-def add_positions(blob, qpos, step, target=ARRAY_BUFFER):
-    """Position accessor for quantize_positions output; uint16 rows padded to an 8-byte stride."""
-    if step is None:
-        view = blob.add(qpos.tobytes(), target)
-        comp = FLOAT
-    else:
-        view = blob.add(pad_rows(qpos, 8).tobytes(), target)
-        blob.views[view]["byteStride"] = 8
-        comp = UNSIGNED_SHORT
-    return {
-        "bufferView": view,
-        "componentType": comp,
-        "count": int(len(qpos)),
-        "type": "VEC3",
-        "min": qpos.min(axis=0).tolist(),
-        "max": qpos.max(axis=0).tolist(),
-    }
-
-
 def dequantize_node(step, origin):
     """Node translation/scale that maps quantized positions back to metres ({} when unquantized)."""
     if step is None:
@@ -194,3 +175,145 @@ def pack_glb(gltf, blob):
     out += struct.pack("<II", len(json_chunk), JSON_CHUNK) + json_chunk
     out += struct.pack("<II", len(bin_chunk), BIN_CHUNK) + bin_chunk
     return bytes(out)
+
+
+_SAMPLER = {"magFilter": 9729, "minFilter": 9987, "wrapS": 33071, "wrapT": 33071}
+
+
+class GltfBuilder:
+    """One buffer and its glTF JSON; each method declares the extensions it needs."""
+
+    def __init__(self, generator):
+        self.generator = generator
+        self.blob = Blob()
+        self.accessors, self.materials, self.meshes, self.nodes = [], [], [], []
+        self.samplers, self.images, self.textures = [], [], []
+        self.extensions = {}
+        self.used, self.required = [], []
+
+    def use(self, name, required=False):
+        if name not in self.used:
+            self.used.append(name)
+        if required and name not in self.required:
+            self.required.append(name)
+
+    def accessor(
+        self,
+        data,
+        component,
+        kind,
+        target=None,
+        normalized=False,
+        stride=None,
+        minmax=None,
+    ):
+        """data: (count, n) array already in the component type; stride pads each row to that many bytes."""
+        rows = np.ascontiguousarray(data).reshape(len(data), -1)
+        raw = pad_rows(rows, stride) if stride else rows
+        view = self.blob.add(raw.tobytes(), target)
+        if stride:
+            self.blob.views[view]["byteStride"] = stride
+        acc = {
+            "bufferView": view,
+            "componentType": component,
+            "count": int(len(rows)),
+            "type": kind,
+        }
+        if normalized:
+            acc["normalized"] = True
+        if minmax is not None:
+            acc["min"], acc["max"] = minmax
+        self.accessors.append(acc)
+        return len(self.accessors) - 1
+
+    def positions(self, qpos, step):
+        """POSITION from quantize_positions output: uint16 rows padded to 8 bytes, or float32."""
+        minmax = (qpos.min(axis=0).tolist(), qpos.max(axis=0).tolist())
+        if step is None:
+            return self.accessor(qpos, FLOAT, "VEC3", ARRAY_BUFFER, minmax=minmax)
+        self.use("KHR_mesh_quantization", required=True)
+        return self.accessor(
+            qpos, UNSIGNED_SHORT, "VEC3", ARRAY_BUFFER, stride=8, minmax=minmax
+        )
+
+    def indices(self, indices, vertex_count):
+        small = vertex_count <= 65535
+        values = np.ascontiguousarray(indices, dtype=np.uint16 if small else np.uint32)
+        return self.accessor(
+            values.ravel(),
+            UNSIGNED_SHORT if small else UNSIGNED_INT,
+            "SCALAR",
+            ELEMENT_ARRAY_BUFFER,
+        )
+
+    def texture(self, image, mime="image/webp"):
+        if not self.samplers:
+            self.samplers.append(dict(_SAMPLER))
+        self.images.append({"bufferView": self.blob.add(image), "mimeType": mime})
+        source = len(self.images) - 1
+        if mime == "image/webp":
+            # WebP is not a core glTF image type
+            self.use("EXT_texture_webp", required=True)
+            self.textures.append(
+                {"sampler": 0, "extensions": {"EXT_texture_webp": {"source": source}}}
+            )
+        else:
+            self.textures.append({"sampler": 0, "source": source})
+        return len(self.textures) - 1
+
+    def material(self, base_color=None, texture=None, name=None):
+        pbr = {"metallicFactor": 0.0, "roughnessFactor": 1.0}
+        if base_color is not None:
+            pbr["baseColorFactor"] = list(base_color)
+        if texture is not None:
+            pbr["baseColorTexture"] = {"index": texture}
+        material = {"doubleSided": True, "pbrMetallicRoughness": pbr}
+        if name:
+            material["name"] = name
+        self.materials.append(material)
+        return len(self.materials) - 1
+
+    def mesh(self, primitives):
+        self.meshes.append({"primitives": primitives})
+        return len(self.meshes) - 1
+
+    def node(self, **fields):
+        self.nodes.append(fields)
+        return len(self.nodes) - 1
+
+    def metadata(self, features, schema):
+        self.use("EXT_structural_metadata")
+        self.extensions["EXT_structural_metadata"] = metadata(
+            self.blob, features, schema
+        )
+
+    def glb(self):
+        gltf = {
+            "asset": {"version": "2.0", "generator": self.generator},
+            "scene": 0,
+            "scenes": [{"nodes": list(range(len(self.nodes)))}],
+            "nodes": self.nodes,
+            "meshes": self.meshes,
+            "materials": self.materials,
+            "accessors": self.accessors,
+        }
+        for key in ("samplers", "images", "textures", "extensions"):
+            if getattr(self, key):
+                gltf[key] = getattr(self, key)
+        if self.used:
+            gltf["extensionsUsed"] = list(self.used)
+        if self.required:
+            gltf["extensionsRequired"] = list(self.required)
+        return pack_glb(gltf, self.blob)
+
+
+def primitive(attributes, indices, material, extensions=None):
+    out = {
+        "attributes": attributes,
+        "indices": indices,
+        "mode": 4,
+        "material": material,
+    }
+    if extensions:
+        out["extensions"] = extensions
+    return out
