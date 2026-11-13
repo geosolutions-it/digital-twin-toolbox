@@ -49,7 +49,7 @@ services:
   backend:
     restart: "no"
     ports:
-      - "8888:8888"
+      - "5678:5678"
 
   frontend:
     restart: "no"

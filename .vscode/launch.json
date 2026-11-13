@@ -5,24 +5,19 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug Backend: Python Debugger",
+            "name": "Attach to backend container",
             "type": "debugpy",
-            "request": "launch",
-            "module": "uvicorn",
-            "args": [
-                "app.main:app",
-                "--reload"
-            ],
-            "cwd": "${workspaceFolder}/backend",
-            "jinja": true,
-            "envFile": "${workspaceFolder}/.env",
-        },
-        {
-            "type": "chrome",
-            "request": "launch",
-            "name": "Debug Frontend: Launch Chrome against http://localhost:5173",
-            "url": "http://localhost:5173",
-            "webRoot": "${workspaceFolder}/frontend"
+            "request": "attach",
+            "connect": {
+                "host": "localhost",
+                "port": 5678
+            },
+            "pathMappings": [
+                {
+                    "localRoot": "${workspaceFolder}/backend/app",
+                    "remoteRoot": "/app/app"
+                }
+            ]
         },
     ]
 }
