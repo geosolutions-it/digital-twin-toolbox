@@ -3,11 +3,12 @@ import tempfile
 
 import numpy as np
 
-from app.core.storage import get_storage, output_key
+from app.core.storage import get_storage
 from app.models.config import CityGMLConfig
 from app.worker.common.geo import LocalFrame
 from app.worker.common.logs import log_stage
 from app.worker.common.output import publish_tiles
+from app.worker.common.task_input import task_output_base, task_source
 from app.worker.main import PipelineDatabaseTask, celery
 from app.worker.tasks.vector.citygml.crs import (
     is_ellipsoidal,
@@ -106,14 +107,11 @@ def tile_city_objects(
 
 @celery.task(name="create_citygml_3dtiles", base=PipelineDatabaseTask)
 def create_citygml_3dtiles(pipeline_extended):
-    pipeline_id = pipeline_extended["id"]
-    source = pipeline_extended.get("source") or {}
-    key = source.get("key")
-    if not key:
-        raise Exception("City model pipeline requires a bucket source")
+    source = task_source(pipeline_extended, "City model")
+    key = source.key
     config = CityGMLConfig(**(pipeline_extended.get("data") or {}))
     storage = get_storage()
-    out_base = source.get("output_base") or output_key(pipeline_id)
+    out_base = task_output_base(pipeline_extended, source)
 
     with tempfile.TemporaryDirectory() as scratch:
         ext = os.path.splitext(key)[1].lower()

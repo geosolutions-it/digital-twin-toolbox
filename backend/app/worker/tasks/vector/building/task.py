@@ -8,10 +8,11 @@ import numpy as np
 from osgeo import gdal, osr
 from pyproj import CRS
 
-from app.core.storage import get_storage, output_key
+from app.core.storage import get_storage
 from app.models.config import BuildingConfig
 from app.worker.common.logs import log_stage
 from app.worker.common.output import publish_tiles
+from app.worker.common.task_input import task_output_base, task_source
 from app.worker.common.utils import run_subprocess
 from app.worker.main import PipelineDatabaseTask, celery
 from app.worker.tasks.vector.citygml.cityjson import iter_cityjson
@@ -192,16 +193,14 @@ def read_roofer(paths, lod):
 
 @celery.task(name="create_building_3dtiles", base=PipelineDatabaseTask)
 def create_building_3dtiles(pipeline_extended):
-    source = pipeline_extended.get("source") or {}
-    if not source.get("key"):
-        raise Exception("Building pipeline requires a footprint file as source")
+    source = task_source(pipeline_extended, "Building")
     config = BuildingConfig(**(pipeline_extended.get("data") or {}))
     storage = get_storage()
-    out_base = source.get("output_base") or output_key(pipeline_extended["id"])
+    out_base = task_output_base(pipeline_extended, source)
 
     with tempfile.TemporaryDirectory() as scratch:
         log_stage("Reading footprints")
-        footprints = resolve_input(source, storage, scratch)
+        footprints = resolve_input(source.key, storage, scratch)
         ds, layer = open_layer(footprints)
         if layer.GetSpatialRef() is None:
             raise Exception("The footprints have no CRS: include the .prj file")

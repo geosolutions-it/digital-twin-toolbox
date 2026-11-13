@@ -5,12 +5,13 @@ from fastapi import APIRouter, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
 from app.core.storage import get_storage
+from app.models.storage import StorageListing
 from app.services.file_classify import classify_bucket_file
 
 router = APIRouter()
 
 
-@router.get("/")
+@router.get("/", response_model=StorageListing)
 def list_storage(prefix: str = "", classify: bool = True) -> Any:
     """List one level of the bucket under a prefix: folders and files."""
     prefix = prefix.lstrip("/")
@@ -23,9 +24,9 @@ def list_storage(prefix: str = "", classify: bool = True) -> Any:
     # zips are peeked, so the UI offers the right form
     for f in listing["files"]:
         try:
-            f["workflow"] = classify_bucket_file(storage, f["key"])
+            f["pipeline"] = classify_bucket_file(storage, f["key"])
         except Exception:
-            f["workflow"] = None
+            f["pipeline"] = None
     return listing
 
 

@@ -18,6 +18,7 @@ from app.models.pipeline import (
     PipelineBatch,
     PipelineLog,
     PipelinesActionTypes,
+    PipelineSource,
 )
 from app.models.pipeline_types import (
     PIPELINES,
@@ -45,7 +46,7 @@ def create_and_dispatch(
     *,
     title: str,
     data: dict | None,
-    source: dict,
+    source: PipelineSource,
     owner_id: uuid.UUID,
     batch_id: uuid.UUID | None = None,
 ) -> Pipeline:
@@ -55,7 +56,7 @@ def create_and_dispatch(
         task_id=str(uuid.uuid4()),
         task_status=PENDING,
         task_result=None,
-        source=source,
+        source=source.model_dump(exclude_none=True),
         batch_id=batch_id,
         owner_id=owner_id,
     )

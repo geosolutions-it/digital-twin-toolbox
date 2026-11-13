@@ -8,9 +8,8 @@ from osgeo import gdal, osr
 gdal.UseExceptions()
 
 
-def resolve_input(source, storage, scratch):
+def resolve_input(key, storage, scratch):
     """Local DEM path, a single GeoTIFF."""
-    key = source["key"]
     dest = os.path.join(scratch, os.path.basename(key))
     storage.download_file(key, dest)
     return dest

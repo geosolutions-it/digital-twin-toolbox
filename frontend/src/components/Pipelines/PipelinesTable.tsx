@@ -45,7 +45,6 @@ import {
   PER_PAGE,
   type RowAction,
   pipelineType,
-  sourceOf,
 } from "./pipelineData"
 
 function getOverviewQueryOptions({ page }: { page: number }) {
@@ -253,7 +252,7 @@ export default function PipelinesTable({
       id: p.id,
       label: p.title,
       type: pipelineType(p),
-      sampleKey: sourceOf(p)?.key,
+      sampleKey: p.source?.key ?? undefined,
       values: formValuesFromConfig(pipelineType(p), p.data),
     })
   const editBatch = (summary: PipelineBatchSummary) =>

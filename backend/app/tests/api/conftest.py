@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, delete, select
 
 from app.api.routes import pipelines as pipelines_routes
+from app.api.routes import storage as storage_routes
 from app.core.celery_app import celery
 from app.core.db import engine, init_db
 from app.main import app
@@ -107,6 +108,18 @@ class FakeStorage:
     def read_range(self, key, start, length):
         return self.objects[key][start : start + length]
 
+    def list_dir(self, prefix):
+        folders, files = set(), []
+        for key, data in sorted(self.objects.items()):
+            if not key.startswith(prefix):
+                continue
+            rest = key[len(prefix) :]
+            if "/" in rest:
+                folders.add(prefix + rest.split("/")[0] + "/")
+            else:
+                files.append({"key": key, "name": rest, "size": len(data)})
+        return {"prefix": prefix, "folders": sorted(folders), "files": files}
+
     def delete_prefix(self, prefix):
         self.deleted.append(prefix)
         for key in self.list(prefix):
@@ -117,6 +130,7 @@ class FakeStorage:
 def storage(monkeypatch) -> FakeStorage:
     fake = FakeStorage()
     monkeypatch.setattr(pipelines_routes, "get_storage", lambda: fake)
+    monkeypatch.setattr(storage_routes, "get_storage", lambda: fake)
     return fake
 
 

@@ -23,7 +23,7 @@ def read_vector_fields(options):
     key = options["key"]
     storage = get_storage()
     with tempfile.TemporaryDirectory() as scratch:
-        path = resolve_input({"key": key}, storage, scratch)
+        path = resolve_input(key, storage, scratch)
         ds, layer = open_layer(path)
         defn = layer.GetLayerDefn()
         fields = [
@@ -89,7 +89,7 @@ def read_vector_sample(options):
     limit = int(options.get("limit") or 200)
     storage = get_storage()
     with tempfile.TemporaryDirectory() as scratch:
-        path = resolve_input({"key": key}, storage, scratch)
+        path = resolve_input(key, storage, scratch)
         ds, layer = open_layer(path)
         transform = wgs84_transform(layer, ellipsoidal)
         names = field_names(layer)

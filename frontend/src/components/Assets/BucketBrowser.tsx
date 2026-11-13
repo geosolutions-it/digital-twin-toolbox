@@ -73,18 +73,6 @@ function Breadcrumbs({
   )
 }
 
-const WORKFLOWS: PipelineType[] = [
-  "PointCloud",
-  "Polygon",
-  "Terrain",
-  "Mesh",
-  "CityGML",
-]
-
-function hintTypeForFile(workflow?: string | null): PipelineType | undefined {
-  return WORKFLOWS.find((w) => w === workflow)
-}
-
 export default function BucketBrowser({
   cwd,
   setCwd,
@@ -197,7 +185,7 @@ export default function BucketBrowser({
                   )
                 })}
                 {files.map((file) => {
-                  const hintType = hintTypeForFile(file.workflow)
+                  const hintType = file.pipeline ?? undefined
                   return (
                     <Tr
                       key={file.key}

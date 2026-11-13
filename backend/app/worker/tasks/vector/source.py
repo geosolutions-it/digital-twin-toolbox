@@ -7,9 +7,8 @@ from osgeo import ogr, osr
 from pyproj import CRS
 
 
-def resolve_input(source, storage, scratch):
+def resolve_input(key, storage, scratch):
     """Download the bucket vector to scratch; a .zip opens via /vsizip."""
-    key = source["key"]
     if key.lower().endswith(".zip"):
         dest = os.path.join(scratch, "index.zip")
         storage.download_file(key, dest)

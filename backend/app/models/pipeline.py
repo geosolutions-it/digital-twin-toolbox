@@ -3,11 +3,12 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Literal
 
+from pydantic import ConfigDict, field_validator
 from sqlalchemy import BigInteger, DateTime, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
-from app.models.pipeline_types import PipelineType
+from app.models.pipeline_types import PIPELINES, PipelineType
 
 
 class PipelineBatch(SQLModel, table=True):
@@ -83,9 +84,51 @@ class PipelineLogsPublic(SQLModel):
     data: list[PipelineLogPublic]
 
 
+class PipelineSource(SQLModel):
+    """The `source` JSON column. Rows outlive code changes, so every field is optional."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    key: str | None = None
+    extension: str | None = None
+    output_base: str | None = None
+    pipeline: PipelineType | None = None
+
+    @field_validator("pipeline", mode="before")
+    @classmethod
+    def _known_pipeline(cls, v):
+        return v if v in PIPELINES else None
+
+
+class OutputArtifact(SQLModel):
+    name: str
+    url: str
+    size: int | None = None
+
+
+class TaskResult(SQLModel):
+    """The `task_result` JSON column a finished run writes."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    output: str | None = None
+    tileset: str | None = None
+    download: str | None = None
+    artifacts: list[OutputArtifact] = []
+    # terrain
+    extent: list[float] | None = None
+    min_zoom: int | None = None
+    max_zoom: int | None = None
+    # point cloud
+    sample_radius: float | None = None
+    sample_radius_auto: bool | None = None
+
+
 class PipelinePublic(PipelineBase):
     id: uuid.UUID
     owner_id: uuid.UUID
+    source: PipelineSource | None = None
+    task_result: TaskResult | None = None
     # latest stage logged by a running job
     stage: str | None = None
 

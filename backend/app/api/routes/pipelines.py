@@ -31,6 +31,7 @@ from app.models.pipeline import (
     PipelineOverviewEntry,
     PipelinePublic,
     PipelinesActionTypes,
+    PipelineSource,
     PipelineSourceCreate,
     PipelinesOverview,
     PipelinesPublic,
@@ -246,12 +247,12 @@ def create_pipeline_source(
         session,
         title=source_in.title or os.path.basename(key),
         data=data,
-        source={
-            "key": key,
-            "extension": os.path.splitext(key)[1],
-            "output_base": _unique_output(storage, base_name),
-            "pipeline": pipeline_type,
-        },
+        source=PipelineSource(
+            key=key,
+            extension=os.path.splitext(key)[1],
+            output_base=_unique_output(storage, base_name),
+            pipeline=pipeline_type,
+        ),
         owner_id=current_user.id,
     )
     return {"id": str(pipeline.id)}
@@ -329,12 +330,12 @@ def create_pipeline_batch(
             session,
             title=f"{batch_in.title} / {name}" if batch_in.title else name,
             data=data,
-            source={
-                "key": key,
-                "extension": os.path.splitext(key)[1],
-                "output_base": output_base,
-                "pipeline": ptype,
-            },
+            source=PipelineSource(
+                key=key,
+                extension=os.path.splitext(key)[1],
+                output_base=output_base,
+                pipeline=ptype,
+            ),
             owner_id=current_user.id,
             batch_id=batch.id,
         )
@@ -605,8 +606,8 @@ def delete_pipeline(session: SessionDep, id: uuid.UUID) -> Message:
     if not pipeline:
         raise HTTPException(status_code=404, detail="Pipeline not found")
 
-    source = pipeline.source or {}
-    output_prefix = source.get("output_base") or output_key(str(pipeline.id))
+    source = PipelineSource.model_validate(pipeline.source or {})
+    output_prefix = source.output_base or output_key(str(pipeline.id))
     batch = session.get(PipelineBatch, pipeline.batch_id) if pipeline.batch_id else None
     batch_prefix = batch.output_prefix if batch else None
 

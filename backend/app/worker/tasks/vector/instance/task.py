@@ -4,13 +4,14 @@
 import os
 import tempfile
 
-from app.core.storage import get_storage, output_key
+from app.core.storage import get_storage
 from app.models.config import InstanceConfig
 from app.worker.common.expression import parse_expression
 from app.worker.common.geo import LocalFrame
 from app.worker.common.gltf import infer_schema
 from app.worker.common.logs import log_stage
 from app.worker.common.output import publish_tiles
+from app.worker.common.task_input import task_output_base, task_source
 from app.worker.main import PipelineDatabaseTask, celery
 from app.worker.tasks.vector.instance import reader
 from app.worker.tasks.vector.instance.tiler import build_instance_tileset
@@ -36,19 +37,16 @@ def _load_model(storage, name, config, scratch, cache):
 
 @celery.task(name="create_point_instance_3dtiles", base=PipelineDatabaseTask)
 def create_point_instance_3dtiles(pipeline_extended):
-    pipeline_id = pipeline_extended["id"]
-    source = pipeline_extended.get("source") or {}
-    if not source.get("key"):
-        raise Exception("Instance pipeline requires a bucket source")
+    source = task_source(pipeline_extended, "Instance")
 
     config = InstanceConfig(**(pipeline_extended.get("data") or {}))
 
     storage = get_storage()
-    out_base = source.get("output_base") or output_key(pipeline_id)
+    out_base = task_output_base(pipeline_extended, source)
 
     with tempfile.TemporaryDirectory() as scratch:
         log_stage("Downloading input")
-        input_path = resolve_input(source, storage, scratch)
+        input_path = resolve_input(source.key, storage, scratch)
         log_stage("Reading points")
         features, (lo, hi) = reader.read_points(
             input_path, config.to_ellipsoidal_height

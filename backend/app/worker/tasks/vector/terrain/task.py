@@ -4,10 +4,11 @@ Cesium terrain layer. No external binary, no PostGIS."""
 import os
 import tempfile
 
-from app.core.storage import get_storage, output_key
+from app.core.storage import get_storage
 from app.models.config import TerrainConfig
 from app.worker.common.logs import log_stage
 from app.worker.common.output import publish_tiles
+from app.worker.common.task_input import task_output_base, task_source
 from app.worker.main import PipelineDatabaseTask, celery
 from app.worker.tasks.vector.terrain import preprocess
 from app.worker.tasks.vector.terrain.qmesh.tiler import build_terrain
@@ -15,20 +16,17 @@ from app.worker.tasks.vector.terrain.qmesh.tiler import build_terrain
 
 @celery.task(name="create_terrain_tiles", base=PipelineDatabaseTask)
 def create_terrain_tiles(pipeline_extended):
-    pipeline_id = pipeline_extended["id"]
-    source = pipeline_extended.get("source") or {}
-    if not source.get("key"):
-        raise Exception("Terrain pipeline requires a bucket source")
+    source = task_source(pipeline_extended, "Terrain")
 
     config = TerrainConfig(**(pipeline_extended.get("data") or {}))
     params = config.model_dump()
 
     storage = get_storage()
-    out_base = source.get("output_base") or output_key(pipeline_id)
+    out_base = task_output_base(pipeline_extended, source)
 
     with tempfile.TemporaryDirectory() as scratch:
         log_stage("Downloading DEM")
-        src = preprocess.resolve_input(source, storage, scratch)
+        src = preprocess.resolve_input(source.key, storage, scratch)
         log_stage("Reprojecting DEM")
         dem = preprocess.warp_to_wgs84(
             src, scratch, config.to_ellipsoidal_height, config.source_vertical_epsg

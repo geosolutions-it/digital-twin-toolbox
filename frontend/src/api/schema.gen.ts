@@ -117,13 +117,13 @@ export interface paths {
         get?: never;
         /**
          * Update Pipeline Batch
-         * @description Apply one config to every pipeline in a batch.
+         * @description Apply one config to the batch and every pipeline in it.
          */
         put: operations["pipelines-update_pipeline_batch"];
         post?: never;
         /**
          * Delete Pipeline Batch
-         * @description Delete every member of a batch and its combined output tree.
+         * @description Delete a batch, every member (database cascade) and its combined output tree.
          */
         delete: operations["pipelines-delete_pipeline_batch"];
         options?: never;
@@ -405,6 +405,15 @@ export interface components {
             /** Message */
             message: string;
         };
+        /** OutputArtifact */
+        OutputArtifact: {
+            /** Name */
+            name: string;
+            /** Url */
+            url: string;
+            /** Size */
+            size?: number | null;
+        };
         /** PipelineActionResult */
         PipelineActionResult: {
             action_type: components["schemas"]["PipelinesActionTypes"];
@@ -570,14 +579,8 @@ export interface components {
             task_id: string | null;
             /** Task Status */
             task_status: string | null;
-            /** Task Result */
-            task_result: {
-                [key: string]: unknown;
-            } | null;
-            /** Source */
-            source?: {
-                [key: string]: unknown;
-            } | null;
+            task_result?: components["schemas"]["TaskResult"] | null;
+            source?: components["schemas"]["PipelineSource"] | null;
             /** Batch Id */
             batch_id?: string | null;
             /**
@@ -592,6 +595,20 @@ export interface components {
             owner_id: string;
             /** Stage */
             stage?: string | null;
+        };
+        /**
+         * PipelineSource
+         * @description The `source` JSON column. Rows outlive code changes, so every field is optional.
+         */
+        PipelineSource: {
+            /** Key */
+            key?: string | null;
+            /** Extension */
+            extension?: string | null;
+            /** Output Base */
+            output_base?: string | null;
+            /** Pipeline */
+            pipeline?: ("PointCloud" | "Polygon" | "Terrain" | "Instance" | "Mesh" | "CityGML" | "Building") | null;
         };
         /** PipelineSourceCreate */
         PipelineSourceCreate: {
@@ -655,6 +672,53 @@ export interface components {
             type: string;
             /** Coordinates */
             coordinates: unknown;
+        };
+        /** StorageFile */
+        StorageFile: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** Size */
+            size: number;
+            /** Pipeline */
+            pipeline?: ("PointCloud" | "Polygon" | "Terrain" | "Instance" | "Mesh" | "CityGML" | "Building") | null;
+        };
+        /** StorageListing */
+        StorageListing: {
+            /** Prefix */
+            prefix: string;
+            /** Folders */
+            folders: string[];
+            /** Files */
+            files: components["schemas"]["StorageFile"][];
+        };
+        /**
+         * TaskResult
+         * @description The `task_result` JSON column a finished run writes.
+         */
+        TaskResult: {
+            /** Output */
+            output?: string | null;
+            /** Tileset */
+            tileset?: string | null;
+            /** Download */
+            download?: string | null;
+            /**
+             * Artifacts
+             * @default []
+             */
+            artifacts: components["schemas"]["OutputArtifact"][];
+            /** Extent */
+            extent?: number[] | null;
+            /** Min Zoom */
+            min_zoom?: number | null;
+            /** Max Zoom */
+            max_zoom?: number | null;
+            /** Sample Radius */
+            sample_radius?: number | null;
+            /** Sample Radius Auto */
+            sample_radius_auto?: boolean | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -1560,7 +1624,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["StorageListing"];
                 };
             };
             /** @description Validation Error */

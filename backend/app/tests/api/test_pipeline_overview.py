@@ -142,3 +142,21 @@ def test_finalize_queues_the_batch_rebuild(
     make_pipeline(source=batch_source(prefix, "a"), batch_id=batch_id)
     assert client.post(f"{BASE}/batch/{batch_id}/finalize").json() == {"ok": True}
     assert [t.kwargs["output_prefix"] for t in fake_celery.sent] == [prefix]
+
+
+def test_row_written_by_older_code_still_loads(client, make_pipeline, fake_celery):
+    row = make_pipeline(
+        source={
+            "key": "catedral.zip",
+            "pipeline": "Photogrammetry",
+            "batch_output_url": "/api/v1/output/old",
+            "reconstruction": {"mesh": "output/catedral/mesh.zip"},
+        },
+        task_status=SUCCESS,
+        task_result={"tileset": "/t.json", "artifacts": [], "unknown": 1},
+    )
+    body = client.get(f"{BASE}/{row.id}").json()
+    assert body["source"]["key"] == "catedral.zip"
+    assert body["source"]["pipeline"] is None
+    assert "reconstruction" not in body["source"]
+    assert body["task_result"]["tileset"] == "/t.json"

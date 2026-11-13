@@ -25,7 +25,7 @@ import {
   FiTerminal,
 } from "react-icons/fi"
 import { API_BASE } from "../../api"
-import type { PipelinePublic } from "../../api/types"
+import type { OutputArtifact, PipelinePublic } from "../../api/types"
 import {
   celeryTaskStatusColor,
   celeryTaskStatusLabel,
@@ -33,13 +33,7 @@ import {
 } from "../../utils/celeryStatus"
 import { RemoveButton } from "./DeleteDialog"
 import LogsDrawer from "./LogsDrawer"
-import {
-  type Artifact,
-  type RowAction,
-  type TaskResult,
-  sourceOf,
-  zipName,
-} from "./pipelineData"
+import { type RowAction, zipName } from "./pipelineData"
 
 function StatusCell({
   status,
@@ -94,7 +88,7 @@ function LogsButton({ pipeline }: { pipeline: PipelinePublic }) {
   )
 }
 
-function artifactSize(bytes?: number) {
+function artifactSize(bytes?: number | null) {
   if (!bytes) return ""
   const units = ["B", "KB", "MB", "GB"]
   const i = Math.min(
@@ -104,7 +98,7 @@ function artifactSize(bytes?: number) {
   return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`
 }
 
-function ArtifactsMenu({ artifacts }: { artifacts: Artifact[] }) {
+function ArtifactsMenu({ artifacts }: { artifacts: OutputArtifact[] }) {
   return (
     <Menu isLazy placement="bottom-end">
       <Tooltip label="Other outputs">
@@ -157,9 +151,9 @@ export function PipelineRow({
   indent,
 }: RowProps) {
   const running = isCeleryTaskInProgress(pipeline.task_status)
-  const result = pipeline.task_result as TaskResult | null
+  const result = pipeline.task_result
   const download = `${API_BASE}${result?.download}`
-  const source = sourceOf(pipeline)
+  const source = pipeline.source
   const subtitle = source?.key ? `s3://…/${source.key}` : "no input"
   const isSel = selected.has(pipeline.id)
   return (

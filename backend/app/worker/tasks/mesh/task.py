@@ -3,10 +3,11 @@ import os
 import sys
 import tempfile
 
-from app.core.storage import get_storage, output_key
+from app.core.storage import get_storage
 from app.models.config import MeshConfig
 from app.worker.common.logs import log_stage
 from app.worker.common.output import publish_tiles
+from app.worker.common.task_input import task_output_base, task_source
 from app.worker.common.utils import run_subprocess
 from app.worker.main import PipelineDatabaseTask, celery
 from app.worker.tasks.mesh.reader import mesh_bbox_from_key, resolve_obj
@@ -29,20 +30,17 @@ def read_mesh_bbox(options):
     return mesh_bbox_from_key(get_storage(), options["key"])
 
 
-def _resolve_input(pipeline_extended):
-    key = (pipeline_extended.get("source") or {}).get("key")
-    if not key:
-        raise Exception("Mesh pipeline requires a bucket source")
-    return key, ".zip" if key.lower().endswith(".zip") else os.path.splitext(key)[1]
+def _extension(key):
+    return ".zip" if key.lower().endswith(".zip") else os.path.splitext(key)[1]
 
 
 @celery.task(name="create_mesh_3dtiles", base=PipelineDatabaseTask)
 def create_mesh_3dtiles(pipeline_extended):
     config = MeshConfig(**(pipeline_extended.get("data") or {}))
     storage = get_storage()
-    input_key, extension = _resolve_input(pipeline_extended)
-    source = pipeline_extended.get("source") or {}
-    out_base = source.get("output_base") or output_key(pipeline_extended["id"])
+    source = task_source(pipeline_extended, "Mesh")
+    input_key, extension = source.key, _extension(source.key)
+    out_base = task_output_base(pipeline_extended, source)
 
     with tempfile.TemporaryDirectory() as scratch:
         log_stage("Downloading mesh")

@@ -2,9 +2,10 @@ import logging
 import os
 import tempfile
 
-from app.core.storage import get_storage, output_key, output_url
+from app.core.storage import get_storage, output_url
 from app.models.config import PointCloudConfig
 from app.worker.common.logs import log_stage
+from app.worker.common.task_input import task_output_base, task_source
 from app.worker.main import PipelineDatabaseTask, celery
 from app.worker.tasks.pointcloud.pdal.processes import (
     compute_auto_sample_radius,
@@ -31,36 +32,20 @@ def _resolve_colorization_path(storage, filename, scratch):
     return _materialize(storage, filename, scratch, f"colorization{ext}")
 
 
-def _resolve_input(pipeline_extended):
-    source = pipeline_extended.get("source") or {}
-    key = source.get("key")
-    if not key:
-        raise Exception("Point cloud pipeline requires a bucket source")
-    return key, source.get("extension") or os.path.splitext(key)[1]
-
-
-def _resolve_crs(pipeline_extended, input_file):
-    """CRS from an explicit source hint, else read from the file."""
-    source = pipeline_extended.get("source") or {}
-    if source.get("crs"):
-        return source["crs"], source.get("vertical_crs")
-    return resolve_crs_from_file(input_file)
-
-
 @celery.task(name="create_point_cloud_3dtiles", base=PipelineDatabaseTask)
 def create_point_cloud_3dtiles(pipeline_extended):
     config = PointCloudConfig(**(pipeline_extended.get("data") or {}))
-    pipeline_id = pipeline_extended["id"]
     storage = get_storage()
-    input_key, extension = _resolve_input(pipeline_extended)
-    source = pipeline_extended.get("source") or {}
-    out_base = source.get("output_base") or output_key(pipeline_id)
+    source = task_source(pipeline_extended, "Point cloud")
+    input_key = source.key
+    extension = source.extension or os.path.splitext(input_key)[1]
+    out_base = task_output_base(pipeline_extended, source)
 
     with tempfile.TemporaryDirectory() as scratch:
         log_stage("Downloading point cloud")
         input_file = _materialize(storage, input_key, scratch, f"index{extension}")
 
-        horizontal_epsg, vertical_epsg = _resolve_crs(pipeline_extended, input_file)
+        horizontal_epsg, vertical_epsg = resolve_crs_from_file(input_file)
         # some clouds ship without a CRS in the header: fall back to the one set in the config
         if not horizontal_epsg and config.horizontal_epsg:
             horizontal_epsg = config.horizontal_epsg

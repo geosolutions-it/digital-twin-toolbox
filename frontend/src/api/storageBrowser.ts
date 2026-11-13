@@ -1,18 +1,6 @@
 import axios from "axios"
 import { API_BASE } from "./config"
-
-export interface StorageFile {
-  key: string
-  name: string
-  size: number
-  workflow?: string | null
-}
-
-export interface StorageListing {
-  prefix: string
-  folders: string[]
-  files: StorageFile[]
-}
+import type { StorageListing } from "./types"
 
 export async function listStorage(
   prefix = "",

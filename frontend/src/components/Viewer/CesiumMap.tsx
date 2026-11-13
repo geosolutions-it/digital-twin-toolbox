@@ -37,15 +37,11 @@ type Layer = {
   extent?: number[]
 }
 
-// JSON columns the API does not type yet
-type TaskResult = { tileset?: string; extent?: number[] }
-type PipelineSource = { pipeline?: string }
-
 function soloLayer(p: PipelinePublic): Layer | null {
-  const result = p.task_result as TaskResult | null
+  const result = p.task_result
   if (p.task_status !== "SUCCESS" || !result?.tileset) return null
   const tileset = String(result.tileset)
-  const type = (p.source as PipelineSource | null)?.pipeline || "PointCloud"
+  const type = p.source?.pipeline || "PointCloud"
   return {
     id: p.id,
     title: p.title || p.id,
