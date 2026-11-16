@@ -1,0 +1,114 @@
+name: Documentation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
+  release:
+    types:
+      - published
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+jobs:
+  check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docs
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+
+      - run: npm ci
+      - run: npm run build
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: docs-deploy
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.event.repository.name }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: main/docs/package-lock.json
+
+      - name: Build latest
+        working-directory: main/docs
+        env:
+          DOCS_VERSION: latest
+          DOCS_BASE: /${{ env.REPO }}/latest/
+        run: |
+          npm ci
+          npm run build
+          mkdir -p "$GITHUB_WORKSPACE/site"
+          cp -r .vitepress/dist "$GITHUB_WORKSPACE/site/latest"
+
+      - name: Checkout release
+        if: github.event_name == 'release'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          path: release
+          fetch-depth: 0
+
+      - name: Build release and attach it
+        if: github.event_name == 'release'
+        working-directory: release/docs
+        env:
+          DOCS_VERSION: ${{ github.ref_name }}
+          DOCS_BASE: /${{ env.REPO }}/${{ github.ref_name }}/
+        run: |
+          npm ci
+          npm run build
+          (cd .vitepress/dist && zip -qr "$RUNNER_TEMP/docs.zip" .)
+          gh release upload "$DOCS_VERSION" "$RUNNER_TEMP/docs.zip" --clobber --repo "$GITHUB_REPOSITORY"
+
+      - name: Restore published releases
+        run: |
+          for tag in $(gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName --jq '.[].tagName'); do
+            gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern docs.zip --dir "$RUNNER_TEMP/$tag" 2>/dev/null || continue
+            unzip -qo "$RUNNER_TEMP/$tag/docs.zip" -d "site/$tag"
+          done
+          node main/docs/scripts/update-versions.mjs site
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

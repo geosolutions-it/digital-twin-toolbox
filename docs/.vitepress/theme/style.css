@@ -1,0 +1,9 @@
+.dark .VPNavBarTitle .logo {
+  filter: invert(1);
+}
+
+.VPHero .name,
+.VPHero .text,
+.VPHero .tagline {
+  max-width: none;
+}

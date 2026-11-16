@@ -1,4 +1,4 @@
-# <img src="./frontend/public/assets/images/logo.svg" height="32" /> Digital Twin Toolbox
+# <img src="./docs/public/logo.svg" height="32" /> Digital Twin Toolbox
 
 Introduction
 ============
@@ -6,12 +6,6 @@ This repository collects different tools/libraries and workflows inside a docker
 The short term goal is to evaluate the various open source tools that are available to generate 3D Tiles from various data sources typically used when modeling an urban environment when creating a 3D Model like building and Lidar data. The long term goal is to transform this experiment into an engine that can be used to create 3D Tiles for urban environments.
 
 This project is still a work in progress and this application **is not** production ready. Extensive documentation about this project can be found in the [wiki](https://github.com/geosolutions-it/digital-twin-toolbox/wiki) page (see the Table of Contents).
-
-At the moment we have draft pipelines for:
-- converting shapefile data (polygons, lines, points) into 3DTiles
-- converting lidar data to point 3DTiles dataset, including lidar processing  to fix/manage CRS, resample and color it
-
-![Application viewer with extruded polygons](img/digital-twin-toolbox.png)
 
 License
 ============
